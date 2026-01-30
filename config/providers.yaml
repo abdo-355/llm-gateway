@@ -1,0 +1,104 @@
+providers:
+  - id: "groq"
+    kind: "openai_compatible"
+    base_url: "https://api.groq.com/openai/v1"
+    auth:
+      type: "bearer_env"
+      env: "GROQ_API_KEY"
+    models:
+      mode: "allowlist"
+      allow:
+        - "llama-3.3-70b-versatile"
+        - "llama-3.1-8b-instant"
+        - "mixtral-8x7b-32768"
+    capabilities:
+      chat_completions: true
+      streaming: true
+      tools: true
+      structured_outputs:
+        json_schema_strict: "model_dependent"
+        json_object: true
+    limits:
+      daily_requests: 999999
+      rpm: 30
+      tpm: 6000
+    routing:
+      base_weight: 1.0
+      tags: ["fast", "free-tier"]
+
+  - id: "openrouter"
+    kind: "openai_compatible"
+    base_url: "https://openrouter.ai/api/v1"
+    auth:
+      type: "bearer_env"
+      env: "OPENROUTER_API_KEY"
+    models:
+      mode: "allowlist"
+      allow:
+        - "anthropic/claude-3.5-sonnet"
+        - "google/gemini-pro"
+        - "meta-llama/llama-3.1-70b-instruct"
+    capabilities:
+      chat_completions: true
+      streaming: true
+      tools: true
+      structured_outputs:
+        json_schema_strict: "model_dependent"
+        json_object: true
+    limits:
+      daily_requests: 200
+      rpm: 20
+    routing:
+      base_weight: 0.8
+      tags: ["fallback", "wide-model-menu"]
+
+  - id: "ollama"
+    kind: "openai_compatible"
+    base_url: "http://localhost:11434/v1"
+    auth:
+      type: "none"
+    models:
+      mode: "allowlist"
+      allow:
+        - "llama3.1"
+        - "llama3.2"
+        - "phi4"
+    capabilities:
+      chat_completions: true
+      streaming: true
+      tools: false
+      structured_outputs:
+        json_schema_strict: "unknown"
+        json_object: true
+    limits:
+      max_concurrency: 2
+    routing:
+      base_weight: 0.9
+      tags: ["local", "free"]
+
+  - id: "openai"
+    kind: "openai_compatible"
+    base_url: "https://api.openai.com/v1"
+    auth:
+      type: "bearer_env"
+      env: "OPENAI_API_KEY"
+    models:
+      mode: "allowlist"
+      allow:
+        - "gpt-4o"
+        - "gpt-4o-mini"
+        - "gpt-3.5-turbo"
+    capabilities:
+      chat_completions: true
+      streaming: true
+      tools: true
+      structured_outputs:
+        json_schema_strict: true
+        json_object: true
+    limits:
+      daily_requests: 999999
+      rpm: 500
+      tpm: 200000
+    routing:
+      base_weight: 1.2
+      tags: ["reliable", "paid"]
