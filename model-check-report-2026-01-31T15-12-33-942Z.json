@@ -1,0 +1,2375 @@
+{
+  "timestamp": "2026-01-31T15:12:33.942Z",
+  "totalModels": 35,
+  "passed": 35,
+  "failed": 0,
+  "rateLimited": 0,
+  "paymentRequired": 0,
+  "totalDuration": 20960,
+  "results": [
+    {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:33.943Z",
+      "requestDuration": 510,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 32,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-095e9f8c-ba8e-4562-aa02-fca1fb6b5299",
+          "object": "chat.completion",
+          "created": 1769872354,
+          "model": "llama-3.3-70b-versatile",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello. How can I help you today?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.091822034,
+            "prompt_tokens": 36,
+            "prompt_time": 0.000942982,
+            "completion_tokens": 10,
+            "completion_time": 0.028127646,
+            "total_tokens": 46,
+            "total_time": 0.029070628
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_c06d5113ec",
+          "x_groq": {
+            "id": "req_01kga9styyfh0v1y6dff6550bk",
+            "seed": 1628984544
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25e618f47894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:34 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=Gpng6Ucdf0MhIg3oJ2Skthw3YlfIgreFNlLmbdNcbhY-1769872354.2578704-1.0.1.1-ht7CbwMZO40dqCNSL6Thrhm0YpeO0cXino6zWsDJ9EemkC7LfW9Tz6OISai6alAZ45EpZXQ2cANDo.a_W4kcIkBRkNAyHMJ1RP_GwyO4rfwN_0CfgedJCECieJxuQP6Z; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:34 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "12000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "11963",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "185ms",
+        "x-request-id": "req_01kga9styyfh0v1y6dff6550bk"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:34.454Z",
+      "requestDuration": 693,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-3974100d-cf9a-4f01-9b6d-3a88ff1cfafb",
+          "object": "chat.completion",
+          "created": 1769872355,
+          "model": "llama-3.1-8b-instant",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello. How can I assist you today?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.090226189,
+            "prompt_tokens": 36,
+            "prompt_time": 0.002210935,
+            "completion_tokens": 10,
+            "completion_time": 0.010038195,
+            "total_tokens": 46,
+            "total_time": 0.01224913
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_f757f4b0bf",
+          "x_groq": {
+            "id": "req_01kga9svnhev6sn7tmqex0r9nw",
+            "seed": 1884181132
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25ea9aeb7894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:35 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=r57VNfnH9MA3UaKKxLA1p0.RPljPRGP3LX3Jjctn2t0-1769872354.9804642-1.0.1.1-ADC49ddg7x.74y2OHiI4V8L7ieM6WqW5DPUUzMuFl3AgBwDPHkmYneq3bse8DsydJQPnfsCFNq3Ufl.oXDnzWHBKE0ekG._.Sxc82k_PYCe05tqOftF2G5CnhpSwHVRY; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:35 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "14400",
+        "x-ratelimit-limit-tokens": "6000",
+        "x-ratelimit-remaining-requests": "14399",
+        "x-ratelimit-remaining-tokens": "5963",
+        "x-ratelimit-reset-requests": "6s",
+        "x-ratelimit-reset-tokens": "370ms",
+        "x-request-id": "req_01kga9svnhev6sn7tmqex0r9nw"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:35.148Z",
+      "requestDuration": 972,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 96,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-3eef1361-9678-4bc6-ae4d-88026b144a02",
+          "object": "chat.completion",
+          "created": 1769872356,
+          "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello! It's nice to meet you. Is there something I can help you with, or would you like to chat?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.01755691,
+            "prompt_tokens": 11,
+            "prompt_time": 0.000057129,
+            "completion_tokens": 25,
+            "completion_time": 0.058475566,
+            "total_tokens": 36,
+            "total_time": 0.058532695
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_d9b1f0849c",
+          "x_groq": {
+            "id": "req_01kga9swmte2y8swa30spvzrq2",
+            "seed": 70080534
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25f0e9047894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:36 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=py1.DWV7iVlhu9YWDufVpfoNP9lgnvJ0PGfiVzvMHRM-1769872355.9815323-1.0.1.1-KohNNrUzh0t4K2LTDSDwBzJBB4l2Gy4cf5AQE3SiMmizVVNJWdvGHozh.zGG2.aPTmGyCp7Ql_1Gm2FfhiqBijQLyhR4Ja5bchwlFGO4B0_dtj8s.riLdAHGcxL8rZAJ; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:36 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "30000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "29988",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "24ms",
+        "x-request-id": "req_01kga9swmte2y8swa30spvzrq2"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:36.120Z",
+      "requestDuration": 1239,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 91,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-54a68f55-3748-40bb-b868-bad5628fd420",
+          "object": "chat.completion",
+          "created": 1769872357,
+          "model": "meta-llama/llama-4-maverick-17b-128e-instruct",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello! How are you today? Is there something I can help you with or would you like to chat?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.090475765,
+            "prompt_tokens": 11,
+            "prompt_time": 0.000548162,
+            "completion_tokens": 23,
+            "completion_time": 0.131593361,
+            "total_tokens": 34,
+            "total_time": 0.132141523
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_d2c1f7e199",
+          "x_groq": {
+            "id": "req_01kga9sxm5evhsc40acxgq9g6p",
+            "seed": 1256172223
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25f72e587894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:37 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=Jd_l6G7wdkcH3ceqnCX6zpOmoXhW1FfOcJxQfxDXuGw-1769872356.983051-1.0.1.1-hME_F7CuKLojKFDjOsg4FPgXwCse8dCGS23a.Hv_Y0oPXJfjN09mXwANbAxxfVehXuhSHvcit6FWYEwqHDimniOijjlX3bXJ9SCxXVvrSH9dDTXVmh50NRk._Etog_Bh; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:37 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "6000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "5988",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "120ms",
+        "x-request-id": "req_01kga9sxm5evhsc40acxgq9g6p"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "moonshotai/kimi-k2-instruct",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:37.360Z",
+      "requestDuration": 1127,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 35,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-646af4bd-d0f0-4e85-a998-4c2b9d256cde",
+          "object": "chat.completion",
+          "created": 1769872358,
+          "model": "moonshotai/kimi-k2-instruct",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hi there! How can I help you today?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.340131741,
+            "prompt_tokens": 27,
+            "prompt_time": 0.015697718,
+            "completion_tokens": 11,
+            "completion_time": 0.022449244,
+            "total_tokens": 38,
+            "total_time": 0.038146962
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_3312304636",
+          "x_groq": {
+            "id": "req_01kga9sykefhkr2gnvwawzbp5v",
+            "seed": 784974030
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25fd6cd07894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:38 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=RA6nndSmGXTQ4UTKE9Q7Yy4sMtjmQqHbx57O2iEa1K0-1769872357.9848347-1.0.1.1-YTKaTbbVZ_0Ln9gsqTa6Hn2aZcFGpSd.btXOD0OAg1Hz5tbcc_LpGeKIcOgmAq.NR19D2IoMHD1p5ZJAwp4klndIdfP8Vm79E4yDy1nggECo3KX6Xvc.ufGjfolBb6DN; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:38 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "10000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "9972",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "168ms",
+        "x-request-id": "req_01kga9sykefhkr2gnvwawzbp5v"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "moonshotai/kimi-k2-instruct-0905",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:38.487Z",
+      "requestDuration": 807,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-bb53dd8d-5484-4a91-9de4-7025c28bf4e3",
+          "object": "chat.completion",
+          "created": 1769872359,
+          "model": "moonshotai/kimi-k2-instruct-0905",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hi there—how can I help you today?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.195926947,
+            "prompt_tokens": 27,
+            "prompt_time": 0.022899087,
+            "completion_tokens": 11,
+            "completion_time": 0.029939697,
+            "total_tokens": 38,
+            "total_time": 0.052838784
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_05df423bab",
+          "x_groq": {
+            "id": "req_01kga9szjge3ctwf68pmv10exw",
+            "seed": 741406838
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a260399bb7894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:39 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=YOcaBB24wN0XxxmRFpraa7ODn3w2pH4z5wBhhTOOFgc-1769872358.9799304-1.0.1.1-CO1Q.wdSxFhbZIOskeCwJqwA3zzqI_V9uHNN7qQ.UvBx8TVIqxV4o0vBNKyKRNYhbILdtpJ4NX5oRehTy.y.SNQOjMMxedfyXYvoJSYg0xLji5EWMmT_dKM8ukc_qlqR; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:39 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "10000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "9972",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "168ms",
+        "x-request-id": "req_01kga9szjge3ctwf68pmv10exw"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:39.294Z",
+      "requestDuration": 860,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-5e8e0ac2-ee24-41ea-8371-940e6c135548",
+          "object": "chat.completion",
+          "created": 1769872360,
+          "model": "openai/gpt-oss-120b",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello! How can I assist you today?",
+                "reasoning": "The user says \"Hello\". We need to respond appropriately. It's a simple greeting. We can respond friendly."
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.017585989,
+            "prompt_tokens": 72,
+            "prompt_time": 0.002753527,
+            "completion_tokens": 41,
+            "completion_time": 0.084754506,
+            "total_tokens": 113,
+            "total_time": 0.087508033,
+            "completion_tokens_details": {
+              "reasoning_tokens": 23
+            }
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_dddd02f37b",
+          "x_groq": {
+            "id": "req_01kga9t0hrfhx8b4a8grett1b8",
+            "seed": 817924158
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2609df407894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:40 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=0trDzWCpUGJmg8Uh57PqIcfuizMPp7W8oyMFIMk.epY-1769872359.9795537-1.0.1.1-l98wMvX9RwxCgwVjANptXuP42zfR0.It07YI__n07ESU3Rdt0vlRye.4mLRZovN1prF_7sBx75_XtiiR2KwMaLseF3KBLisFUoeqhX6Q5qE6fbG3ZGy5PI50JmHnIbVF; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:40 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "8000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "7927",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "547ms",
+        "x-request-id": "req_01kga9t0hrfhx8b4a8grett1b8"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-20b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:40.154Z",
+      "requestDuration": 957,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 32,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-7f3e1ef6-f8cf-48c8-965c-6ff9e38c277a",
+          "object": "chat.completion",
+          "created": 1769872361,
+          "model": "openai/gpt-oss-20b",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Hello! How can I help you today?",
+                "reasoning": "We need to respond to \"Hello\". It's a greeting. We should respond politely."
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.015743876,
+            "prompt_tokens": 72,
+            "prompt_time": 0.003400528,
+            "completion_tokens": 36,
+            "completion_time": 0.036812865,
+            "total_tokens": 108,
+            "total_time": 0.040213393,
+            "completion_tokens_details": {
+              "reasoning_tokens": 18
+            }
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_73d9ae1ca9",
+          "x_groq": {
+            "id": "req_01kga9t1h2e3q8y967n8hz4rz1",
+            "seed": 1105660893
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26102cf97894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:41 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=D8l8s4kb6luSrJDyic4WAGN3ru9NmYGOq0nZm8nWNjQ-1769872360.9809422-1.0.1.1-g0sbFfdQGyrjvTYmsLyr3OHNileWaXD0K.vdojiLkCY2J6sSIbemKUsPACtF1wKsK8Tu0hulY3oiYryE7cLRZ8.Y6of1NguNewATg5jMEt5Yv7tamRb1HRmNDoD6jdeS; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:41 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "8000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "7927",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "547ms",
+        "x-request-id": "req_01kga9t1h2e3q8y967n8hz4rz1"
+      }
+    },
+    {
+      "provider": "groq",
+      "model": "qwen/qwen3-32b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:41.112Z",
+      "requestDuration": 1266,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 318,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-49dc30d6-93d1-4871-97a5-b365bb16fe94",
+          "object": "chat.completion",
+          "created": 1769872362,
+          "model": "qwen/qwen3-32b",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "<think>\nOkay, the user said \"Hello\". I should respond in a friendly and welcoming way. Let me make sure to keep it open-ended so they feel comfortable to ask anything. Maybe add an emoji to keep it approachable. Let me check for any typos. Alright, that should do it.\n</think>\n\nHi there! 😊 How can I assist you today?"
+              },
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "queue_time": 0.090128892,
+            "prompt_tokens": 9,
+            "prompt_time": 0.000391674,
+            "completion_tokens": 77,
+            "completion_time": 0.169994994,
+            "total_tokens": 86,
+            "total_time": 0.170386668
+          },
+          "usage_breakdown": null,
+          "system_fingerprint": "fp_5cf921caa2",
+          "x_groq": {
+            "id": "req_01kga9t2gbew9btx6pv7n6ewkc",
+            "seed": 1512862542
+          },
+          "service_tier": "on_demand"
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26166b697894-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:42 GMT",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=THZlKJzBKYnMyj8cMdlngdEZIR8Di70ZU2_RWXIQ3QE-1769872361.9824936-1.0.1.1-0pHXr.ugU4m1.8pe69uXBm.dyiEeBKcS8AndKGN1QZkkGxfHgIEQbdzDm9jwK7VSaLss0gLpBJu9KYcNzw5iDydLN0t2cFh4faywX1wVBhs1mDy6sAC_CVzjiqfqdFZJ; HttpOnly; Secure; Path=/; Domain=groq.com; Expires=Sat, 31 Jan 2026 15:42:42 GMT",
+        "strict-transport-security": "max-age=15552000",
+        "transfer-encoding": "chunked",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "fra",
+        "x-ratelimit-limit-requests": "1000",
+        "x-ratelimit-limit-tokens": "6000",
+        "x-ratelimit-remaining-requests": "999",
+        "x-ratelimit-remaining-tokens": "5990",
+        "x-ratelimit-reset-requests": "1m26.4s",
+        "x-ratelimit-reset-tokens": "100ms",
+        "x-request-id": "req_01kga9t2gbew9btx6pv7n6ewkc"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "gpt-oss-120b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:33.943Z",
+      "requestDuration": 674,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-e5ed58f2-c570-4d6b-b4c6-847bfe802597",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "Hello! How can I assist you today?",
+                "reasoning": "The user just says \"Hello\". Likely they want a greeting. Should respond politely. Possibly ask how can I help.",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872354,
+          "model": "gpt-oss-120b",
+          "system_fingerprint": "fp_e7ab83753cbd28777b40",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 112,
+            "completion_tokens": 44,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 68,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 0.004103515,
+            "prompt_time": 0.001912106,
+            "completion_time": 0.020054104,
+            "total_time": 0.029079437255859375,
+            "created": 1769872354.3920217
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25e62f0bfa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:34 GMT",
+        "inference-id": "chatcmpl-e5ed58f2-c570-4d6b-b4c6-847bfe802597",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=XKm93.6pmhK7a4t33nU4frlWtd4M.aFpN_Wae8txHLo-1769872354.2633774-1.0.1.1-yoYnxz7kdreYiwTeAZkAu_aFNbDIBadlgvJ9mz0q_GLd.4znwaAl4h2kIH5j2NvZXE9uxhBN9lSjMjXKRneSq7BkvxOxH6v3RE3ZrxjO6rP1WBwUJCnvPCFyNBAQAh28; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:34 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "14400",
+        "x-ratelimit-limit-requests-hour": "900",
+        "x-ratelimit-limit-requests-minute": "30",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "64000",
+        "x-ratelimit-remaining-requests-day": "14399",
+        "x-ratelimit-remaining-requests-hour": "899",
+        "x-ratelimit-remaining-requests-minute": "29",
+        "x-ratelimit-remaining-tokens-day": "977067",
+        "x-ratelimit-remaining-tokens-hour": "983615",
+        "x-ratelimit-remaining-tokens-minute": "47615",
+        "x-request-id": "9c6a25e62f0bfa5c-MRS"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "llama-3.3-70b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:34.617Z",
+      "requestDuration": 900,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 32,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-69135f00-d14f-47dd-9bf6-3c490c1792a6",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "Hello. How can I help you today?",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872358,
+          "model": "llama-3.3-70b",
+          "system_fingerprint": "fp_dfe74da37155f509c7b3",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 46,
+            "completion_tokens": 10,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 36,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 0.116532937,
+            "prompt_time": 0.004261723000000002,
+            "completion_time": 0.003113416,
+            "total_time": 0.12531185150146484,
+            "created": 1769872358.3530824
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25ea9ae4fa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:35 GMT",
+        "inference-id": "chatcmpl-69135f00-d14f-47dd-9bf6-3c490c1792a6",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=Ln88wSPv4xgdIEMIyk1PjRDX8cG5jIyM5feSR_508DY-1769872354.9794097-1.0.1.1-qKgmderyVZgQyVw6h.xuXL878Lyihp7c7n3GBeoBi8TNlb07eW.VlhE.JSpg93SMTOOsVxvuLCVQL5PbLvPKfLJCgoptlFeHxv9GvnUXv2jdUrHMWuOAxU5beIxWGnAB; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:35 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "14400",
+        "x-ratelimit-limit-requests-hour": "900",
+        "x-ratelimit-limit-requests-minute": "30",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "64000",
+        "x-ratelimit-remaining-requests-day": "14399",
+        "x-ratelimit-remaining-requests-hour": "899",
+        "x-ratelimit-remaining-requests-minute": "29",
+        "x-ratelimit-remaining-tokens-day": "991807",
+        "x-ratelimit-remaining-tokens-hour": "991807",
+        "x-ratelimit-remaining-tokens-minute": "55807",
+        "x-request-id": "9c6a25ea9ae4fa5c-MRS"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "llama3.1-8b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:35.517Z",
+      "requestDuration": 2600,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-f1b32534-e910-46dc-91e2-56b569c7b130",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "Hello. How can I assist you today?",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872353,
+          "model": "llama3.1-8b",
+          "system_fingerprint": "fp_feb5e1faa8274e54bef0",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 46,
+            "completion_tokens": 10,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 36,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 1.823146794,
+            "prompt_time": 0.002420692,
+            "completion_time": 0.004256958,
+            "total_time": 1.831303596496582,
+            "created": 1769872353.609196
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25f0d876fa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:38 GMT",
+        "inference-id": "chatcmpl-f1b32534-e910-46dc-91e2-56b569c7b130",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=InnSX4BlQNmHv5xLb9dJ.m7fGyySyUiU7B94MzS.Rhc-1769872355.980908-1.0.1.1-fYFCAu5dHRScso1U9kH8adblx7hjmlGd8MUl_ea4uuMJ.wVScjjgiU_yH25k8n2.sTTQ4kDuU2ng4TX3U7hViyfL7SHGZaEC0eEF_VJ6r50eNVxj.oA4ZUgkYSjWykF_; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:38 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "14400",
+        "x-ratelimit-limit-requests-hour": "900",
+        "x-ratelimit-limit-requests-minute": "30",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "60000",
+        "x-ratelimit-remaining-requests-day": "14399",
+        "x-ratelimit-remaining-requests-hour": "899",
+        "x-ratelimit-remaining-requests-minute": "29",
+        "x-ratelimit-remaining-tokens-day": "991808",
+        "x-ratelimit-remaining-tokens-hour": "991808",
+        "x-ratelimit-remaining-tokens-minute": "51808",
+        "x-request-id": "9c6a25f0d876fa5c-MRS"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "qwen-3-32b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:38.117Z",
+      "requestDuration": 409,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 399,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-dc7bfae9-0a2d-481d-a16b-3afd53370c9a",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "<think>\nOkay, the user just said \"Hello\". I need to respond appropriately. Since it's a greeting, I should reply with a friendly greeting. Let me make sure to keep it welcoming and offer assistance. Maybe something like \"Hello! How can I assist you today?\" That should cover it. I don't see any other context, so keeping it simple and open-ended is best.\n</think>\n\nHello! How can I assist you today?",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872361,
+          "model": "qwen-3-32b",
+          "system_fingerprint": "fp_114c6a5fb3fb63730b63",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 100,
+            "completion_tokens": 91,
+            "completion_tokens_details": {
+              "reasoning_tokens": 80
+            },
+            "prompt_tokens": 9,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 0.0000473,
+            "prompt_time": 0.000932853,
+            "completion_time": 0.047180162,
+            "total_time": 0.049398183822631836,
+            "created": 1769872361.522368
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25fe6cf6fa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:38 GMT",
+        "inference-id": "chatcmpl-dc7bfae9-0a2d-481d-a16b-3afd53370c9a",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=SKuIV9k6qPqBEX.ENf4RRo9KKyij8HICOjETsf8Gf2E-1769872358.151079-1.0.1.1-_uhtgZxpSo8RgKgTE9wzJnhbiHiQhqoJZAIZqd5rX4tLfMccep3yux6LhKjlt5ITNPux5VOqbKq.iBzugqYtuv8VQndMN.ge9JDZQyx1BqQcaZIFdZ5IiVyYfTBsGU82; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:38 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "14400",
+        "x-ratelimit-limit-requests-hour": "900",
+        "x-ratelimit-limit-requests-minute": "30",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "64000",
+        "x-ratelimit-remaining-requests-day": "14399",
+        "x-ratelimit-remaining-requests-hour": "899",
+        "x-ratelimit-remaining-requests-minute": "29",
+        "x-ratelimit-remaining-tokens-day": "991807",
+        "x-ratelimit-remaining-tokens-hour": "991807",
+        "x-ratelimit-remaining-tokens-minute": "55807",
+        "x-request-id": "9c6a25fe6cf6fa5c-MRS"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "qwen-3-235b-a22b-instruct-2507",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:38.526Z",
+      "requestDuration": 15046,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-af83f608-6cd3-4c23-b201-774334552ff7",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "Hello! How can I assist you today? 😊",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872356,
+          "model": "qwen-3-235b-a22b-instruct-2507",
+          "system_fingerprint": "fp_2fdfb528f73209fc6909",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 21,
+            "completion_tokens": 12,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 9,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 13.992322066,
+            "prompt_time": 0.003485791,
+            "completion_time": 0.011286138,
+            "total_time": 14.00860047340393,
+            "created": 1769872356.7876475
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2604aa5afa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:53 GMT",
+        "inference-id": "chatcmpl-af83f608-6cd3-4c23-b201-774334552ff7",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=BomG8yRwMlF_fRMBkwAHFNAQwW6sH0ig4C62dOCQV2k-1769872359.1495898-1.0.1.1-v.TtmPoa.ka4cEARmHwOY4uE5jq.Z.ZWjBXcaDEtQRDwBt1bN4hiIbeY0VXHNnxRg3G3uONoAadEkC1gR5awwZ4V9ADmU1j3Bw5p5B1YjFKkOrpih0PrxKdhL7zLbfSu; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:53 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "1440",
+        "x-ratelimit-limit-requests-hour": "900",
+        "x-ratelimit-limit-requests-minute": "30",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "64000",
+        "x-ratelimit-remaining-requests-day": "1439",
+        "x-ratelimit-remaining-requests-hour": "899",
+        "x-ratelimit-remaining-requests-minute": "29",
+        "x-ratelimit-remaining-tokens-day": "936893",
+        "x-ratelimit-remaining-tokens-hour": "983615",
+        "x-ratelimit-remaining-tokens-minute": "47615",
+        "x-request-id": "9c6a2604aa5afa5c-MRS"
+      }
+    },
+    {
+      "provider": "cerebras",
+      "model": "zai-glm-4.7",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:53.573Z",
+      "requestDuration": 1329,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 89,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "chatcmpl-15614d6d-2c05-4a9d-b6ad-93064d451189",
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "你好！我是Z.ai训练的GLM大语言模型。很高兴能与你交流。\n\n有什么我能帮助你的问题或者你想了解的话题吗？无论是工作学习上的疑问，还是日常生活中的好奇，我都很乐意为你提供帮助。",
+                "reasoning": "Let me consider how to respond to this greeting thoughtfully.\n\nThe user has started with a simple \"Hello\" - this is likely the beginning of a conversation. I should respond in a way that's both welcoming and open-ended.\n\nFirst, I'll acknowledge their greeting warmly. Then I should introduce myself briefly to establish context. Since I'm an AI assistant, I should mention my role while keeping it friendly and approachable.\n\nI should also consider what information would be most helpful to share at this point. A good response would include:\n- A warm return greeting\n- A brief introduction of who I am\n- An invitation to engage in conversation\n- An indication of my willingness to help\n\nIt's important to keep the tone professional yet conversational. Since this is just the opening exchange, I don't want to overwhelm with too much information, but rather create an inviting space for further discussion.\n\nLet me craft a response that balances these elements naturally, while being genuine and setting the stage for a helpful interaction.",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 1769872373,
+          "model": "zai-glm-4.7",
+          "system_fingerprint": "fp_d173c2eeb4f6fe28312d",
+          "object": "chat.completion",
+          "usage": {
+            "total_tokens": 258,
+            "completion_tokens": 252,
+            "completion_tokens_details": {
+              "accepted_prediction_tokens": 0,
+              "rejected_prediction_tokens": 0,
+              "reasoning_tokens": 203
+            },
+            "prompt_tokens": 6,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            }
+          },
+          "time_info": {
+            "queue_time": 0.000806533,
+            "prompt_time": 0.003167979,
+            "completion_time": 1.026486059,
+            "total_time": 1.0323872566223145,
+            "created": 1769872373.7228973
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a265f1c4bfa5c-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:54 GMT",
+        "inference-id": "chatcmpl-15614d6d-2c05-4a9d-b6ad-93064d451189",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "set-cookie": "__cf_bm=vSpXcFvqZQ.EEZHljeRgTpZH0PE4FLOcssek8euSp3c-1769872373.6124184-1.0.1.1-FeQxwXKirYuXGI93qaVRzjpLsJL7.Wc15Uk5hFkxwraUDnNhUDgGPvcK0tP1193E.PjDj7eCRCU3jKTtG5ldVsle.TvKziOGwLpzZf4bf23cfa3yygvIpGh8YRLz56rL; HttpOnly; Secure; Path=/; Domain=cerebras-sandbox.net; Expires=Sat, 31 Jan 2026 15:42:54 GMT",
+        "strict-transport-security": "max-age=3600; includeSubDomains",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests-day": "100",
+        "x-ratelimit-limit-requests-hour": "100",
+        "x-ratelimit-limit-requests-minute": "10",
+        "x-ratelimit-limit-tokens-day": "1000000",
+        "x-ratelimit-limit-tokens-hour": "1000000",
+        "x-ratelimit-limit-tokens-minute": "60000",
+        "x-ratelimit-remaining-requests-day": "94",
+        "x-ratelimit-remaining-requests-hour": "100",
+        "x-ratelimit-remaining-requests-minute": "10",
+        "x-ratelimit-remaining-tokens-day": "998425",
+        "x-ratelimit-remaining-tokens-hour": "1000000",
+        "x-ratelimit-remaining-tokens-minute": "60000",
+        "x-request-id": "9c6a265f1c4bfa5c-SJC"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-large-latest",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:33.943Z",
+      "requestDuration": 1125,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 132,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "da7b75cbfe0f410ca5b2366b8668a199",
+          "created": 1769872354,
+          "model": "mistral-large-latest",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 40,
+            "completion_tokens": 36,
+            "num_cached_tokens": 3
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you!"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25e678d9c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:35 GMT",
+        "mistral-correlation-id": "019c149c-ec2c-7799-be4c-9021f27800eb",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=HgxgRIqBbX9NQpfmceRvEYagWzndaPVEi3ikONgtFYs-1769872355025-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "646",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149c-ec2c-7799-be4c-9021f27800eb",
+        "x-kong-upstream-latency": "647",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "59",
+        "x-ratelimit-remaining-tokens-minute": "49960",
+        "x-ratelimit-remaining-tokens-month": "3996829",
+        "x-ratelimit-tokens-query-cost": "40"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-large-2402",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:35.068Z",
+      "requestDuration": 771,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 132,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "050c9cb15da649cc9c21d1642444d6f1",
+          "created": 1769872355,
+          "model": "mistral-large-2402",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 40,
+            "completion_tokens": 36,
+            "num_cached_tokens": 3
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you!"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25eb6c0bc68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:35 GMT",
+        "mistral-correlation-id": "019c149c-ef3e-79a4-8797-2049e4fc7ed6",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=NpKoY70_hO0v8KuvKqBkYvqmLgsb4tzuoYYXr2qj5is-1769872355797-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "631",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149c-ef3e-79a4-8797-2049e4fc7ed6",
+        "x-kong-upstream-latency": "631",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "58",
+        "x-ratelimit-remaining-tokens-minute": "49920",
+        "x-ratelimit-remaining-tokens-month": "3996789",
+        "x-ratelimit-tokens-query-cost": "40"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-large-2407",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:35.839Z",
+      "requestDuration": 1110,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 132,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "32642fe0094f488ea400877c1005caea",
+          "created": 1769872356,
+          "model": "mistral-large-2407",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 40,
+            "completion_tokens": 36,
+            "num_cached_tokens": 3
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you!"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25f1a9bac68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:36 GMT",
+        "mistral-correlation-id": "019c149c-f325-7bf8-83fe-b04733797a1e",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=4oooyTJEonjeCRGrE64yS_nfBVDYGf4WtSg1lLkoW.o-1769872356782-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "615",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149c-f325-7bf8-83fe-b04733797a1e",
+        "x-kong-upstream-latency": "616",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "57",
+        "x-ratelimit-remaining-tokens-minute": "49880",
+        "x-ratelimit-remaining-tokens-month": "3996749",
+        "x-ratelimit-tokens-query-cost": "40"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-large-2411",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:36.949Z",
+      "requestDuration": 533,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 34,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "5fb9f73a9c7f4b83bf2945356a49bce9",
+          "created": 1769872357,
+          "model": "mistral-large-2411",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 14,
+            "completion_tokens": 10,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25f7ee40c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:37 GMT",
+        "mistral-correlation-id": "019c149c-f70c-73a1-943e-30fe8df92b47",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=oOiPncvzb0Eypv8WBMF4zOxFGVRUUPy0Cz07UoZsSCI-1769872357440-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "276",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149c-f70c-73a1-943e-30fe8df92b47",
+        "x-kong-upstream-latency": "277",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-5-minute": "600000",
+        "x-ratelimit-limit-tokens-month": "200000000000",
+        "x-ratelimit-remaining-req-minute": "56",
+        "x-ratelimit-remaining-tokens-5-minute": "599986",
+        "x-ratelimit-remaining-tokens-month": "199999999888",
+        "x-ratelimit-tokens-query-cost": "14"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-medium",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:37.483Z",
+      "requestDuration": 1310,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 233,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "49e0bde4f4ef4f8b805cd262dc07021a",
+          "created": 1769872358,
+          "model": "mistral-medium",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 76,
+            "completion_tokens": 72,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you! Let me know what's on your mind. 🚀\n\n(Or if you're testing me—*beep boop*—I’m fully operational! 🤖)"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a25fe2ad6c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:38 GMT",
+        "mistral-correlation-id": "019c149c-faf4-7627-84cc-43b2f72d6695",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=lQbxZ5gAjb725kVLfUKqE0mqNqooEC7kIuJpR8SlBw0-1769872358699-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "534",
+        "x-kong-proxy-latency": "9",
+        "x-kong-request-id": "019c149c-faf4-7627-84cc-43b2f72d6695",
+        "x-kong-upstream-latency": "534",
+        "x-ratelimit-limit-req-minute": "25",
+        "x-ratelimit-limit-tokens-minute": "375000",
+        "x-ratelimit-remaining-req-minute": "24",
+        "x-ratelimit-remaining-tokens-minute": "374924",
+        "x-ratelimit-tokens-query-cost": "76"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "codestral-2405",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:38.793Z",
+      "requestDuration": 527,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "159ba65b47554609b3a4b6280db38cf5",
+          "created": 1769872359,
+          "model": "codestral-2405",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2604684bc68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:39 GMT",
+        "mistral-correlation-id": "019c149c-fee1-7be8-8c81-27a6fcb84800",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=7CsNyOACzDi3IhDaS0GA3yQG8_vKc48nMnes9cwFT14-1769872359279-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "107",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149c-fee1-7be8-8c81-27a6fcb84800",
+        "x-kong-upstream-latency": "108",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "55",
+        "x-ratelimit-remaining-tokens-minute": "49863",
+        "x-ratelimit-remaining-tokens-month": "3996732",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "codestral-2501",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:39.320Z",
+      "requestDuration": 1009,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "67b87fd7eef84dc29148be466b7ea522",
+          "created": 1769872360,
+          "model": "codestral-2501",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a260aadc7c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:40 GMT",
+        "mistral-correlation-id": "019c149d-02cd-7d1d-81d7-94b1f73b4265",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=jJEktwewfWPMI0LE9sp1OBMS1u_QonK_6k7o7WhSQzA-1769872360274-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "98",
+        "x-kong-proxy-latency": "11",
+        "x-kong-request-id": "019c149d-02cd-7d1d-81d7-94b1f73b4265",
+        "x-kong-upstream-latency": "99",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "54",
+        "x-ratelimit-remaining-tokens-minute": "49846",
+        "x-ratelimit-remaining-tokens-month": "3996715",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "ministral-3b-2410",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:40.329Z",
+      "requestDuration": 1126,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 146,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "761a87d0da8a4e9990df9790df4b8cb2",
+          "created": 1769872361,
+          "model": "ministral-3b-2410",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 43,
+            "completion_tokens": 39,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have questions, need help with something, or just want to chat—let me know! What’s on your mind?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2610ea22c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:41 GMT",
+        "mistral-correlation-id": "019c149d-06ad-7a08-947f-ea40e10911b8",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=eXRWqtTUiAZ1RQaMN0He1eCa7VudYMFVpQEe5WmIKFk-1769872361340-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "163",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149d-06ad-7a08-947f-ea40e10911b8",
+        "x-kong-upstream-latency": "164",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "53",
+        "x-ratelimit-remaining-tokens-minute": "49803",
+        "x-ratelimit-remaining-tokens-month": "3996672",
+        "x-ratelimit-tokens-query-cost": "43"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "ministral-8b-2410",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:41.455Z",
+      "requestDuration": 1022,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 157,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "79dc0a154bbf46c28aaf6e4bddbb8db8",
+          "created": 1769872362,
+          "model": "ministral-8b-2410",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 49,
+            "completion_tokens": 45,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you!\n\nWhat's on your mind? 🚀"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26172d99c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:42 GMT",
+        "mistral-correlation-id": "019c149d-0a95-744a-83dd-17990d0b36da",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=QFrvnj0BY4agBVS3S8X0E_1AEkrIM9zSNgwhK6rF46Y-1769872362435-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "267",
+        "x-kong-proxy-latency": "12",
+        "x-kong-request-id": "019c149d-0a95-744a-83dd-17990d0b36da",
+        "x-kong-upstream-latency": "267",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "52",
+        "x-ratelimit-remaining-tokens-minute": "49754",
+        "x-ratelimit-remaining-tokens-month": "3996623",
+        "x-ratelimit-tokens-query-cost": "49"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-saba-2502",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:42.477Z",
+      "requestDuration": 905,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "66408237aa7f45b78c96cadb16e07e75",
+          "created": 1769872363,
+          "model": "mistral-saba-2502",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a261d696ac68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:43 GMT",
+        "mistral-correlation-id": "019c149d-0e8f-7d8c-9aeb-bdd294368c71",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=qu_wZ7SpAIXqjnUfBCx0YPKqGxHO6B9l5KbN_OOIo_s-1769872363326-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "144",
+        "x-kong-proxy-latency": "6",
+        "x-kong-request-id": "019c149d-0e8f-7d8c-9aeb-bdd294368c71",
+        "x-kong-upstream-latency": "146",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "51",
+        "x-ratelimit-remaining-tokens-minute": "49737",
+        "x-ratelimit-remaining-tokens-month": "3996606",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-small-2402",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:43.382Z",
+      "requestDuration": 1145,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "f59d7d7305c04744acd920d71af6497c",
+          "created": 1769872364,
+          "model": "mistral-small-2402",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2623be64c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:44 GMT",
+        "mistral-correlation-id": "019c149d-126d-7f56-aa9b-1e93da174056",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=n1CksLRtm_uDk.EmIWiwiJXBVO5VdRfwXNN1YhuAy9A-1769872364382-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "202",
+        "x-kong-proxy-latency": "13",
+        "x-kong-request-id": "019c149d-126d-7f56-aa9b-1e93da174056",
+        "x-kong-upstream-latency": "203",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "50",
+        "x-ratelimit-remaining-tokens-minute": "49720",
+        "x-ratelimit-remaining-tokens-month": "3996589",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-small-2409",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:44.527Z",
+      "requestDuration": 922,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "0643ed67711744369e975f014b4ed0be",
+          "created": 1769872365,
+          "model": "mistral-small-2409",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2629eb73c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:45 GMT",
+        "mistral-correlation-id": "019c149d-164d-7882-b6c7-6e9664a9bf37",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=.I.lZxIX8L8b5A8huhYUmi9LJhVRwXgwcaBB44pReeY-1769872365326-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "162",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149d-164d-7882-b6c7-6e9664a9bf37",
+        "x-kong-upstream-latency": "162",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "49",
+        "x-ratelimit-remaining-tokens-minute": "49703",
+        "x-ratelimit-remaining-tokens-month": "3996572",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-small-2501",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:45.449Z",
+      "requestDuration": 969,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "a5684b6ba2774295bee5c9adc9d24b97",
+          "created": 1769872366,
+          "model": "mistral-small-2501",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26302fd4c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:46 GMT",
+        "mistral-correlation-id": "019c149d-1a37-7820-853e-5dd2fc1d7045",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=Sv1RzRgR9NobPXD8W5EFdL2sDzbJXgVifVs5g1e5Low-1769872366375-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "207",
+        "x-kong-proxy-latency": "9",
+        "x-kong-request-id": "019c149d-1a37-7820-853e-5dd2fc1d7045",
+        "x-kong-upstream-latency": "208",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "48",
+        "x-ratelimit-remaining-tokens-minute": "49686",
+        "x-ratelimit-remaining-tokens-month": "3996555",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-small-2503",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:46.418Z",
+      "requestDuration": 983,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "e635bf635b6e47ebaa9b889acc585610",
+          "created": 1769872367,
+          "model": "mistral-small-2503",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26366ce6c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:47 GMT",
+        "mistral-correlation-id": "019c149d-1e20-7374-9f65-23c0b34ef036",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=Lx1cp9TyChf7n2fPk_U.kGuD4SZW7Mksfi0dI9yUg.A-1769872367317-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "136",
+        "x-kong-proxy-latency": "8",
+        "x-kong-request-id": "019c149d-1e20-7374-9f65-23c0b34ef036",
+        "x-kong-upstream-latency": "137",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "47",
+        "x-ratelimit-remaining-tokens-minute": "49669",
+        "x-ratelimit-remaining-tokens-month": "3996538",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "open-mistral-7b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:47.401Z",
+      "requestDuration": 1325,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 157,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "2639ea47d42740b4b5da7ea175581e4a",
+          "created": 1769872368,
+          "model": "open-mistral-7b",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 49,
+            "completion_tokens": 45,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today? Whether you have a question, need help with something, or just want to chat, I'm here for you!\n\nWhat's on your mind? 🚀"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a263ca9bac68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:48 GMT",
+        "mistral-correlation-id": "019c149d-2207-7660-aa6e-9dff13e64026",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=slM87q9YZGmkBDmw88V4_C2m5oJfrYTDoVSo08vLMlw-1769872368605-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "437",
+        "x-kong-proxy-latency": "8",
+        "x-kong-request-id": "019c149d-2207-7660-aa6e-9dff13e64026",
+        "x-kong-upstream-latency": "438",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "46",
+        "x-ratelimit-remaining-tokens-minute": "49620",
+        "x-ratelimit-remaining-tokens-month": "3996489",
+        "x-ratelimit-tokens-query-cost": "49"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "open-mistral-nemo",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:48.726Z",
+      "requestDuration": 819,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 134,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "95a66581900147f098f58811590f6bd3",
+          "created": 1769872369,
+          "model": "open-mistral-nemo",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 42,
+            "completion_tokens": 38,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! How can I assist you today? Let me know if you have any questions, need some advice, or just want to chat. I'm here to help! 😊"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a2642ef30c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:49 GMT",
+        "mistral-correlation-id": "019c149d-25f1-70c7-bc94-b9820f49a2ae",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=0HyK4feEyH8FIlG5JuOjXrb7SYemVmMGhDCov6AJSEo-1769872369401-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "233",
+        "x-kong-proxy-latency": "7",
+        "x-kong-request-id": "019c149d-25f1-70c7-bc94-b9820f49a2ae",
+        "x-kong-upstream-latency": "233",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "45",
+        "x-ratelimit-remaining-tokens-minute": "49578",
+        "x-ratelimit-remaining-tokens-month": "3996447",
+        "x-ratelimit-tokens-query-cost": "42"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "open-mixtral-8x22b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:49.546Z",
+      "requestDuration": 820,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "8eae01c7daa540d28105079be501078f",
+          "created": 1769872370,
+          "model": "open-mixtral-8x22b",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a26492bd3c68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:50 GMT",
+        "mistral-correlation-id": "019c149d-29d6-733e-b4cb-68be59b90499",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=__2Ng8wP4kkafxf.4LE8kD8lU..gm3rsrMqI.FvS3Vk-1769872370324-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "157",
+        "x-kong-proxy-latency": "8",
+        "x-kong-request-id": "019c149d-29d6-733e-b4cb-68be59b90499",
+        "x-kong-upstream-latency": "157",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "44",
+        "x-ratelimit-remaining-tokens-minute": "49561",
+        "x-ratelimit-remaining-tokens-month": "3996430",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "mistral",
+      "model": "open-mixtral-8x7b",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:50.366Z",
+      "requestDuration": 1023,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 37,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "98d1f94558fa42fd9a28b9afce88c954",
+          "created": 1769872371,
+          "model": "open-mixtral-8x7b",
+          "usage": {
+            "prompt_tokens": 4,
+            "total_tokens": 17,
+            "completion_tokens": 13,
+            "num_cached_tokens": 0
+          },
+          "object": "chat.completion",
+          "choices": [
+            {
+              "index": 0,
+              "finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "tool_calls": null,
+                "content": "Hello! 😊 How can I assist you today?"
+              }
+            }
+          ]
+        }
+      },
+      "headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "9c6a264f6ffcc68f-MRS",
+        "connection": "keep-alive",
+        "content-encoding": "br",
+        "content-type": "application/json",
+        "date": "Sat, 31 Jan 2026 15:12:51 GMT",
+        "mistral-correlation-id": "019c149d-2dc0-7491-af08-bbb57635fd43",
+        "server": "cloudflare",
+        "set-cookie": "_cfuvid=A8QfHLEHtSwahKcTiBOBR7g_J3ZFxCNtC06KHJPjgu0-1769872371314-0.0.1.1-604800000; path=/; domain=.mistral.ai; HttpOnly; Secure; SameSite=None",
+        "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+        "transfer-encoding": "chunked",
+        "x-content-type-options": "nosniff",
+        "x-envoy-upstream-service-time": "145",
+        "x-kong-proxy-latency": "8",
+        "x-kong-request-id": "019c149d-2dc0-7491-af08-bbb57635fd43",
+        "x-kong-upstream-latency": "146",
+        "x-ratelimit-limit-req-minute": "60",
+        "x-ratelimit-limit-tokens-minute": "50000",
+        "x-ratelimit-limit-tokens-month": "4000000",
+        "x-ratelimit-remaining-req-minute": "43",
+        "x-ratelimit-remaining-tokens-minute": "49544",
+        "x-ratelimit-remaining-tokens-month": "3996413",
+        "x-ratelimit-tokens-query-cost": "17"
+      }
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3-pro-preview",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:33.943Z",
+      "requestDuration": 3681,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 21,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "vertex-check-1769872357624",
+          "object": "chat.completion",
+          "created": 1769872357,
+          "model": "gemini-3-pro-preview",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "No response generated"
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "content-encoding": "gzip",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 31 Jan 2026 15:12:37 GMT",
+        "server": "scaffolding on HTTPServer2",
+        "transfer-encoding": "chunked",
+        "vary": "Origin, X-Origin, Referer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "0"
+      }
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3-flash-preview",
+      "status": "pass",
+      "timestamp": "2026-01-31T15:12:37.624Z",
+      "requestDuration": 1743,
+      "response": {
+        "statusCode": 200,
+        "hasContent": true,
+        "contentLength": 21,
+        "finishReason": "stop",
+        "fullResponseBody": {
+          "id": "vertex-check-1769872359367",
+          "object": "chat.completion",
+          "created": 1769872359,
+          "model": "gemini-3-flash-preview",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "No response generated"
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+          }
+        }
+      },
+      "headers": {
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "content-encoding": "gzip",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 31 Jan 2026 15:12:39 GMT",
+        "server": "scaffolding on HTTPServer2",
+        "transfer-encoding": "chunked",
+        "vary": "Origin, X-Origin, Referer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "0"
+      }
+    }
+  ],
+  "summary": {
+    "byProvider": {
+      "groq": {
+        "total": 9,
+        "passed": 9,
+        "failed": 0,
+        "rateLimited": 0,
+        "paymentRequired": 0
+      },
+      "cerebras": {
+        "total": 6,
+        "passed": 6,
+        "failed": 0,
+        "rateLimited": 0,
+        "paymentRequired": 0
+      },
+      "mistral": {
+        "total": 18,
+        "passed": 18,
+        "failed": 0,
+        "rateLimited": 0,
+        "paymentRequired": 0
+      },
+      "vertex": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0,
+        "rateLimited": 0,
+        "paymentRequired": 0
+      }
+    }
+  }
+}
