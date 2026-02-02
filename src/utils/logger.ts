@@ -14,6 +14,8 @@ export class Logger {
 
   constructor(context: LogContext = {}) {
     this.context = context;
+    // Use process.env directly here since logger is created early
+    // before getEnv() may be called. These have defaults so it's safe.
     const isDev = process.env.NODE_ENV !== 'production';
     
     this.logger = pino({

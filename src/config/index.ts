@@ -1,23 +1,14 @@
 import { AppConfig } from '../types';
 import { config } from './providers';
+import { getEnv } from './env';
 
 /**
  * Get the application configuration.
- * This now uses TypeScript objects instead of JSON for better type safety.
+ * Environment variables are already validated at startup by validateAndLoadEnv().
+ * This function just returns the provider config.
  */
 export function loadConfig(): AppConfig {
-  // Validate that required environment variables are set
-  for (const provider of config.providers) {
-    if (provider.auth.type !== 'none') {
-      const envValue = process.env[provider.auth.env];
-      if (!envValue) {
-        throw new Error(
-          `Provider ${provider.id}: Environment variable ${provider.auth.env} is not set`
-        );
-      }
-    }
-  }
-
+  // Environment variables are validated in server.ts before this is called
   return config;
 }
 
@@ -35,5 +26,17 @@ export function getProviderApiKey(
     return undefined;
   }
 
-  return process.env[provider.auth.env];
+  const env = getEnv();
+  switch (provider.auth.env) {
+    case 'GROQ_API_KEY':
+      return env.GROQ_API_KEY;
+    case 'CEREBRAS_API_KEY':
+      return env.CEREBRAS_API_KEY;
+    case 'MISTRAL_API_KEY':
+      return env.MISTRAL_API_KEY;
+    case 'GOOGLE_VERTEX_API_KEY':
+      return env.GOOGLE_VERTEX_API_KEY;
+    default:
+      return undefined;
+  }
 }

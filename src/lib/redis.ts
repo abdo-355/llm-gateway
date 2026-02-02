@@ -1,12 +1,14 @@
 import Redis from 'ioredis';
 import { logger } from '../utils/logger';
+import { getEnv } from '../config/env';
 
 let redisClient: Redis | null = null;
 
 export function getRedisClient(): Redis {
   if (!redisClient) {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    const keyPrefix = process.env.REDIS_KEY_PREFIX || 'llm_gateway';
+    const env = getEnv();
+    const redisUrl = env.REDIS_URL;
+    const keyPrefix = env.REDIS_KEY_PREFIX;
 
     redisClient = new Redis(redisUrl, {
       keyPrefix: keyPrefix + ':',

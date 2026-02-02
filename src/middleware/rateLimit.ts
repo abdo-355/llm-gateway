@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRedisClient } from '../lib/redis';
+import { getEnv } from '../config/env';
+import { logger } from '../utils/logger';
 import { GatewayError } from '../types';
 
 const RATE_LIMIT_PREFIX = 'rate_limit:';
@@ -9,8 +11,9 @@ export async function rateLimitMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const maxRequests = parseInt(process.env.RATE_LIMIT_PER_IP || '100', 10);
-  const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
+  const env = getEnv();
+  const maxRequests = env.RATE_LIMIT_PER_IP;
+  const windowMs = env.RATE_LIMIT_WINDOW_MS;
   
   // Get client IP
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -51,7 +54,7 @@ export async function rateLimitMiddleware(
     next();
   } catch (err) {
     // If Redis fails, allow the request but log it
-    console.error('Rate limit check failed:', err);
+    logger.error({ event: 'rate_limit_check_failed', error: err instanceof Error ? err.message : String(err) });
     next();
   }
 }

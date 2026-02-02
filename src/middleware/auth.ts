@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from 'express';
-import { GatewayError } from '../types';
+import { Request, Response, NextFunction } from "express";
+import { getEnv } from "../config/env";
+import { GatewayError } from "../types";
 
 // Extend Express Request
 declare global {
@@ -13,15 +14,16 @@ declare global {
 export function authMiddleware(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
-  const apiKey = process.env.GATEWAY_API_KEY;
-  
+  const env = getEnv();
+  const apiKey = env.GATEWAY_API_KEY;
+
   if (!apiKey) {
     const error: GatewayError = {
-      type: 'gateway_error',
-      code: 'AUTH_NOT_CONFIGURED',
-      message: 'Gateway API key is not configured',
+      type: "gateway_error",
+      code: "AUTH_NOT_CONFIGURED",
+      message: "Gateway API key is not configured",
       request_id: req.requestId,
     };
     res.status(500).json({ error });
@@ -29,12 +31,13 @@ export function authMiddleware(
   }
 
   const authHeader = req.headers.authorization;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     const error: GatewayError = {
-      type: 'authentication_error',
-      code: 'MISSING_AUTH',
-      message: 'Missing or invalid Authorization header. Expected: Bearer <token>',
+      type: "authentication_error",
+      code: "MISSING_AUTH",
+      message:
+        "Missing or invalid Authorization header. Expected: Bearer <token>",
       request_id: req.requestId,
     };
     res.status(401).json({ error });
@@ -42,12 +45,12 @@ export function authMiddleware(
   }
 
   const token = authHeader.slice(7);
-  
+
   if (token !== apiKey) {
     const error: GatewayError = {
-      type: 'authentication_error',
-      code: 'INVALID_TOKEN',
-      message: 'Invalid API key',
+      type: "authentication_error",
+      code: "INVALID_TOKEN",
+      message: "Invalid API key",
       request_id: req.requestId,
     };
     res.status(401).json({ error });

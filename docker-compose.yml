@@ -16,12 +16,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - REDIS_KEY_PREFIX=llm_gateway
       - GROQ_API_KEY=${GROQ_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
       - GOOGLE_VERTEX_API_KEY=${GOOGLE_VERTEX_API_KEY}
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - NODE_ENV=production
     depends_on:

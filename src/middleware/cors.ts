@@ -5,6 +5,7 @@ export function corsMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  // Read CORS_ORIGINS fresh each time as it can change (not cached like other env vars)
   const originsEnv = process.env.CORS_ORIGINS || '';
   const allowedOrigins = originsEnv.split(',').map(o => o.trim()).filter(o => o);
   
@@ -16,6 +17,7 @@ export function corsMiddleware(
     return;
   }
   
+  // Only set CORS headers if origin is allowed
   if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
