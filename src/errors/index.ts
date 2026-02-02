@@ -92,3 +92,29 @@ export class ModelQuotaExceededError extends ProviderError {
     this.name = 'ModelQuotaExceededError';
   }
 }
+
+/**
+ * GatewayError class - extends Error so instanceof checks work properly
+ * This replaces the plain GatewayError interface for runtime errors
+ */
+export class GatewayErrorClass extends Error {
+  public type: string;
+  public code: string;
+  public request_id?: string;
+  public details?: { [key: string]: unknown };
+
+  constructor(
+    type: string,
+    code: string,
+    message: string,
+    request_id?: string,
+    details?: { [key: string]: unknown }
+  ) {
+    super(message);
+    this.name = 'GatewayError';
+    this.type = type;
+    this.code = code;
+    this.request_id = request_id;
+    this.details = details;
+  }
+}

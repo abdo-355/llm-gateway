@@ -5,7 +5,7 @@ import { ChatCompletionRequestSchema } from '../config/schema';
 import { getLogicalModel } from '../config/logicalModels';
 import { GatewayError, JsonObject } from '../types';
 import { logger } from '../utils/logger';
-import { RateLimitError, ModelQuotaExceededError, PaymentRequiredError, ProviderError } from '../errors';
+import { RateLimitError, ModelQuotaExceededError, PaymentRequiredError, ProviderError, GatewayErrorClass } from '../errors';
 
 export async function completionsHandler(req: Request, res: Response): Promise<void> {
   const requestId = req.requestId;
@@ -184,31 +184,58 @@ export async function completionsHandler(req: Request, res: Response): Promise<v
       errorDetails.message = 'Payment required - please add credits to your account';
     }
 
-    const gatewayError: GatewayError = error instanceof Error && 'type' in error
-      ? error as unknown as GatewayError
-      : {
-          type: 'gateway_error',
-          code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown error',
-          request_id: requestId,
-          details: Object.keys(errorDetails).length > 0 ? errorDetails : undefined,
-        };
+    // Handle GatewayErrorClass (errors thrown from router)
+    let gatewayError: GatewayError;
+    
+    if (error instanceof GatewayErrorClass) {
+      // Error already has all properties, just add request_id if missing
+      gatewayError = {
+        type: error.type,
+        code: error.code,
+        message: error.message,
+        request_id: error.request_id || requestId,
+        details: error.details,
+      };
+    } else if (error instanceof Error && 'type' in error) {
+      gatewayError = error as unknown as GatewayError;
+    } else {
+      gatewayError = {
+        type: 'gateway_error',
+        code: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        request_id: requestId,
+        details: Object.keys(errorDetails).length > 0 ? errorDetails : undefined,
+      };
+    }
 
     // Merge error details if the error already has a type (is a known error type)
     if (error instanceof Error && 'type' in error && Object.keys(errorDetails).length > 0) {
       gatewayError.details = { ...(gatewayError.details || {}), ...errorDetails };
     }
 
+    // Enhanced error logging with stack trace for debugging
+    const isDev = process.env.NODE_ENV !== 'production';
+    
     logger.error({
       event: 'request_failed',
       request_id: requestId,
       error: gatewayError.message,
       code: gatewayError.code,
-      ...(error instanceof ModelQuotaExceededError && {
+      error_type: error instanceof Error ? error.constructor.name : 'Unknown',
+      ...(isDev && error instanceof Error && error.stack ? { stack: error.stack } : {}),
+      ...(error instanceof ModelQuotaExceededError ? {
         provider: error.providerId,
         model: error.model,
         limit_type: error.limitType,
-      }),
+      } : {}),
+      ...(error instanceof PaymentRequiredError ? {
+        provider: 'upstream',
+      } : {}),
+      ...(error instanceof ProviderError && !(error instanceof ModelQuotaExceededError) && !(error instanceof PaymentRequiredError) ? {
+        status_code: error.statusCode,
+        is_retryable: error.isRetryable,
+      } : {}),
+      ...(gatewayError.details ? { details: String(gatewayError.details) } : {}),
     });
 
     // Determine HTTP status code based on error type

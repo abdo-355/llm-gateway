@@ -286,13 +286,13 @@ export interface DerivedRequirements {
   tools: 'required' | 'allowed' | 'forbidden';
 }
 
-// Gateway error
+// Gateway error interface (used for response serialization)
 export interface GatewayError {
-  type: 'gateway_error' | 'authentication_error' | 'validation_error' | 'rate_limit_error';
+  type: string;
   code: string;
   message: string;
   request_id?: string;
-  details?: JsonObject;
+  details?: { [key: string]: unknown };
 }
 
 // Logical Model Registry Types
