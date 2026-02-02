@@ -138,8 +138,10 @@ export class ProviderService {
     const url = `${baseUrl}/chat/completions`;
     const startTime = Date.now();
 
+    // Strip internal gateway fields before sending to provider
+    const { router, ...cleanRequest } = request;
     const body = {
-      ...request,
+      ...cleanRequest,
       model,
     };
 
@@ -389,8 +391,10 @@ export class ProviderService {
   ): Promise<void> {
     const url = `${baseUrl}/chat/completions`;
     
+    // Strip internal gateway fields before sending to provider
+    const { router, ...cleanRequest } = request;
     const body = {
-      ...request,
+      ...cleanRequest,
       model,
       stream: true,
     };

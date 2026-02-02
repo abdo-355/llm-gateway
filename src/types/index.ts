@@ -60,6 +60,7 @@ export interface ChatCompletionRequest {
   parallel_tool_calls?: boolean;
   user?: string;
   metadata?: JsonObject;
+  router?: RouterHints; // Internal gateway routing hints (stripped before sending to providers)
 }
 
 export interface ChatCompletionResponse {
