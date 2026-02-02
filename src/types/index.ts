@@ -222,11 +222,6 @@ export interface ModelLimits {
   tpmu?: number;       // Tokens per month
 }
 
-export interface ProviderCosts {
-  per1kInputTokens?: number;
-  per1kOutputTokens?: number;
-}
-
 export type ProviderType = 'openai' | 'vertex';
 
 export interface ProviderConfig {
@@ -236,7 +231,6 @@ export interface ProviderConfig {
   models: ProviderModels;
   capabilities: ProviderCapabilities;
   limits: ProviderLimits;
-  costs?: ProviderCosts;
   providerType?: ProviderType; // Defaults to 'openai' for backward compatibility
 }
 
@@ -300,3 +294,38 @@ export interface GatewayError {
   request_id?: string;
   details?: JsonObject;
 }
+
+// Logical Model Registry Types
+export type LogicalModelId = string;
+
+export type TaskType = 
+  | 'chat' 
+  | 'analysis' 
+  | 'json_extraction' 
+  | 'code' 
+  | 'tool_orchestration';
+
+export interface LogicalModelCandidate {
+  provider: string;           // Provider ID (e.g., 'groq', 'mistral')
+  model: string;              // Provider-native model ID
+  weight?: number;            // Soft preference weight (0.0-1.0)
+}
+
+export interface LogicalModelSLO {
+  maxLatencyMs?: number;
+  maxAttempts?: number;
+}
+
+export interface LogicalModelConfig {
+  id: LogicalModelId;
+  taskType: TaskType;
+  candidates: LogicalModelCandidate[];
+  slo?: LogicalModelSLO;
+  requireStrictJson?: boolean;
+  requireTools?: boolean;
+}
+
+// Registry type - maps logical model IDs to their configurations
+export type LogicalModelRegistry = Record<LogicalModelId, LogicalModelConfig>;
+
+

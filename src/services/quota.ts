@@ -1,6 +1,7 @@
 import { getRedisClient } from '../lib/redis';
-import { RateLimitError, ModelQuotaExceededError } from '../errors';
+import { ModelQuotaExceededError } from '../errors';
 import { ChatCompletionRequest, ModelLimits } from '../types';
+import { logger } from '../utils/logger';
 
 const QUOTA_PREFIX = 'quota:';
 
@@ -188,31 +189,8 @@ export class QuotaService {
         return await this.redis.zcard(key);
       }
     } catch (error) {
-      console.error(`Error getting sliding window count for ${key}:`, error);
+      logger.error({ event: 'quota_sliding_window_error', key, error: error instanceof Error ? error.message : String(error) });
       return 0;
-    }
-  }
-
-  /**
-   * Add entry to sliding window
-   */
-  private async addToSlidingWindow(
-    key: string,
-    timestamp: number,
-    value: number = 1,
-    isTokenWindow: boolean = false
-  ): Promise<void> {
-    try {
-      // For RPM: member is random, score is timestamp
-      // For TPM: member is `${tokenCount}-${random}`, score is timestamp
-      const member = isTokenWindow
-        ? `${value}-${Math.random().toString(36).substring(2, 11)}`
-        : `${timestamp}-${Math.random().toString(36).substring(2, 11)}`;
-
-      await this.redis.zadd(key, timestamp, member);
-      await this.redis.expire(key, 60); // Expire after 60 seconds
-    } catch (error) {
-      console.error(`Error adding to sliding window ${key}:`, error);
     }
   }
 
@@ -224,7 +202,7 @@ export class QuotaService {
       const value = await this.redis.get(key);
       return value ? parseInt(value, 10) : 0;
     } catch (error) {
-      console.error(`Error getting counter ${key}:`, error);
+      logger.error({ event: 'quota_get_counter_error', key, error: error instanceof Error ? error.message : String(error) });
       return 0;
     }
   }
@@ -240,7 +218,7 @@ export class QuotaService {
       pipeline.expire(key, ttlSeconds);
       await pipeline.exec();
     } catch (error) {
-      console.error(`Error setting counter ${key}:`, error);
+      logger.error({ event: 'quota_set_counter_error', key, error: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -425,7 +403,7 @@ export class QuotaService {
     try {
       await pipeline.exec();
     } catch (error) {
-      console.error(`Error recording model usage for ${providerId}/${model}:`, error);
+      logger.error({ event: 'quota_record_usage_error', provider: providerId, model, error: error instanceof Error ? error.message : String(error) });
       // Don't throw - recording usage is best-effort
     }
   }
@@ -573,143 +551,6 @@ export class QuotaService {
       remainingTpd: limits.tpd !== undefined ? Math.max(0, limits.tpd - tpd) : Infinity,
       remainingTpmu: limits.tpmu !== undefined ? Math.max(0, limits.tpmu - tpmu) : Infinity,
     };
-  }
-
-  /**
-   * Legacy method for backward compatibility
-   * Checks quota at provider level (not per-model)
-   * @deprecated Use checkModelQuota instead
-   */
-  async checkQuota(
-    providerId: string,
-    limits?: { dailyRequests?: number; rpm?: number; tpm?: number }
-  ): Promise<{ ok: boolean; remaining: number; headroomScore: number }> {
-    const dailyKey = `${QUOTA_PREFIX}${providerId}:daily`;
-    const rpmKey = `${QUOTA_PREFIX}${providerId}:rpm`;
-    const tpmKey = `${QUOTA_PREFIX}${providerId}:tpm`;
-    const lastResetKey = `${QUOTA_PREFIX}${providerId}:last_reset`;
-
-    // Check if we need to reset daily quota
-    const lastReset = await this.redis.get(lastResetKey);
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-
-    if (lastReset !== today) {
-      // Reset daily counter
-      await this.redis.set(dailyKey, '0');
-      await this.redis.set(lastResetKey, today);
-    }
-
-    // Get current values
-    const dailyRequests = parseInt((await this.redis.get(dailyKey)) || '0', 10);
-    const rpm = await this.getSlidingWindowCount(rpmKey, 60, false);
-    const tpm = await this.getSlidingWindowCount(tpmKey, 60, true);
-
-    // Check limits and throw RateLimitError with retryAfter if exceeded
-    if (limits?.dailyRequests !== undefined && dailyRequests >= limits.dailyRequests) {
-      const retryAfter = this.calculateRetryAfterLegacy();
-      throw new RateLimitError(
-        `Daily quota exceeded for ${providerId}`,
-        retryAfter,
-        'daily'
-      );
-    }
-
-    if (limits?.rpm !== undefined && rpm >= limits.rpm) {
-      const retryAfter = this.calculateRetryAfterLegacy();
-      throw new RateLimitError(
-        `Rate limit exceeded (RPM) for ${providerId}`,
-        retryAfter,
-        'rpm'
-      );
-    }
-
-    if (limits?.tpm !== undefined && tpm >= limits.tpm) {
-      const retryAfter = this.calculateRetryAfterLegacy();
-      throw new RateLimitError(
-        `Token limit exceeded (TPM) for ${providerId}`,
-        retryAfter,
-        'tpm'
-      );
-    }
-
-    // Calculate headroom score
-    let headroomScore = 1.0;
-
-    if (limits?.dailyRequests !== undefined && limits.dailyRequests > 0) {
-      const dailyHeadroom = 1 - dailyRequests / limits.dailyRequests;
-      headroomScore = Math.min(headroomScore, dailyHeadroom);
-    }
-
-    if (limits?.rpm !== undefined && limits.rpm > 0) {
-      const rpmHeadroom = 1 - rpm / limits.rpm;
-      headroomScore = Math.min(headroomScore, rpmHeadroom);
-    }
-
-    // Calculate remaining
-    let remaining = Infinity;
-    if (limits?.dailyRequests !== undefined) {
-      remaining = Math.min(remaining, limits.dailyRequests - dailyRequests);
-    }
-    if (limits?.rpm !== undefined) {
-      remaining = Math.min(remaining, limits.rpm - rpm);
-    }
-
-    return { ok: true, remaining, headroomScore };
-  }
-
-  /**
-   * Legacy retry-after calculation
-   */
-  private calculateRetryAfterLegacy(): number {
-    const now = Date.now();
-
-    // End of current minute (for RPM limits)
-    const currentSecond = Math.floor(now / 1000) % 60;
-    const secondsUntilNextMinute = 60 - currentSecond;
-
-    // Midnight UTC (for daily limits)
-    const tomorrow = new Date();
-    tomorrow.setUTCHours(24, 0, 0, 0);
-    const secondsUntilMidnight = Math.ceil((tomorrow.getTime() - now) / 1000);
-
-    // Return whichever is sooner
-    return Math.min(secondsUntilNextMinute, secondsUntilMidnight);
-  }
-
-  /**
-   * Legacy method for backward compatibility
-   * Records request at provider level
-   * @deprecated Use recordModelUsage instead
-   */
-  async recordRequest(providerId: string, tokensUsed?: number): Promise<void> {
-    const dailyKey = `${QUOTA_PREFIX}${providerId}:daily`;
-    const rpmKey = `${QUOTA_PREFIX}${providerId}:rpm`;
-    const tpmKey = `${QUOTA_PREFIX}${providerId}:tpm`;
-    const now = Date.now();
-
-    // Increment daily counter
-    await this.redis.incr(dailyKey);
-
-    // Add to RPM sliding window
-    await this.addToSlidingWindow(rpmKey, now, 1, false);
-
-    // Add to TPM sliding window if tokens provided
-    if (tokensUsed && tokensUsed > 0) {
-      await this.addToSlidingWindow(tpmKey, now, tokensUsed, true);
-    }
-  }
-
-  /**
-   * Reset daily quota for a provider
-   * @deprecated Use per-model quotas instead
-   */
-  async resetDaily(providerId: string): Promise<void> {
-    const dailyKey = `${QUOTA_PREFIX}${providerId}:daily`;
-    const lastResetKey = `${QUOTA_PREFIX}${providerId}:last_reset`;
-
-    await this.redis.set(dailyKey, '0');
-    await this.redis.set(lastResetKey, new Date().toISOString().split('T')[0]);
   }
 }
 

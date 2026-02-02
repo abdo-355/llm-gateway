@@ -118,7 +118,7 @@ export class HealthService {
     await this.updateHealthScore(providerId);
   }
 
-  async recordFailure(providerId: string, _isTimeout: boolean = false): Promise<void> {
+  async recordFailure(providerId: string): Promise<void> {
     const state = await this.getCircuitState(providerId);
     const failuresKey = `${CIRCUIT_PREFIX}${providerId}:failures`;
     const lastFailureKey = `${CIRCUIT_PREFIX}${providerId}:last_failure`;

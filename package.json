@@ -12,7 +12,8 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "check-models": "tsx scripts/check-models.ts"
+    "check-models": "tsx scripts/check-models.ts",
+    "check-logical-models": "tsx scripts/check-logical-models.ts"
   },
   "dependencies": {
     "express": "^4.18.2",

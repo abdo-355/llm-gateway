@@ -3,7 +3,6 @@ import {
   ProviderModelsSchema,
   ProviderCapabilitiesSchema,
   ProviderLimitsSchema,
-  ProviderCostsSchema,
   ProviderConfigSchema,
   CertificationSchema,
   AppConfigSchema,
@@ -144,42 +143,6 @@ describe('Schema Validation', () => {
     });
   });
 
-  describe('ProviderCostsSchema', () => {
-    it('should validate cost config', () => {
-      const result = ProviderCostsSchema.safeParse({
-        per1kInputTokens: 0.01,
-        per1kOutputTokens: 0.02,
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it('should validate empty costs', () => {
-      const result = ProviderCostsSchema.safeParse({});
-      expect(result.success).toBe(true);
-    });
-
-    it('should validate partial costs', () => {
-      const result = ProviderCostsSchema.safeParse({
-        per1kInputTokens: 0.01,
-      });
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject negative costs', () => {
-      const result = ProviderCostsSchema.safeParse({
-        per1kInputTokens: -0.01,
-      });
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject zero costs', () => {
-      const result = ProviderCostsSchema.safeParse({
-        per1kOutputTokens: 0,
-      });
-      expect(result.success).toBe(false);
-    });
-  });
-
   describe('ProviderConfigSchema', () => {
     const validProvider = {
       id: 'openai',
@@ -188,17 +151,10 @@ describe('Schema Validation', () => {
       models: { mode: 'allowlist', list: ['gpt-4'] },
       capabilities: { streaming: true, tools: true, structuredOutputs: 'json_object' },
       limits: { rpm: 100 },
-      costs: { per1kInputTokens: 0.01 },
     };
 
     it('should validate full provider config', () => {
       const result = ProviderConfigSchema.safeParse(validProvider);
-      expect(result.success).toBe(true);
-    });
-
-    it('should validate without optional costs', () => {
-      const { costs, ...withoutCosts } = validProvider;
-      const result = ProviderConfigSchema.safeParse(withoutCosts);
       expect(result.success).toBe(true);
     });
 

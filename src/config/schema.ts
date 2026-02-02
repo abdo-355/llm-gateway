@@ -24,11 +24,6 @@ export const ProviderLimitsSchema = z.object({
   maxConcurrency: z.number().int().positive().optional(),
 });
 
-export const ProviderCostsSchema = z.object({
-  per1kInputTokens: z.number().positive().optional(),
-  per1kOutputTokens: z.number().positive().optional(),
-});
-
 export const ProviderConfigSchema = z.object({
   id: z.string().min(1),
   baseUrl: z.string().url(),
@@ -36,7 +31,6 @@ export const ProviderConfigSchema = z.object({
   models: ProviderModelsSchema,
   capabilities: ProviderCapabilitiesSchema,
   limits: ProviderLimitsSchema,
-  costs: ProviderCostsSchema.optional(),
   providerType: z.enum(['openai', 'vertex']).optional().default('openai'),
 });
 

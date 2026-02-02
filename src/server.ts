@@ -1,26 +1,6 @@
 import { createApp } from "./app";
 import { closeRedis } from "./lib/redis";
 import { logger } from "./utils/logger";
-import { Registry, Counter, Histogram } from "prom-client";
-
-// Create Prometheus registry
-export const register = new Registry();
-
-// Define metrics
-export const gatewayRequestsTotal = new Counter({
-  name: "gateway_requests_total",
-  help: "Total number of requests",
-  labelNames: ["status"],
-  registers: [register],
-});
-
-export const gatewayLatencyHistogram = new Histogram({
-  name: "gateway_latency_ms",
-  help: "Request latency in milliseconds",
-  labelNames: ["provider", "model"],
-  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000],
-  registers: [register],
-});
 
 async function main() {
   const port = process.env.PORT || "8080";

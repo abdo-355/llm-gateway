@@ -1,4 +1,4 @@
-import { ChatCompletionRequest, ChatCompletionResponse, RouterHints, SSEChunk, GatewayError, ProviderConfig, Certification, DerivedRequirements, AppConfig } from '../types';
+import { ChatCompletionRequest, ChatCompletionResponse, RouterHints, SSEChunk, GatewayError, ProviderConfig, Certification, DerivedRequirements, AppConfig, LogicalModelConfig } from '../types';
 import { getProviderApiKey } from '../config';
 import { quotaService, estimateTokens } from './quota';
 import { healthService } from './health';
@@ -71,6 +71,60 @@ export class RouterService {
         });
       }
     }
+
+    return candidates;
+  }
+
+  /**
+   * Generate candidates from a logical model configuration
+   * Only includes candidates specified in the logical model's candidate list
+   */
+  async generateCandidatesFromLogicalModel(logicalModelConfig: LogicalModelConfig): Promise<RoutingCandidate[]> {
+    const candidates: RoutingCandidate[] = [];
+
+    for (const candidateConfig of logicalModelConfig.candidates) {
+      // Find the provider in the config
+      const provider = this.config.providers.find(p => p.id === candidateConfig.provider);
+      if (!provider) {
+        logger.warn({
+          event: 'logical_model_provider_not_found',
+          provider: candidateConfig.provider,
+          model: candidateConfig.model,
+          logical_model: logicalModelConfig.id,
+        });
+        continue;
+      }
+
+      // Check if the model exists for this provider
+      if (!provider.models.list.includes(candidateConfig.model)) {
+        logger.warn({
+          event: 'logical_model_model_not_found',
+          provider: candidateConfig.provider,
+          model: candidateConfig.model,
+          logical_model: logicalModelConfig.id,
+        });
+        continue;
+      }
+
+      // Check certification status
+      const isCertified = this.config.certifications.some(
+        (c: Certification) => c.provider === provider.id && c.model === candidateConfig.model && c.strictSchema
+      );
+
+      candidates.push({
+        provider,
+        model: candidateConfig.model,
+        isCertifiedForStrictSchema: isCertified,
+        score: candidateConfig.weight ?? 0.5, // Use weight from logical model as base score
+        scoreBreakdown: { logicalModelWeight: candidateConfig.weight ?? 0.5 },
+      });
+    }
+
+    logger.info({
+      event: 'logical_model_candidates_generated',
+      logical_model: logicalModelConfig.id,
+      candidate_count: candidates.length,
+    });
 
     return candidates;
   }
@@ -161,8 +215,12 @@ export class RouterService {
     return scoreCandidates(candidates, hints);
   }
 
-  compilePlan(candidates: RoutingCandidate[], hints?: RouterHints): RoutingPlan {
-    return compilePlan(candidates, this.config, hints);
+  compilePlan(
+    candidates: RoutingCandidate[], 
+    hints?: RouterHints, 
+    logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number }
+  ): RoutingPlan {
+    return compilePlan(candidates, this.config, hints, logicalModelSLO);
   }
 
   shouldRetry(error: ProviderError, plan: RoutingPlan, attemptIndex: number): boolean {
@@ -257,8 +315,7 @@ export class RouterService {
         });
 
         // Record failure
-        const isTimeout = lastError.message.includes('timeout') || lastError.message.includes('abort');
-        await healthService.recordFailure(attempt.providerId, isTimeout);
+        await healthService.recordFailure(attempt.providerId);
 
         // Handle specific error types
         if (error instanceof ModelQuotaExceededError) {
@@ -394,8 +451,7 @@ export class RouterService {
         onComplete();
         return;
       } catch (error) {
-        const isTimeout = error instanceof Error && error.message.includes('timeout');
-        await healthService.recordFailure(attempt.providerId, isTimeout);
+        await healthService.recordFailure(attempt.providerId);
 
         // Handle specific error types
         if (error instanceof ModelQuotaExceededError) {
@@ -576,13 +632,15 @@ export function scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHi
 export function compilePlan(
   candidates: RoutingCandidate[],
   config: AppConfig,
-  hints?: RouterHints
+  hints?: RouterHints,
+  logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number }
 ): RoutingPlan {
-  const maxAttempts = hints?.fallback?.max_attempts ?? 3;
+  // Use logical model SLO as defaults, override with explicit hints
+  const maxAttempts = hints?.fallback?.max_attempts ?? logicalModelSLO?.maxAttempts ?? 3;
   const hardTimeoutMs = hints?.slo?.hard_timeout_ms;
 
   const attempts: RoutingAttempt[] = candidates.slice(0, maxAttempts).map(candidate => {
-    const timeoutMs = hints?.slo?.max_latency_ms ?? 30000;
+    const timeoutMs = hints?.slo?.max_latency_ms ?? logicalModelSLO?.maxLatencyMs ?? 30000;
 
     return {
       providerId: candidate.provider.id,

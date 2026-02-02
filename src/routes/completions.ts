@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { loadConfig } from '../config';
 import { createRouter } from '../services/router';
 import { ChatCompletionRequestSchema } from '../config/schema';
+import { getLogicalModel } from '../config/logicalModels';
 import { GatewayError, JsonObject } from '../types';
 import { logger } from '../utils/logger';
 import { RateLimitError, ModelQuotaExceededError, PaymentRequiredError, ProviderError } from '../errors';
@@ -31,11 +32,18 @@ export async function completionsHandler(req: Request, res: Response): Promise<v
 
   const request = parseResult.data;
   const routerHints = request.router;
+  const modelId = request.model;
+
+  // Check if the requested model is a logical model
+  const logicalModelConfig = getLogicalModel(modelId);
+  const isLogical = !!logicalModelConfig;
 
   logger.info({
     event: 'request_received',
     request_id: requestId,
-    model_requested: request.model,
+    model_requested: modelId,
+    is_logical_model: isLogical,
+    logical_model_id: isLogical ? modelId : undefined,
     stream: request.stream,
     has_router_hints: !!routerHints,
   });
@@ -48,21 +56,37 @@ export async function completionsHandler(req: Request, res: Response): Promise<v
     const requirements = router.deriveRequirements(request, routerHints);
 
     // Generate candidates
-    const candidates = await router.generateCandidates();
+    let candidates;
+    if (logicalModelConfig) {
+      // Use logical model's candidate list
+      candidates = await router.generateCandidatesFromLogicalModel(logicalModelConfig);
+    } else {
+      // Legacy: Generate all candidates from all providers
+      candidates = await router.generateCandidates();
+    }
 
     // Filter candidates
     const { eligible, filtered } = await router.filterCandidates(candidates, requirements, request, routerHints);
 
     if (eligible.length === 0) {
+      const errorDetails: JsonObject = {
+        requirements: requirements as unknown as JsonObject,
+        filtered_providers: filtered,
+      };
+      
+      if (logicalModelConfig) {
+        errorDetails.logical_model = modelId;
+        errorDetails.task_type = logicalModelConfig.taskType;
+      }
+      
       const error: GatewayError = {
         type: 'gateway_error',
         code: 'NO_ELIGIBLE_PROVIDER',
-        message: 'No eligible provider found for the given requirements',
+        message: isLogical 
+          ? `No eligible provider found for logical model '${modelId}'`
+          : 'No eligible provider found for the given requirements',
         request_id: requestId,
-        details: {
-          requirements: requirements as unknown as JsonObject,
-          filtered_providers: filtered,
-        },
+        details: errorDetails,
       };
       res.status(422).json({ error });
       return;
@@ -70,7 +94,10 @@ export async function completionsHandler(req: Request, res: Response): Promise<v
 
     // Score and compile plan
     const scored = router.scoreCandidates(eligible, routerHints);
-    const plan = router.compilePlan(scored, routerHints);
+    
+    // Use logical model SLO as defaults if available
+    const logicalModelSLO = logicalModelConfig?.slo;
+    const plan = router.compilePlan(scored, routerHints, logicalModelSLO);
 
     logger.info({
       event: 'routing_plan',
@@ -122,11 +149,20 @@ export async function completionsHandler(req: Request, res: Response): Promise<v
     // Add gateway metadata
     result.response.system_fingerprint = `gateway_${requestId}`;
 
+    // Add response headers for observability
+    res.setHeader('X-Gateway-Provider', result.providerId);
+    res.setHeader('X-Gateway-Model', result.model);
+    if (isLogical) {
+      res.setHeader('X-Gateway-Logical-Model', modelId);
+    }
+    res.setHeader('X-Gateway-Attempts', String(result.attempts));
+
     logger.info({
       event: 'request_complete',
       request_id: requestId,
       provider: result.providerId,
       model: result.model,
+      logical_model: isLogical ? modelId : undefined,
       attempts: result.attempts,
       latency_ms: Date.now() - startTime,
     });
