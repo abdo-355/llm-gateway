@@ -3,15 +3,9 @@ import { loadConfig } from "../config";
 import { createRouter } from "../services/router";
 import { ChatCompletionRequestSchema } from "../config/schema";
 import { getLogicalModel } from "../config/logicalModels";
-import { GatewayError, JsonObject } from "../types";
 import { logger } from "../utils/logger";
-import {
-  RateLimitError,
-  ModelQuotaExceededError,
-  PaymentRequiredError,
-  ProviderError,
-  GatewayErrorClass,
-} from "../errors";
+import { errorHandler } from "../services/errorHandler";
+import { GatewayError, JsonObject } from "../types";
 
 export async function completionsHandler(
   req: Request,
@@ -184,129 +178,6 @@ export async function completionsHandler(
 
     res.json(result.response);
   } catch (error) {
-    // Build error details including provider/model info for model-specific errors
-    const errorDetails: JsonObject = {};
-
-    // Handle ModelQuotaExceededError - includes provider, model, and limit type
-    if (error instanceof ModelQuotaExceededError) {
-      errorDetails.provider = error.providerId;
-      errorDetails.model = error.model;
-      errorDetails.limit_type = error.limitType;
-    }
-
-    // Handle PaymentRequiredError - includes helpful message about credits
-    if (error instanceof PaymentRequiredError) {
-      errorDetails.message =
-        "Payment required - please add credits to your account";
-    }
-
-    // Handle GatewayErrorClass (errors thrown from router)
-    let gatewayError: GatewayError;
-
-    if (error instanceof GatewayErrorClass) {
-      // Error already has all properties, just add request_id if missing
-      gatewayError = {
-        type: error.type,
-        code: error.code,
-        message: error.message,
-        request_id: error.request_id || requestId,
-        details: error.details,
-      };
-    } else if (error instanceof Error && "type" in error) {
-      gatewayError = error as unknown as GatewayError;
-    } else {
-      gatewayError = {
-        type: "gateway_error",
-        code: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Unknown error",
-        request_id: requestId,
-        details:
-          Object.keys(errorDetails).length > 0 ? errorDetails : undefined,
-      };
-    }
-
-    // Merge error details if the error already has a type (is a known error type)
-    if (
-      error instanceof Error &&
-      "type" in error &&
-      Object.keys(errorDetails).length > 0
-    ) {
-      gatewayError.details = {
-        ...(gatewayError.details || {}),
-        ...errorDetails,
-      };
-    }
-
-    // Enhanced error logging with stack trace for debugging
-    const isDev = process.env.NODE_ENV !== "production";
-
-    logger.error({
-      event: "request_failed",
-      request_id: requestId,
-      error: gatewayError.message,
-      code: gatewayError.code,
-      error_type: error instanceof Error ? error.constructor.name : "Unknown",
-      ...(isDev && error instanceof Error && error.stack
-        ? { stack: error.stack }
-        : {}),
-      ...(error instanceof ModelQuotaExceededError
-        ? {
-            provider: error.providerId,
-            model: error.model,
-            limit_type: error.limitType,
-          }
-        : {}),
-      ...(error instanceof PaymentRequiredError
-        ? {
-            provider: "upstream",
-          }
-        : {}),
-      ...(error instanceof ProviderError &&
-      !(error instanceof ModelQuotaExceededError) &&
-      !(error instanceof PaymentRequiredError)
-        ? {
-            status_code: error.statusCode,
-            is_retryable: error.isRetryable,
-          }
-        : {}),
-      ...(gatewayError.details
-        ? { details: String(gatewayError.details) }
-        : {}),
-    });
-
-    // Determine HTTP status code based on error type
-    const statusCode =
-      error instanceof PaymentRequiredError
-        ? 402
-        : error instanceof ModelQuotaExceededError
-          ? 429
-          : gatewayError.code === "TIMEOUT"
-            ? 504
-            : gatewayError.code === "RATE_LIMITED"
-              ? 429
-              : gatewayError.code === "CIRCUIT_BREAKER_OPEN"
-                ? 503
-                : gatewayError.code === "VALIDATION_ERROR"
-                  ? 400
-                  : gatewayError.code === "NO_ELIGIBLE_PROVIDER"
-                    ? 422
-                    : error instanceof ProviderError
-                      ? error.statusCode
-                      : 502;
-
-    // Set Retry-After header for rate limit errors (both RateLimitError and ModelQuotaExceededError)
-    if (error instanceof RateLimitError) {
-      res.setHeader("Retry-After", String(error.retryAfter));
-    } else if (error instanceof ModelQuotaExceededError) {
-      // ModelQuotaExceededError extends ProviderError with statusCode 429
-      // Retry-After info may be available via headers if set by the router
-      if (error.headers?.retryAfter) {
-        res.setHeader("Retry-After", String(error.headers.retryAfter));
-      }
-    } else if (error instanceof ProviderError && error.headers?.retryAfter) {
-      res.setHeader("Retry-After", String(error.headers.retryAfter));
-    }
-
-    res.status(statusCode).json({ error: gatewayError });
+    errorHandler.handleError(error, requestId, res);
   }
 }
