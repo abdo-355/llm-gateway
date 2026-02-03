@@ -1,16 +1,28 @@
 import { Request, Response, NextFunction } from "express";
 
+let cachedOrigins: string[] | null = null;
+let lastOriginsEnv: string | null = null;
+
+function parseAllowedOrigins(): string[] {
+  const originsEnv = process.env.CORS_ORIGINS || "";
+
+  if (originsEnv !== lastOriginsEnv) {
+    lastOriginsEnv = originsEnv;
+    cachedOrigins = originsEnv
+      .split(",")
+      .map((o) => o.trim())
+      .filter((o) => o);
+  }
+
+  return cachedOrigins || [];
+}
+
 export function corsMiddleware(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  // Read CORS_ORIGINS fresh each time as it can change (not cached like other env vars)
-  const originsEnv = process.env.CORS_ORIGINS || "";
-  const allowedOrigins = originsEnv
-    .split(",")
-    .map((o) => o.trim())
-    .filter((o) => o);
+  const allowedOrigins = parseAllowedOrigins();
 
   const origin = req.headers.origin;
 
