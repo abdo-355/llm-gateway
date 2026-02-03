@@ -5,6 +5,21 @@ import { ProviderError, TimeoutError, PaymentRequiredError, RateLimitHeaders } f
 
 export class ProviderService {
   /**
+   * Sanitize URL for logging - removes query parameters and auth info
+   * Ensures sensitive data is never logged
+   */
+  private sanitizeUrlForLogging(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      // Return only protocol, hostname, and pathname
+      return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+    } catch {
+      // If URL parsing fails, return a safe placeholder
+      return '[invalid-url]';
+    }
+  }
+
+  /**
    * Extract rate limit headers from provider response
    * Handles various header naming conventions used by different providers
    */
@@ -175,7 +190,7 @@ export class ProviderService {
         
         logger.error({
           event: 'provider_error',
-          baseUrl,
+          baseUrl: this.sanitizeUrlForLogging(baseUrl),
           model,
           status: response.status,
           latency_ms: latencyMs,
@@ -204,7 +219,7 @@ export class ProviderService {
 
       logger.info({
         event: 'provider_success',
-        baseUrl,
+        baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         latency_ms: latencyMs,
         tokens_used: data.usage?.total_tokens,
@@ -222,7 +237,7 @@ export class ProviderService {
 
       logger.error({
         event: 'provider_exception',
-        baseUrl,
+        baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -280,7 +295,7 @@ export class ProviderService {
         
         logger.error({
           event: 'provider_error',
-          baseUrl,
+          baseUrl: this.sanitizeUrlForLogging(baseUrl),
           model,
           status: response.status,
           latency_ms: latencyMs,
@@ -310,7 +325,7 @@ export class ProviderService {
 
       logger.info({
         event: 'provider_success',
-        baseUrl,
+        baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         latency_ms: latencyMs,
         tokens_used: data.usage?.total_tokens,
@@ -329,7 +344,7 @@ export class ProviderService {
 
       logger.error({
         event: 'provider_exception',
-        baseUrl,
+        baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         error: error instanceof Error ? error.message : String(error),
         provider_type: 'vertex',
