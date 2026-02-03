@@ -65,6 +65,16 @@ export interface ExecutionResult {
   latencyMs: number;
 }
 
+/**
+ * RouterService - Intelligent LLM request routing with failover and load balancing
+ *
+ * This service handles:
+ * - Provider candidate generation and scoring
+ * - Circuit breaker awareness
+ * - Quota-based filtering
+ * - Automatic retries with exponential backoff
+ * - Streaming and non-streaming request execution
+ */
 export class RouterService {
   private config: AppConfig;
 
@@ -72,6 +82,12 @@ export class RouterService {
     this.config = config;
   }
 
+  /**
+   * Derive requirements from the request and optional hints
+   * @param request - The chat completion request
+   * @param hints - Optional routing hints from the request
+   * @returns Derived requirements for routing decisions
+   */
   deriveRequirements(
     request: ChatCompletionRequest,
     hints?: RouterHints,
@@ -79,6 +95,10 @@ export class RouterService {
     return deriveRequirements(request, hints);
   }
 
+  /**
+   * Generate routing candidates from all configured providers
+   * @returns Array of provider-model combinations with certification info
+   */
   async generateCandidates(): Promise<RoutingCandidate[]> {
     const candidates: RoutingCandidate[] = [];
 
@@ -103,8 +123,15 @@ export class RouterService {
   }
 
   /**
-   * Generate candidates from a logical model configuration
-   * Only includes candidates specified in the logical model's candidate list
+   * Generate routing candidates from a logical model configuration
+   *
+   * Only includes provider-model combinations that are explicitly specified
+   * in the logical model's candidate list. Each candidate is validated against
+   * the actual provider configuration to ensure the provider exists and the model
+   * is available. Certification status is checked for each valid candidate.
+   *
+   * @param logicalModelConfig - The logical model configuration containing candidate specifications
+   * @returns Promise resolving to an array of validated routing candidates with certification info
    */
   async generateCandidatesFromLogicalModel(
     logicalModelConfig: LogicalModelConfig,
@@ -163,6 +190,23 @@ export class RouterService {
     return candidates;
   }
 
+  /**
+   * Filter routing candidates based on requirements, hints, and health checks
+   *
+   * Applies a series of filters to eliminate candidates that cannot handle the request:
+   * - Provider allow/deny list restrictions from hints
+   * - Strict schema certification requirements
+   * - Streaming capability requirements
+   * - Tools capability requirements
+   * - Circuit breaker state (excludes unhealthy providers)
+   * - Per-model quota limits (excludes providers over quota)
+   *
+   * @param candidates - The list of candidates to filter
+   * @param requirements - Derived requirements from the request
+   * @param request - The chat completion request (used for token estimation)
+   * @param hints - Optional routing hints for filtering decisions
+   * @returns Promise resolving to eligible candidates and filtered-out candidates with reasons
+   */
   async filterCandidates(
     candidates: RoutingCandidate[],
     requirements: DerivedRequirements,
@@ -339,6 +383,21 @@ export class RouterService {
     return { eligible, filtered };
   }
 
+  /**
+   * Score and rank routing candidates based on hints and health status
+   *
+   * Delegates to the pure scoreCandidates function to calculate scores for each candidate.
+   * Candidates are scored based on:
+   * - Base weight
+   * - Provider preference ordering from hints
+   * - Health status (via external scoring function)
+   *
+   * Results are sorted by score in descending order (highest score first).
+   *
+   * @param candidates - The candidates to score
+   * @param hints - Optional routing hints with provider preferences
+   * @returns Array of scored and sorted candidates
+   */
   scoreCandidates(
     candidates: RoutingCandidate[],
     hints?: RouterHints,
@@ -346,6 +405,24 @@ export class RouterService {
     return scoreCandidates(candidates, hints);
   }
 
+  /**
+   * Compile a routing plan from scored candidates
+   *
+   * Delegates to the pure compilePlan function to create an execution plan.
+   * The plan includes:
+   * - Top N candidates based on score (limited by maxAttempts)
+   * - Timeout configuration per attempt
+   * - API keys and authentication details
+   * - Retry policy configuration
+   *
+   * SLO values from logical models are used as defaults, which can be overridden
+   * by explicit hints.
+   *
+   * @param candidates - The scored candidates to include in the plan
+   * @param hints - Optional routing hints for plan configuration
+   * @param logicalModelSLO - Optional SLO constraints from logical model (latency, attempts)
+   * @returns A routing plan ready for execution
+   */
   compilePlan(
     candidates: RoutingCandidate[],
     hints?: RouterHints,
@@ -362,6 +439,24 @@ export class RouterService {
     return shouldRetry(error, plan, attemptIndex);
   }
 
+  /**
+   * Execute a routing plan by attempting providers in order
+   *
+   * Iterates through the plan's attempts in order, trying each provider until
+   * one succeeds. Handles various error types with appropriate retry logic:
+   * - Model quota exceeded: continues to next provider
+   * - Rate limit (429): syncs with quota service and retries if configured
+   * - Payment required (402): non-retryable, fails immediately
+   * - 5xx and timeout errors: retries based on plan configuration
+   *
+   * Records success/failure metrics and quota usage for each attempt.
+   *
+   * @param plan - The routing plan with ordered attempts
+   * @param request - The chat completion request to execute
+   * @param requestId - Unique identifier for this request (for logging)
+   * @returns Promise resolving to the execution result on success
+   * @throws GatewayError when all attempts fail
+   */
   async execute(
     plan: RoutingPlan,
     request: ChatCompletionRequest,
@@ -553,6 +648,26 @@ export class RouterService {
     }
   }
 
+  /**
+   * Execute a streaming request by attempting providers in order
+   *
+   * Similar to execute() but for streaming responses. Iterates through the plan's
+   * attempts, trying each provider until one successfully establishes a streaming
+   * connection. Uses callbacks to deliver chunks, completion, and errors.
+   *
+   * Error handling:
+   * - Calls onError callback for non-retryable errors (payment required)
+   * - Continues to next provider for retryable errors (quota exceeded, rate limit)
+   * - Handles rate limit errors by syncing with quota service
+   *
+   * @param plan - The routing plan with ordered attempts
+   * @param request - The chat completion request to execute
+   * @param requestId - Unique identifier for this request (for logging)
+   * @param onChunk - Callback invoked for each SSE chunk received
+   * @param onComplete - Callback invoked when streaming completes successfully
+   * @param onError - Callback invoked when an error occurs (non-retryable or final failure)
+   * @returns Promise that resolves when streaming completes or all attempts fail
+   */
   async executeStream(
     plan: RoutingPlan,
     request: ChatCompletionRequest,
