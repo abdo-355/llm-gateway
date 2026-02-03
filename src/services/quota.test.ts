@@ -25,8 +25,16 @@ describe("QuotaService", () => {
         incrby: jest.fn().mockReturnThis(),
         expire: jest.fn().mockReturnThis(),
         zadd: jest.fn().mockReturnThis(),
+        zremrangebyscore: jest.fn().mockReturnThis(),
+        zrangebyscore: jest.fn().mockReturnThis(),
+        zcard: jest.fn().mockReturnThis(),
         set: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([]),
+        exec: jest.fn().mockResolvedValue([
+          [null, 0], // zremrangebyscore result
+          [null, 0], // zcard result (for RPM - isTokenWindow=false)
+          [null, []], // zrangebyscore result (for TPM - isTokenWindow=true)
+          [null, 0], // zcard result (for TPM)
+        ]),
       }),
     };
     (getRedisClient as jest.Mock).mockReturnValue(mockRedis);

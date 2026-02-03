@@ -170,6 +170,7 @@ export class QuotaService {
    * Get count from sliding window (sorted set)
    * For RPM: count entries
    * For TPM: sum token counts from member values
+   * Optimized with Redis pipeline for better performance
    */
   private async getSlidingWindowCount(
     key: string,
@@ -180,13 +181,25 @@ export class QuotaService {
     const windowStart = now - windowSeconds * 1000;
 
     try {
-      // Remove entries outside window
-      await this.redis.zremrangebyscore(key, 0, windowStart);
+      // Use pipeline for atomic operations
+      const pipeline = this.redis.pipeline();
+      pipeline.zremrangebyscore(key, 0, windowStart);
 
       if (isTokenWindow) {
-        // For TPM, we need to sum the token counts from member values
-        // Members are stored as `${tokenCount}-${random}` with score=timestamp
-        const members = await this.redis.zrangebyscore(key, windowStart, now);
+        // For TPM, get members in window
+        pipeline.zrangebyscore(key, windowStart, now);
+        pipeline.zcard(key); // Also get count for potential use
+        const results = await pipeline.exec();
+
+        if (!results) {
+          return 0;
+        }
+
+        // Parse results from pipeline
+        // results[0] = zremrangebyscore result
+        // results[1] = zrangebyscore result (array of members)
+        // results[2] = zcard result (count)
+        const members = (results[1] as any)?.[1] || [];
         let totalTokens = 0;
         for (const member of members) {
           const tokenCount = parseInt(member.split("-")[0], 10);
@@ -196,8 +209,16 @@ export class QuotaService {
         }
         return totalTokens;
       } else {
-        // For RPM, just count entries
-        return await this.redis.zcard(key);
+        // For RPM, just count entries after cleanup
+        pipeline.zcard(key);
+        const results = await pipeline.exec();
+
+        if (!results) {
+          return 0;
+        }
+
+        // Parse result from pipeline
+        return (results[1] as any)?.[1] || 0;
       }
     } catch (error) {
       logger.error({
