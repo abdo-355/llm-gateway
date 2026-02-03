@@ -1,14 +1,17 @@
-import Redis from 'ioredis';
+import Redis from "ioredis";
+import { logger } from "../utils/logger";
+import { getEnv } from "../config/env";
 
 let redisClient: Redis | null = null;
 
 export function getRedisClient(): Redis {
   if (!redisClient) {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-    const keyPrefix = process.env.REDIS_KEY_PREFIX || 'llm_gateway';
+    const env = getEnv();
+    const redisUrl = env.REDIS_URL;
+    const keyPrefix = env.REDIS_KEY_PREFIX;
 
     redisClient = new Redis(redisUrl, {
-      keyPrefix: keyPrefix + ':',
+      keyPrefix: keyPrefix + ":",
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -16,12 +19,12 @@ export function getRedisClient(): Redis {
       maxRetriesPerRequest: 3,
     });
 
-    redisClient.on('error', (err) => {
-      console.error('Redis error:', err);
+    redisClient.on("error", (err) => {
+      logger.error({ event: "redis_error", error: err.message });
     });
 
-    redisClient.on('connect', () => {
-      console.log('Redis connected');
+    redisClient.on("connect", () => {
+      logger.info({ event: "redis_connected" });
     });
   }
 

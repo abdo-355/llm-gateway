@@ -3,6 +3,7 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
+  setupFiles: ['<rootDir>/jest.setup.js'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',
@@ -11,7 +12,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
+    '^.+\.tsx?$': ['ts-jest', {
       tsconfig: {
         module: 'commonjs',
         target: 'ES2022',

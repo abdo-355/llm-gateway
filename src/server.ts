@@ -1,42 +1,35 @@
 import { createApp } from "./app";
 import { closeRedis } from "./lib/redis";
 import { logger } from "./utils/logger";
-import { Registry, Counter, Histogram } from "prom-client";
-
-// Create Prometheus registry
-export const register = new Registry();
-
-// Define metrics
-export const gatewayRequestsTotal = new Counter({
-  name: "gateway_requests_total",
-  help: "Total number of requests",
-  labelNames: ["status"],
-  registers: [register],
-});
-
-export const gatewayLatencyHistogram = new Histogram({
-  name: "gateway_latency_ms",
-  help: "Request latency in milliseconds",
-  labelNames: ["provider", "model"],
-  buckets: [50, 100, 250, 500, 1000, 2500, 5000, 10000],
-  registers: [register],
-});
+import { validateAndLoadEnv } from "./config/env";
 
 async function main() {
-  const port = process.env.PORT || "8080";
+  // Validate environment variables first - server won't start if any are missing
+  let env;
+  try {
+    env = validateAndLoadEnv();
+  } catch (error) {
+    console.error(
+      error instanceof Error ? error.message : "Environment validation failed",
+    );
+    process.exit(1);
+  }
+
+  const port = env.PORT;
   const app = createApp();
 
   logger.info({
     event: "startup",
     version: "1.0.0",
     port,
+    env: env.NODE_ENV,
   });
 
-  const server = app.listen(parseInt(port, 10), () => {
+  const server = app.listen(port, () => {
     logger.info({
       event: "server_started",
       port,
-      env: process.env.NODE_ENV || "development",
+      env: env.NODE_ENV,
     });
   });
 

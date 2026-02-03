@@ -1,6 +1,6 @@
-import express, { Application } from 'express';
-import { middleware } from './middleware';
-import { router } from './routes';
+import express, { Application } from "express";
+import { middleware } from "./middleware";
+import { router, healthHandler } from "./routes";
 
 export function createApp(): Application {
   const app = express();
@@ -11,7 +11,10 @@ export function createApp(): Application {
 
   // Request handling
   app.use(middleware.requestId);
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: "10mb" }));
+
+  // Health endpoint - no auth required
+  app.get("/health", healthHandler);
 
   // Mandatory auth (no bypass)
   app.use(middleware.auth);
@@ -22,8 +25,8 @@ export function createApp(): Application {
   });
 
   // Routes
-  app.use('/v1', router);
-  app.use('/', router);
+  app.use("/v1", router);
+  app.use("/", router);
 
   // Error handling
   app.use(middleware.errorHandler);

@@ -1,7 +1,15 @@
-import pino from 'pino';
+import pino from "pino";
 
 // Valid log value types
-export type LogValue = string | number | boolean | null | undefined | Date | LogValue[] | { [key: string]: LogValue };
+export type LogValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | Date
+  | LogValue[]
+  | { [key: string]: LogValue };
 
 export interface LogContext {
   request_id?: string;
@@ -14,18 +22,22 @@ export class Logger {
 
   constructor(context: LogContext = {}) {
     this.context = context;
-    const isDev = process.env.NODE_ENV !== 'production';
-    
+    // Use process.env directly here since logger is created early
+    // before getEnv() may be called. These have defaults so it's safe.
+    const isDev = process.env.NODE_ENV !== "production";
+
     this.logger = pino({
-      level: process.env.LOG_LEVEL || 'info',
-      transport: isDev ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
-        },
-      } : undefined,
+      level: process.env.LOG_LEVEL || "info",
+      transport: isDev
+        ? {
+            target: "pino-pretty",
+            options: {
+              colorize: true,
+              translateTime: "HH:MM:ss Z",
+              ignore: "pid,hostname",
+            },
+          }
+        : undefined,
       base: undefined,
     });
   }
