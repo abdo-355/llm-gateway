@@ -150,10 +150,7 @@ describe("HealthService", () => {
 
       await healthService.recordSuccess("groq", 100);
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        "circuit:groq:failures",
-        "0",
-      );
+      expect(mockRedis.set).toHaveBeenCalledWith("circuit:groq:failures", "0");
     });
 
     it("should transition to CLOSED after success in HALF_OPEN state", async () => {
@@ -209,10 +206,7 @@ describe("HealthService", () => {
 
       await healthService.recordFailure("groq");
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        "circuit:groq:state",
-        "OPEN",
-      );
+      expect(mockRedis.set).toHaveBeenCalledWith("circuit:groq:state", "OPEN");
     });
 
     it("should re-open circuit on failure in HALF_OPEN state", async () => {
@@ -223,10 +217,7 @@ describe("HealthService", () => {
 
       await healthService.recordFailure("groq");
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
-        "circuit:groq:state",
-        "OPEN",
-      );
+      expect(mockRedis.set).toHaveBeenCalledWith("circuit:groq:state", "OPEN");
     });
   });
 

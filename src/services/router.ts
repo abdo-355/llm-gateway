@@ -467,7 +467,7 @@ export class RouterService {
 
     for (let i = 0; i < plan.attempts.length; i++) {
       const attempt = plan.attempts[i];
-      
+
       logger.info({
         event: "attempt_start",
         request_id: requestId,
@@ -477,11 +477,22 @@ export class RouterService {
       });
 
       try {
-        const result = await this.executeAttempt(attempt, request, requestId, startTime);
+        const result = await this.executeAttempt(
+          attempt,
+          request,
+          requestId,
+          startTime,
+        );
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        const shouldContinue = await this.handleAttemptError(error, attempt, plan, i, requestId);
+        const shouldContinue = await this.handleAttemptError(
+          error,
+          attempt,
+          plan,
+          i,
+          requestId,
+        );
         if (!shouldContinue) {
           throw this.createGatewayError(lastError, i + 1);
         }
@@ -503,10 +514,10 @@ export class RouterService {
     attempt: RoutingAttempt,
     request: ChatCompletionRequest,
     requestId: string,
-    startTime: number
+    startTime: number,
   ): Promise<ExecutionResult> {
     const attemptStartTime = Date.now();
-    
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), attempt.timeoutMs);
 
@@ -519,7 +530,7 @@ export class RouterService {
         attempt.timeoutMs,
         controller.signal,
         attempt.providerType,
-        attempt.auth
+        attempt.auth,
       );
 
       const latencyMs = Date.now() - attemptStartTime;
@@ -527,10 +538,14 @@ export class RouterService {
       // Record success
       await healthService.recordSuccess(attempt.providerId, latencyMs);
       const tokensUsed = response.usage?.total_tokens || 0;
-      await quotaService.recordModelUsage(attempt.providerId, attempt.model, tokensUsed);
+      await quotaService.recordModelUsage(
+        attempt.providerId,
+        attempt.model,
+        tokensUsed,
+      );
 
       // Check for refusal
-      const hasRefusal = response.choices?.some(c => c.message?.refusal);
+      const hasRefusal = response.choices?.some((c) => c.message?.refusal);
       if (hasRefusal) {
         logger.info({
           event: "refusal_detected",
@@ -571,7 +586,7 @@ export class RouterService {
     attempt: RoutingAttempt,
     plan: RoutingPlan,
     attemptIndex: number,
-    requestId: string
+    requestId: string,
   ): Promise<boolean> {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -628,14 +643,15 @@ export class RouterService {
   private async syncRateLimitWithQuota(
     providerError: ProviderError,
     attempt: RoutingAttempt,
-    requestId: string
+    requestId: string,
   ): Promise<void> {
     try {
-      const rateLimitHeaders = this.extractRateLimitHeadersFromError(providerError);
+      const rateLimitHeaders =
+        this.extractRateLimitHeadersFromError(providerError);
       await quotaService.handleProviderRateLimit(
         attempt.providerId,
         attempt.model,
-        { headers: rateLimitHeaders, statusCode: 429 }
+        { headers: rateLimitHeaders, statusCode: 429 },
       );
     } catch (syncError) {
       logger.warn({
@@ -643,7 +659,8 @@ export class RouterService {
         request_id: requestId,
         provider: attempt.providerId,
         model: attempt.model,
-        error: syncError instanceof Error ? syncError.message : String(syncError),
+        error:
+          syncError instanceof Error ? syncError.message : String(syncError),
       });
     }
   }
@@ -687,7 +704,7 @@ export class RouterService {
           request,
           estimatedTokens,
           requestId,
-          onChunk
+          onChunk,
         );
         onComplete();
         return;
@@ -698,7 +715,7 @@ export class RouterService {
           plan,
           i,
           requestId,
-          onError
+          onError,
         );
         if (!shouldContinue) {
           return;
@@ -723,7 +740,7 @@ export class RouterService {
     request: ChatCompletionRequest,
     estimatedTokens: number,
     requestId: string,
-    onChunk: (chunk: SSEChunk) => void
+    onChunk: (chunk: SSEChunk) => void,
   ): Promise<void> {
     const controller = new AbortController();
 
@@ -737,12 +754,16 @@ export class RouterService {
         onChunk,
         controller.signal,
         attempt.providerType,
-        attempt.auth
+        attempt.auth,
       );
 
       await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
-      await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
-      
+      await quotaService.recordModelUsage(
+        attempt.providerId,
+        attempt.model,
+        estimatedTokens,
+      );
+
       logger.info({
         event: "streaming_attempt_success",
         request_id: requestId,
@@ -765,7 +786,7 @@ export class RouterService {
     plan: RoutingPlan,
     attemptIndex: number,
     requestId: string,
-    onError: (error: GatewayError) => void
+    onError: (error: GatewayError) => void,
   ): Promise<boolean> {
     await healthService.recordFailure(attempt.providerId);
 
@@ -809,7 +830,10 @@ export class RouterService {
     return true; // Continue for other errors
   }
 
-  private createGatewayError(error: Error, attempts: number): GatewayErrorClass {
+  private createGatewayError(
+    error: Error,
+    attempts: number,
+  ): GatewayErrorClass {
     return createGatewayError(error, attempts);
   }
 
@@ -818,34 +842,46 @@ export class RouterService {
    * Converts internal RateLimitHeaders to the format expected by handleProviderRateLimit
    */
   private extractRateLimitHeadersFromError(
-    providerError: ProviderError
+    providerError: ProviderError,
   ): Record<string, string | string[] | undefined> {
     const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
-    
+
     if (providerError.headers) {
       if (providerError.headers.retryAfter !== undefined) {
-        rateLimitHeaders["retry-after"] = String(providerError.headers.retryAfter);
+        rateLimitHeaders["retry-after"] = String(
+          providerError.headers.retryAfter,
+        );
       }
       if (providerError.headers.limitRequests !== undefined) {
-        rateLimitHeaders["x-ratelimit-limit-requests"] = String(providerError.headers.limitRequests);
+        rateLimitHeaders["x-ratelimit-limit-requests"] = String(
+          providerError.headers.limitRequests,
+        );
       }
       if (providerError.headers.remainingRequests !== undefined) {
-        rateLimitHeaders["x-ratelimit-remaining-requests"] = String(providerError.headers.remainingRequests);
+        rateLimitHeaders["x-ratelimit-remaining-requests"] = String(
+          providerError.headers.remainingRequests,
+        );
       }
       if (providerError.headers.resetRequests !== undefined) {
-        rateLimitHeaders["x-ratelimit-reset-requests"] = providerError.headers.resetRequests;
+        rateLimitHeaders["x-ratelimit-reset-requests"] =
+          providerError.headers.resetRequests;
       }
       if (providerError.headers.limitTokens !== undefined) {
-        rateLimitHeaders["x-ratelimit-limit-tokens"] = String(providerError.headers.limitTokens);
+        rateLimitHeaders["x-ratelimit-limit-tokens"] = String(
+          providerError.headers.limitTokens,
+        );
       }
       if (providerError.headers.remainingTokens !== undefined) {
-        rateLimitHeaders["x-ratelimit-remaining-tokens"] = String(providerError.headers.remainingTokens);
+        rateLimitHeaders["x-ratelimit-remaining-tokens"] = String(
+          providerError.headers.remainingTokens,
+        );
       }
       if (providerError.headers.resetTokens !== undefined) {
-        rateLimitHeaders["x-ratelimit-reset-tokens"] = providerError.headers.resetTokens;
+        rateLimitHeaders["x-ratelimit-reset-tokens"] =
+          providerError.headers.resetTokens;
       }
     }
-    
+
     return rateLimitHeaders;
   }
 }

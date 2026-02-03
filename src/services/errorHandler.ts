@@ -27,8 +27,7 @@ export class ErrorHandlerService {
     }
 
     if (error instanceof PaymentRequiredError) {
-      details.message =
-        "Payment required - please add credits to your account";
+      details.message = "Payment required - please add credits to your account";
     }
 
     return details;
@@ -182,11 +181,7 @@ export class ErrorHandlerService {
   /**
    * Handle complete error flow: build, log, and send response
    */
-  handleError(
-    error: unknown,
-    requestId: string,
-    res: Response,
-  ): void {
+  handleError(error: unknown, requestId: string, res: Response): void {
     // Build error details
     const details = this.buildErrorDetails(error);
 
