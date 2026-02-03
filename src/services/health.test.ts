@@ -15,7 +15,7 @@ describe("HealthService", () => {
       set: jest.fn(),
       setex: jest.fn(),
       incr: jest.fn(),
-      keys: jest.fn(),
+      scan: jest.fn(),
     };
     (getRedisClient as jest.Mock).mockReturnValue(mockRedis);
     healthService = new HealthService();
@@ -273,10 +273,11 @@ describe("HealthService", () => {
   });
 
   describe("getAllHealthMetrics", () => {
-    it("should return metrics for all providers", async () => {
-      mockRedis.keys.mockResolvedValue([
-        "circuit:groq:state",
-        "circuit:mistral:state",
+    it("should return metrics for all providers using SCAN", async () => {
+      // SCAN returns [cursor, [keys...]] - cursor "0" means done
+      mockRedis.scan.mockResolvedValue([
+        "0",
+        ["circuit:groq:state", "circuit:mistral:state"],
       ]);
       mockRedis.get
         .mockResolvedValueOnce("CLOSED")
@@ -297,14 +298,48 @@ describe("HealthService", () => {
       expect(metrics).toHaveLength(2);
       expect(metrics[0].providerId).toBe("groq");
       expect(metrics[1].providerId).toBe("mistral");
+      // Verify SCAN was called with correct parameters
+      expect(mockRedis.scan).toHaveBeenCalledWith(
+        "0",
+        "MATCH",
+        "circuit:*:state",
+        "COUNT",
+        100,
+      );
     });
 
     it("should return empty array when no providers", async () => {
-      mockRedis.keys.mockResolvedValue([]);
+      mockRedis.scan.mockResolvedValue(["0", []]);
 
       const metrics = await healthService.getAllHealthMetrics();
 
       expect(metrics).toEqual([]);
+    });
+
+    it("should handle multiple SCAN iterations", async () => {
+      // First SCAN returns partial results with non-zero cursor
+      mockRedis.scan
+        .mockResolvedValueOnce(["123", ["circuit:groq:state"]])
+        .mockResolvedValueOnce(["0", ["circuit:mistral:state"]]);
+
+      mockRedis.get
+        .mockResolvedValueOnce("CLOSED")
+        .mockResolvedValueOnce("0")
+        .mockResolvedValueOnce("0")
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce("1.0")
+        .mockResolvedValueOnce("CLOSED")
+        .mockResolvedValueOnce("0")
+        .mockResolvedValueOnce("0")
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce("1.0");
+
+      const metrics = await healthService.getAllHealthMetrics();
+
+      expect(metrics).toHaveLength(2);
+      expect(mockRedis.scan).toHaveBeenCalledTimes(2);
     });
   });
 });

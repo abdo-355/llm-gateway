@@ -192,9 +192,26 @@ export class HealthService {
     };
   }
 
+  /**
+   * Scan for keys using Redis SCAN command (O(1) per iteration vs O(N) for KEYS)
+   * Prevents blocking Redis on large databases
+   */
+  private async scanKeys(pattern: string): Promise<string[]> {
+    const keys: string[] = [];
+    let cursor = "0";
+
+    do {
+      const result = await this.redis.scan(cursor, "MATCH", pattern, "COUNT", 100);
+      cursor = result[0];
+      keys.push(...result[1]);
+    } while (cursor !== "0");
+
+    return keys;
+  }
+
   async getAllHealthMetrics(): Promise<HealthMetrics[]> {
-    // Get all provider IDs from circuit keys
-    const keys = await this.redis.keys(`${CIRCUIT_PREFIX}*:state`);
+    // Use SCAN instead of KEYS for better performance on large Redis instances
+    const keys = await this.scanKeys(`${CIRCUIT_PREFIX}*:state`);
     const providerIds = keys.map((k) =>
       k.replace(`${CIRCUIT_PREFIX}`, "").replace(":state", ""),
     );
