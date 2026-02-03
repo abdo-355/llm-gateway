@@ -5,7 +5,7 @@ A secure, production-ready LLM Gateway that exposes an OpenAI-compatible API and
 ## Features
 
 - **OpenAI-Compatible API** - Drop-in replacement for OpenAI's `/v1/chat/completions`
-- **Multi-Provider Support** - groq, openrouter, cerebras, mistral, vertex
+- **Multi-Provider Support** - Groq, Cerebras, Mistral, Google Vertex AI
 - **Smart Routing** - Automatic provider selection based on requirements
 - **Automatic Failover** - Retries on errors, circuit breakers for unhealthy providers
 - **Quota Management** - Redis-backed RPM/TPM/daily limits with persistence
@@ -31,7 +31,7 @@ cp .env.example .env
 
 ### 2. Configure Providers
 
-Edit `config/config.json` to add/remove providers:
+Edit `src/config/providers.ts` to add/remove providers:
 
 ```json
 {
@@ -84,7 +84,7 @@ Edit `config/config.json` to add/remove providers:
     {
       "id": "vertex",
       "baseUrl": "https://us-central1-aiplatform.googleapis.com/v1",
-      "auth": { "type": "bearer", "env": "VERTEX_API_KEY" },
+      "auth": { "type": "bearer", "env": "GOOGLE_VERTEX_API_KEY" },
       "models": {
         "mode": "allowlist",
         "list": ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-1.5-pro", "gemini-1.5-flash"]
@@ -125,7 +125,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "router:auto",
+    "model": "chat-lite",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
@@ -135,17 +135,37 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `GATEWAY_API_KEY` | Yes | - | API key for authenticating requests (min 32 chars) |
-| `GROQ_API_KEY` | No | - | Groq API key |
-| `OPENROUTER_API_KEY` | No | - | OpenRouter API key |
-| `CEREBRAS_API_KEY` | No | - | Cerebras API key |
-| `MISTRAL_API_KEY` | No | - | Mistral API key |
-| `VERTEX_API_KEY` | No | - | Google Vertex AI API key |
+| `GROQ_API_KEY` | Yes | - | Groq API key |
+| `CEREBRAS_API_KEY` | Yes | - | Cerebras API key |
+| `MISTRAL_API_KEY` | Yes | - | Mistral API key |
+| `GOOGLE_VERTEX_API_KEY` | Yes | - | Google Vertex AI API key |
 | `PORT` | No | 8080 | Server port |
 | `RATE_LIMIT_PER_IP` | No | 100 | Max requests per IP per window |
 | `RATE_LIMIT_WINDOW_MS` | No | 60000 | Rate limit window in ms |
 | `CORS_ORIGINS` | No | - | Comma-separated allowed origins |
 | `REDIS_URL` | No | redis://redis:6379 | Redis connection URL |
 | `LOG_LEVEL` | No | info | Log level (debug, info, warn, error) |
+
+## Logical Models
+
+Instead of managing individual provider models, use **logical models** that automatically route to the best available provider based on your requirements:
+
+| Logical Model | Task | Description | Default Providers |
+|--------------|------|-------------|-------------------|
+| `chat-lite` | Chat | Fast, cost-effective responses | Groq (llama-3.1-8b) → Mistral (small) |
+| `chat-pro` | Chat | Balanced quality and speed | Groq (llama-3.3-70b) → Cerebras → Mistral |
+| `chat-max` | Chat | Maximum reasoning capability | Large MoE models with failover |
+| `json-fast` | JSON | Quick structured output extraction | Optimized for speed over strictness |
+| `json-safe` | JSON | Guaranteed schema compliance | Only strict-schema-certified models |
+| `code-fast` | Code | Quick code generation | Codestral and fast code models |
+| `code-pro` | Code | Production code generation | Best code models with large context |
+| `tools-pro` | Tools | Function calling & orchestration | Models with excellent tool support |
+| `analysis-pro` | Analysis | Deep reasoning and research | Largest available reasoning models |
+
+The gateway automatically:
+- Routes to the best available provider based on health and quota
+- Fails over to backup providers if the primary fails
+- Adds response headers showing the actual provider used
 
 ## API Usage
 
@@ -164,7 +184,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "router:auto",
+    "model": "chat-lite",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
@@ -178,7 +198,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "router:auto",
+    "model": "chat-lite",
     "messages": [{"role": "user", "content": "Hello!"}],
     "router": {
       "providers": {
@@ -202,7 +222,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "router:auto",
+    "model": "chat-lite",
     "messages": [{"role": "user", "content": "Extract name"}],
     "response_format": {
       "type": "json_schema",
@@ -226,7 +246,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer $GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "router:auto",
+    "model": "chat-lite",
     "messages": [{"role": "user", "content": "Count to 5"}],
     "stream": true
   }'
