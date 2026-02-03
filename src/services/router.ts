@@ -293,8 +293,7 @@ export class RouterService {
 
     for (let i = 0; i < plan.attempts.length; i++) {
       const attempt = plan.attempts[i];
-      const attemptStartTime = Date.now();
-
+      
       logger.info({
         event: 'attempt_start',
         request_id: requestId,
@@ -304,153 +303,13 @@ export class RouterService {
       });
 
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), attempt.timeoutMs);
-
-        const response = await providerService.callProvider(
-          attempt.baseUrl,
-          attempt.apiKey,
-          attempt.model,
-          request,
-          attempt.timeoutMs,
-          controller.signal,
-          attempt.providerType,
-          attempt.auth
-        );
-
-        clearTimeout(timeoutId);
-
-        const latencyMs = Date.now() - attemptStartTime;
-
-        // Record success
-        await healthService.recordSuccess(attempt.providerId, latencyMs);
-        // Use new per-model quota recording
-        const tokensUsed = response.usage?.total_tokens || 0;
-        await quotaService.recordModelUsage(attempt.providerId, attempt.model, tokensUsed);
-
-        // Check for refusal
-        const hasRefusal = response.choices?.some(c => c.message?.refusal);
-        if (hasRefusal) {
-          logger.info({
-            event: 'refusal_detected',
-            request_id: requestId,
-            provider: attempt.providerId,
-            model: attempt.model,
-          });
-        }
-
-        logger.info({
-          event: 'attempt_success',
-          request_id: requestId,
-          attempt: i + 1,
-          provider: attempt.providerId,
-          model: attempt.model,
-          latency_ms: latencyMs,
-          tokens_used: tokensUsed,
-        });
-
-        return {
-          response,
-          attempts: i + 1,
-          providerId: attempt.providerId,
-          model: attempt.model,
-          latencyMs: Date.now() - startTime,
-        };
+        const result = await this.executeAttempt(attempt, request, requestId, startTime);
+        return result;
       } catch (error) {
-        const latencyMs = Date.now() - attemptStartTime;
         lastError = error instanceof Error ? error : new Error(String(error));
-
-        logger.error({
-          event: 'attempt_failed',
-          request_id: requestId,
-          attempt: i + 1,
-          provider: attempt.providerId,
-          model: attempt.model,
-          latency_ms: latencyMs,
-          error: lastError.message,
-        });
-
-        // Record failure
-        await healthService.recordFailure(attempt.providerId);
-
-        // Handle specific error types
-        if (error instanceof ModelQuotaExceededError) {
-          // Model quota exceeded - filter this candidate and continue to next attempt
-          logger.warn({
-            event: 'model_quota_exceeded',
-            request_id: requestId,
-            provider: attempt.providerId,
-            model: attempt.model,
-            limit_type: error.limitType,
-          });
-          // Continue to next attempt (don't throw, let loop continue)
-          continue;
-        }
-
-        if (error instanceof ProviderError) {
-          const providerError = error as ProviderError;
-          
-          // Handle 402 Payment Required (OpenRouter specific) - non-retryable
-          if (providerError.statusCode === 402) {
-            logger.error({
-              event: 'payment_required',
-              request_id: requestId,
-              provider: attempt.providerId,
-              model: attempt.model,
-            });
-            throw this.createGatewayError(error, i + 1);
-          }
-
-          // Handle 429 rate limit - sync with provider state if available
-          if (providerError.statusCode === 429) {
-            try {
-              // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
-              if (providerError.headers) {
-                // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
-                if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
-                }
-                if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
-                }
-                if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
-                }
-                if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
-                }
-                if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
-                }
-                if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
-                }
-                if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
-                }
-              }
-
-              await quotaService.handleProviderRateLimit(
-                attempt.providerId,
-                attempt.model,
-                { headers: rateLimitHeaders, statusCode: 429 }
-              );
-            } catch (syncError) {
-              logger.warn({
-                event: 'rate_limit_sync_failed',
-                request_id: requestId,
-                provider: attempt.providerId,
-                model: attempt.model,
-                error: syncError instanceof Error ? syncError.message : String(syncError),
-              });
-            }
-          }
-
-          const shouldRetry = this.shouldRetry(error, plan, i);
-          if (!shouldRetry) {
-            throw this.createGatewayError(error, i + 1);
-          }
+        const shouldContinue = await this.handleAttemptError(error, attempt, plan, i, requestId);
+        if (!shouldContinue) {
+          throw this.createGatewayError(lastError, i + 1);
         }
       }
     }
@@ -461,6 +320,160 @@ export class RouterService {
     );
   }
 
+  /**
+   * Execute a single provider attempt
+   * @returns ExecutionResult on success
+   * @throws ProviderError on failure
+   */
+  private async executeAttempt(
+    attempt: RoutingAttempt,
+    request: ChatCompletionRequest,
+    requestId: string,
+    startTime: number
+  ): Promise<ExecutionResult> {
+    const attemptStartTime = Date.now();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), attempt.timeoutMs);
+
+    try {
+      const response = await providerService.callProvider(
+        attempt.baseUrl,
+        attempt.apiKey,
+        attempt.model,
+        request,
+        attempt.timeoutMs,
+        controller.signal,
+        attempt.providerType,
+        attempt.auth
+      );
+
+      const latencyMs = Date.now() - attemptStartTime;
+
+      // Record success
+      await healthService.recordSuccess(attempt.providerId, latencyMs);
+      const tokensUsed = response.usage?.total_tokens || 0;
+      await quotaService.recordModelUsage(attempt.providerId, attempt.model, tokensUsed);
+
+      // Check for refusal
+      const hasRefusal = response.choices?.some(c => c.message?.refusal);
+      if (hasRefusal) {
+        logger.info({
+          event: 'refusal_detected',
+          request_id: requestId,
+          provider: attempt.providerId,
+          model: attempt.model,
+        });
+      }
+
+      logger.info({
+        event: 'attempt_success',
+        request_id: requestId,
+        attempt: 1,
+        provider: attempt.providerId,
+        model: attempt.model,
+        latency_ms: latencyMs,
+        tokens_used: tokensUsed,
+      });
+
+      return {
+        response,
+        attempts: 1,
+        providerId: attempt.providerId,
+        model: attempt.model,
+        latencyMs: Date.now() - startTime,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Handle an error from a provider attempt
+   * @returns true if we should continue to next attempt, false if we should throw
+   */
+  private async handleAttemptError(
+    error: unknown,
+    attempt: RoutingAttempt,
+    plan: RoutingPlan,
+    attemptIndex: number,
+    requestId: string
+  ): Promise<boolean> {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    logger.error({
+      event: 'attempt_failed',
+      request_id: requestId,
+      attempt: attemptIndex + 1,
+      provider: attempt.providerId,
+      model: attempt.model,
+      error: errorMessage,
+    });
+
+    // Record failure
+    await healthService.recordFailure(attempt.providerId);
+
+    // Handle specific error types
+    if (error instanceof ModelQuotaExceededError) {
+      logger.warn({
+        event: 'model_quota_exceeded',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        limit_type: error.limitType,
+      });
+      return true; // Continue to next attempt
+    }
+
+    if (error instanceof ProviderError) {
+      // Handle 402 Payment Required - non-retryable
+      if (error.statusCode === 402) {
+        logger.error({
+          event: 'payment_required',
+          request_id: requestId,
+          provider: attempt.providerId,
+          model: attempt.model,
+        });
+        return false; // Don't continue, will throw
+      }
+
+      // Handle 429 rate limit
+      if (error.statusCode === 429) {
+        await this.syncRateLimitWithQuota(error, attempt, requestId);
+      }
+
+      return this.shouldRetry(error, plan, attemptIndex);
+    }
+
+    return true; // Continue for non-ProviderErrors
+  }
+
+  /**
+   * Sync rate limit headers with quota service
+   */
+  private async syncRateLimitWithQuota(
+    providerError: ProviderError,
+    attempt: RoutingAttempt,
+    requestId: string
+  ): Promise<void> {
+    try {
+      const rateLimitHeaders = this.extractRateLimitHeadersFromError(providerError);
+      await quotaService.handleProviderRateLimit(
+        attempt.providerId,
+        attempt.model,
+        { headers: rateLimitHeaders, statusCode: 429 }
+      );
+    } catch (syncError) {
+      logger.warn({
+        event: 'rate_limit_sync_failed',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        error: syncError instanceof Error ? syncError.message : String(syncError),
+      });
+    }
+  }
+
   async executeStream(
     plan: RoutingPlan,
     request: ChatCompletionRequest,
@@ -469,125 +482,32 @@ export class RouterService {
     onComplete: () => void,
     onError: (error: GatewayError) => void
   ): Promise<void> {
-    // Estimate tokens for quota tracking
     const estimatedTokens = estimateTokens(request);
 
     for (let i = 0; i < plan.attempts.length; i++) {
       const attempt = plan.attempts[i];
 
       try {
-        const controller = new AbortController();
-
-        await providerService.streamProvider(
-          attempt.baseUrl,
-          attempt.apiKey,
-          attempt.model,
+        await this.executeStreamingAttempt(
+          attempt,
           request,
-          attempt.timeoutMs,
-          onChunk,
-          controller.signal,
-          attempt.providerType,
-          attempt.auth
+          estimatedTokens,
+          requestId,
+          onChunk
         );
-
-        await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
-        
-        // Record streaming usage - use estimated tokens since we don't have actual usage
-        await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
-        
-        logger.info({
-          event: 'streaming_attempt_success',
-          request_id: requestId,
-          attempt: i + 1,
-          provider: attempt.providerId,
-          model: attempt.model,
-          estimated_tokens: estimatedTokens,
-        });
-        
         onComplete();
         return;
       } catch (error) {
-        await healthService.recordFailure(attempt.providerId);
-
-        // Handle specific error types
-        if (error instanceof ModelQuotaExceededError) {
-          logger.warn({
-            event: 'streaming_model_quota_exceeded',
-            request_id: requestId,
-            provider: attempt.providerId,
-            model: attempt.model,
-            limit_type: error.limitType,
-          });
-          // Continue to next attempt
-          continue;
-        }
-
-        if (error instanceof ProviderError) {
-          const providerError = error as ProviderError;
-          
-          // Handle 402 Payment Required (OpenRouter specific) - non-retryable
-          if (providerError.statusCode === 402) {
-            logger.error({
-              event: 'streaming_payment_required',
-              request_id: requestId,
-              provider: attempt.providerId,
-              model: attempt.model,
-            });
-            onError(this.createGatewayError(error, i + 1));
-            return;
-          }
-
-          // Handle 429 rate limit
-          if (providerError.statusCode === 429) {
-            try {
-              // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
-              if (providerError.headers) {
-                // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
-                if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
-                }
-                if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
-                }
-                if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
-                }
-                if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
-                }
-                if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
-                }
-                if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
-                }
-                if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
-                }
-              }
-
-              await quotaService.handleProviderRateLimit(
-                attempt.providerId,
-                attempt.model,
-                { headers: rateLimitHeaders, statusCode: 429 }
-              );
-            } catch (syncError) {
-              logger.warn({
-                event: 'streaming_rate_limit_sync_failed',
-                request_id: requestId,
-                provider: attempt.providerId,
-                model: attempt.model,
-                error: syncError instanceof Error ? syncError.message : String(syncError),
-              });
-            }
-          }
-
-          const shouldRetry = this.shouldRetry(error, plan, i);
-          if (!shouldRetry) {
-            onError(this.createGatewayError(error, i + 1));
-            return;
-          }
+        const shouldContinue = await this.handleStreamingAttemptError(
+          error,
+          attempt,
+          plan,
+          i,
+          requestId,
+          onError
+        );
+        if (!shouldContinue) {
+          return;
         }
       }
     }
@@ -595,8 +515,139 @@ export class RouterService {
     onError(this.createGatewayError(new Error('All streaming attempts failed'), plan.attempts.length));
   }
 
+  /**
+   * Execute a single streaming provider attempt
+   * @throws ProviderError on failure
+   */
+  private async executeStreamingAttempt(
+    attempt: RoutingAttempt,
+    request: ChatCompletionRequest,
+    estimatedTokens: number,
+    requestId: string,
+    onChunk: (chunk: SSEChunk) => void
+  ): Promise<void> {
+    const controller = new AbortController();
+
+    try {
+      await providerService.streamProvider(
+        attempt.baseUrl,
+        attempt.apiKey,
+        attempt.model,
+        request,
+        attempt.timeoutMs,
+        onChunk,
+        controller.signal,
+        attempt.providerType,
+        attempt.auth
+      );
+
+      await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
+      await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
+      
+      logger.info({
+        event: 'streaming_attempt_success',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        estimated_tokens: estimatedTokens,
+      });
+    } finally {
+      controller.abort();
+    }
+  }
+
+  /**
+   * Handle an error from a streaming attempt
+   * @returns true if we should continue to next attempt, false if we should stop
+   */
+  private async handleStreamingAttemptError(
+    error: unknown,
+    attempt: RoutingAttempt,
+    plan: RoutingPlan,
+    attemptIndex: number,
+    requestId: string,
+    onError: (error: GatewayError) => void
+  ): Promise<boolean> {
+    await healthService.recordFailure(attempt.providerId);
+
+    // Handle specific error types
+    if (error instanceof ModelQuotaExceededError) {
+      logger.warn({
+        event: 'streaming_model_quota_exceeded',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        limit_type: error.limitType,
+      });
+      return true; // Continue to next attempt
+    }
+
+    if (error instanceof ProviderError) {
+      // Handle 402 Payment Required - non-retryable
+      if (error.statusCode === 402) {
+        logger.error({
+          event: 'streaming_payment_required',
+          request_id: requestId,
+          provider: attempt.providerId,
+          model: attempt.model,
+        });
+        onError(this.createGatewayError(error, attemptIndex + 1));
+        return false;
+      }
+
+      // Handle 429 rate limit
+      if (error.statusCode === 429) {
+        await this.syncRateLimitWithQuota(error, attempt, requestId);
+      }
+
+      const shouldRetry = this.shouldRetry(error, plan, attemptIndex);
+      if (!shouldRetry) {
+        onError(this.createGatewayError(error, attemptIndex + 1));
+        return false;
+      }
+    }
+
+    return true; // Continue for other errors
+  }
+
   private createGatewayError(error: Error, attempts: number): GatewayErrorClass {
     return createGatewayError(error, attempts);
+  }
+
+  /**
+   * Extract rate limit headers from a ProviderError for quota synchronization
+   * Converts internal RateLimitHeaders to the format expected by handleProviderRateLimit
+   */
+  private extractRateLimitHeadersFromError(
+    providerError: ProviderError
+  ): Record<string, string | string[] | undefined> {
+    const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
+    
+    if (providerError.headers) {
+      if (providerError.headers.retryAfter !== undefined) {
+        rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
+      }
+      if (providerError.headers.limitRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
+      }
+      if (providerError.headers.remainingRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
+      }
+      if (providerError.headers.resetRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
+      }
+      if (providerError.headers.limitTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
+      }
+      if (providerError.headers.remainingTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
+      }
+      if (providerError.headers.resetTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
+      }
+    }
+    
+    return rateLimitHeaders;
   }
 }
 
