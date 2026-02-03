@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -6,9 +6,9 @@ services:
       context: .
       target: production
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT:-8081}:8081"
     environment:
-      - PORT=8080
+      - PORT=8081
       - GATEWAY_API_KEY=${GATEWAY_API_KEY}
       - RATE_LIMIT_PER_IP=${RATE_LIMIT_PER_IP:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
@@ -29,10 +29,19 @@ services:
       - backend
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8081/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
