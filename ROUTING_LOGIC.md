@@ -29,12 +29,11 @@ The routing system acts as an intelligent proxy between your application and mul
 - **Quota availability**: per-model rate limits (RPM, RPH, RPD, TPM, TPH, TPD, TPMU)
 
 **Current Provider Model Counts:**
+
 - **Groq**: 9 models (Llama 3.3/3.1/4, Kimi K2, GPT-OSS, Qwen3)
 - **Cerebras**: 6 models (Llama 3.3/3.1, GPT-OSS, Qwen3, ZAI GLM)
 - **Mistral**: 18 models (Large, Medium, Small, Codestral, Ministral, Open Mixtral, etc.)
 - **Vertex**: 2 models (Gemini 3 Pro/Flash Preview)
-
-**All providers operate on free tier limits only.**
 
 ---
 
@@ -88,7 +87,7 @@ The gateway receives an OpenAI-compatible request with optional routing hints:
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Hello"}],
+  "messages": [{ "role": "user", "content": "Hello" }],
   "stream": true,
   "max_tokens": 1000,
   "response_format": {
@@ -104,16 +103,19 @@ The gateway receives an OpenAI-compatible request with optional routing hints:
 ### Derivation Logic
 
 **Output Requirement:**
+
 - If `response_format.type` equals "json_schema" AND `json_schema.strict` is true
   - Then output requirement = "json_schema_strict"
   - Else output requirement = "text"
 
 **Streaming Requirement:**
+
 - If `stream` is true → "required"
 - If `stream` is false → "forbidden"
 - Else → "preferred"
 
 **Tools Requirement:**
+
 - If `tools` array is present AND `tool_choice` equals "required" → "required"
 - If `tools` array is present AND `tool_choice` equals "none" → "forbidden"
 - If `tools` array is present → "allowed"
@@ -122,6 +124,7 @@ The gateway receives an OpenAI-compatible request with optional routing hints:
 ### Token Estimation
 
 Rough approximation: 1 token ≈ 4 characters
+
 - Input tokens: Sum all message content lengths ÷ 4
 - Output tokens: `max_tokens` parameter (default 1000)
 - Total estimate: Input + Output
@@ -187,18 +190,22 @@ Hard filtering eliminates candidates that absolutely cannot handle the request. 
 #### 1. Provider Allow/Deny Lists
 
 **Logic:**
+
 - If router.providers.allow is set, provider must be in that list
 - If router.providers.deny is set, provider must NOT be in that list
 
 **Example:**
+
 ```json
 { "router": { "providers": { "allow": ["groq", "cerebras"] } } }
 ```
+
 This removes mistral and vertex candidates.
 
 #### 2. Strict Schema Requirement
 
 **Logic:**
+
 - If requirements.output equals "json_schema_strict":
   - Provider must be certified for strict schema
   - Otherwise, filter out
@@ -208,18 +215,21 @@ This removes mistral and vertex candidates.
 #### 3. Streaming Requirement
 
 **Logic:**
+
 - If requirements.streaming equals "required", provider must have streaming=true
 - If "forbidden", provider must NOT support streaming
 
 #### 4. Tools Requirement
 
 **Logic:**
+
 - If requirements.tools equals "required", provider must have tools=true
 - If "forbidden", provider must have tools=false
 
 #### 5. Circuit Breaker State
 
 **Logic:**
+
 - If circuit breaker state is "OPEN", filter out the provider
 - If "HALF_OPEN" or "CLOSED", the provider passes
 
@@ -252,6 +262,7 @@ if (limits.tpmu && tpmu + estimatedTokens >= limits.tpmu) → filter out
 ```
 
 **Redis Key Structure:**
+
 ```
 quota:{provider}:{model}:rpm → Sorted set (timestamp)
 quota:{provider}:{model}:rph:{YYYY-MM-DD-HH} → Counter
@@ -277,6 +288,7 @@ score = base_weight + preference_bonus + quota_headroom + health_score
 ```
 
 **Component Weights:**
+
 - base: 1.0 (all candidates start here)
 - prefer: 0.5 (explicit provider preference)
 - quota: 0.3 (headroom percentage)
@@ -321,6 +333,7 @@ The routing plan defines which candidates to try and in what order.
 - retryOn5xx: retry on server errors (default true)
 
 **Non-retryable:**
+
 - 400 Bad Request
 - 402 Payment Required
 - Validation errors
@@ -354,6 +367,7 @@ await quotaService.recordModelUsage(providerId, model, tokensUsed);
 ```
 
 **Recording Logic:**
+
 ```typescript
 // RPM: Add timestamp to sliding window
 await redis.zadd(`quota:${provider}:${model}:rpm`, now, `${now}`);
@@ -382,16 +396,18 @@ await redis.incrby(`quota:${provider}:${model}:tpmu:${month}`, tokensUsed);
 When a provider returns 429:
 
 1. **Extract rate limit headers:**
+
 ```typescript
 const headers = {
-  retryAfter: response.headers.get('retry-after'),
-  limitRequests: response.headers.get('x-ratelimit-limit-requests'),
-  remainingRequests: response.headers.get('x-ratelimit-remaining-requests'),
+  retryAfter: response.headers.get("retry-after"),
+  limitRequests: response.headers.get("x-ratelimit-limit-requests"),
+  remainingRequests: response.headers.get("x-ratelimit-remaining-requests"),
   // ... etc
 };
 ```
 
 2. **Sync local quota state:**
+
 ```typescript
 if (headers.remainingRequests !== undefined) {
   const used = headers.limitRequests - headers.remainingRequests;
@@ -400,6 +416,7 @@ if (headers.remainingRequests !== undefined) {
 ```
 
 3. **Retry with next candidate:**
+
 ```typescript
 if (retryable && attemptsRemain) {
   continue; // Try next candidate
@@ -411,18 +428,19 @@ if (retryable && attemptsRemain) {
 **Timeout Value:** 60 seconds
 
 **Logic:**
+
 ```typescript
 const inactivityTimeoutMs = 60000;
 let lastChunkTime = Date.now();
 
 while (true) {
   if (Date.now() - lastChunkTime > inactivityTimeoutMs) {
-    throw new TimeoutError('Streaming inactivity timeout', 'inactivity');
+    throw new TimeoutError("Streaming inactivity timeout", "inactivity");
   }
-  
+
   const { done, value } = await reader.read();
   if (done) break;
-  
+
   lastChunkTime = Date.now();
   // Process chunk...
 }
@@ -434,19 +452,20 @@ while (true) {
 
 ### Seven Time Windows
 
-| Window | Description | Reset | Redis Type |
-|--------|-------------|-------|------------|
-| **RPM** | Requests per minute | End of minute | Sliding window (sorted set) |
-| **RPH** | Requests per hour | End of hour | Counter (hourly key) |
-| **RPD** | Requests per day | Midnight UTC | Counter (daily key) |
-| **TPM** | Tokens per minute | End of minute | Sliding window (sorted set with token counts) |
-| **TPH** | Tokens per hour | End of hour | Counter (hourly key) |
-| **TPD** | Tokens per day | Midnight UTC | Counter (daily key) |
-| **TPMU** | Tokens per month | Calendar month | Counter (monthly key) |
+| Window   | Description         | Reset          | Redis Type                                    |
+| -------- | ------------------- | -------------- | --------------------------------------------- |
+| **RPM**  | Requests per minute | End of minute  | Sliding window (sorted set)                   |
+| **RPH**  | Requests per hour   | End of hour    | Counter (hourly key)                          |
+| **RPD**  | Requests per day    | Midnight UTC   | Counter (daily key)                           |
+| **TPM**  | Tokens per minute   | End of minute  | Sliding window (sorted set with token counts) |
+| **TPH**  | Tokens per hour     | End of hour    | Counter (hourly key)                          |
+| **TPD**  | Tokens per day      | Midnight UTC   | Counter (daily key)                           |
+| **TPMU** | Tokens per month    | Calendar month | Counter (monthly key)                         |
 
 ### Provider-Specific Limit Structures
 
 **Groq (9 Models, Per-Model Limits):**
+
 ```typescript
 {
   'llama-3.3-70b-versatile': { rpm: 30, rpd: 1000, tpm: 12000, tpd: 100000 },
@@ -462,6 +481,7 @@ while (true) {
 ```
 
 **Cerebras (6 Models, Per-Model + Hourly):**
+
 ```typescript
 {
   'gpt-oss-120b': { rpm: 30, rph: 900, rpd: 14400, tpm: 64000, tph: 1000000, tpd: 1000000 },
@@ -474,6 +494,7 @@ while (true) {
 ```
 
 **Mistral (18 Models, Platform-Wide + Per-Model):**
+
 ```typescript
 // Platform RPM limit (60) shared across ALL 18 models
 platformLimit: { rpm: 60 }
@@ -487,6 +508,7 @@ platformLimit: { rpm: 60 }
 ```
 
 **Vertex (2 Models):**
+
 ```typescript
 {
   'gemini-3-pro-preview': { rpm: 60, tpm: 60000 },
@@ -499,6 +521,7 @@ platformLimit: { rpm: 60 }
 ## Error Classes
 
 ### ProviderError (Base Class)
+
 ```typescript
 export class ProviderError extends Error {
   constructor(
@@ -511,27 +534,32 @@ export class ProviderError extends Error {
 ```
 
 ### ValidationError
+
 - **HTTP Status:** 400
 - **Retryable:** No
 - **When thrown:** Request validation fails
 
 ### RateLimitError
+
 - **HTTP Status:** 429
 - **Retryable:** Yes
 - **When thrown:** Provider returns 429
 
 ### ModelQuotaExceededError
+
 - **HTTP Status:** 429
 - **Retryable:** Yes
 - **When thrown:** Per-model quota exceeded during routing
 - **Properties:** providerId, model, limitType
 
 ### CircuitBreakerError
+
 - **HTTP Status:** 503
 - **Retryable:** Yes
 - **When thrown:** Circuit breaker is OPEN or HALF_OPEN
 
 ### TimeoutError
+
 - **HTTP Status:** 504
 - **Retryable:** Yes
 - **Types:** 'request' | 'inactivity'
@@ -543,14 +571,16 @@ export class ProviderError extends Error {
 ### Scenario 1: Simple Text Request
 
 **Request:**
+
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Hello"}]
+  "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 **Process:**
+
 1. All 35 models pass hard filters (no strict requirements)
 2. Scoring considers health, quota, preferences
 3. Check per-model quotas with estimated tokens (~250)
@@ -560,18 +590,21 @@ export class ProviderError extends Error {
 ### Scenario 2: Model at Daily Limit with Automatic Fallback
 
 **Request:**
+
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Hello"}]
+  "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 **Current Quota State:**
+
 - groq/llama-3.3-70b: 1000/1000 RPD used (100% - LIMIT REACHED)
 - cerebras/llama-3.3-70b: 500/14400 RPD used (3.5%)
 
 **Process:**
+
 1. Generate candidates for "llama-3.3-70b" across all providers
 2. Hard filter checks quotas:
    - Groq: quota_exceeded_rpd → FILTERED OUT
@@ -585,19 +618,22 @@ export class ProviderError extends Error {
 ### Scenario 3: All Models of Same Type at Limit
 
 **Request:**
+
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Hello"}]
+  "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 **Current Quota State:**
+
 - groq/llama-3.3-70b: 1000/1000 RPD (100%)
 - cerebras/llama-3.3-70b: 14400/14400 RPD (100%)
 - Both models at daily limit
 
 **Process:**
+
 1. Generate candidates
 2. Both filtered out:
    - Groq: quota_exceeded_rpd
@@ -606,6 +642,7 @@ export class ProviderError extends Error {
 4. Return HTTP 422 with filtered reasons
 
 **Client Response:**
+
 ```json
 {
   "error": {
@@ -614,8 +651,16 @@ export class ProviderError extends Error {
     "message": "No eligible provider found",
     "details": {
       "filtered_providers": [
-        { "provider": "groq", "model": "llama-3.3-70b", "reason": "quota_exceeded_rpd" },
-        { "provider": "cerebras", "model": "llama-3.3-70b", "reason": "quota_exceeded_rpd" }
+        {
+          "provider": "groq",
+          "model": "llama-3.3-70b",
+          "reason": "quota_exceeded_rpd"
+        },
+        {
+          "provider": "cerebras",
+          "model": "llama-3.3-70b",
+          "reason": "quota_exceeded_rpd"
+        }
       ]
     }
   }
@@ -625,18 +670,21 @@ export class ProviderError extends Error {
 ### Scenario 4: Hourly Limit Recovery
 
 **Request:**
+
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Hello"}]
+  "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 **Timeline:**
+
 - 13:59: cerebras/llama-3.3-70b at 895/900 RPH
 - 14:00: Request comes in
 
 **Process:**
+
 1. Check RPH for current hour ("2024-01-15-14")
 2. New hour started, counter reset to 0
 3. Check: 0 + 1 < 900 → PASS
@@ -647,10 +695,11 @@ export class ProviderError extends Error {
 ### Scenario 5: Token Limit Exceeded Mid-Request
 
 **Request:**
+
 ```json
 {
   "model": "llama-3.3-70b",
-  "messages": [{"role": "user", "content": "Very long document..."}],
+  "messages": [{ "role": "user", "content": "Very long document..." }],
   "max_tokens": 2000
 }
 ```
@@ -658,9 +707,11 @@ export class ProviderError extends Error {
 **Token Estimate:** 15000 (13000 input + 2000 output)
 
 **Current Quota:**
+
 - groq/llama-3.3-70b: 11000/12000 TPM used
 
 **Process:**
+
 1. Check TPM: 11000 + 15000 = 26000 > 12000 → EXCEEDED
 2. Filtered: groq/llama-3.3-70b with reason 'quota_exceeded_tpm'
 3. Try next model: groq/llama-3.1-8b-instant
@@ -673,17 +724,20 @@ export class ProviderError extends Error {
 ### Scenario 6: Mistral Platform Limit Affects All Models
 
 **Current State:**
+
 - Platform RPM (all 18 Mistral models): 59/60 (98.3%)
 
 **Request:**
+
 ```json
 {
   "model": "mistral-large-latest",
-  "messages": [{"role": "user", "content": "Hello"}]
+  "messages": [{ "role": "user", "content": "Hello" }]
 }
 ```
 
 **Process:**
+
 1. Check platform RPM: 59 + 1 >= 60 → EXCEEDED
 2. All 18 Mistral models filtered with 'quota_exceeded_rpm'
 3. Try other providers (Groq, Cerebras, Vertex)
@@ -700,15 +754,28 @@ export class ProviderError extends Error {
 **Response:** HTTP 422 with detailed explanation
 
 **Example Response:**
+
 ```json
 {
   "error": {
     "code": "NO_ELIGIBLE_PROVIDER",
     "details": {
       "filtered_providers": [
-        { "provider": "groq", "model": "llama-3.3-70b", "reason": "quota_exceeded_rpd" },
-        { "provider": "cerebras", "model": "llama-3.3-70b", "reason": "quota_exceeded_rph" },
-        { "provider": "mistral", "model": "mistral-large-latest", "reason": "quota_exceeded_rpm" }
+        {
+          "provider": "groq",
+          "model": "llama-3.3-70b",
+          "reason": "quota_exceeded_rpd"
+        },
+        {
+          "provider": "cerebras",
+          "model": "llama-3.3-70b",
+          "reason": "quota_exceeded_rph"
+        },
+        {
+          "provider": "mistral",
+          "model": "mistral-large-latest",
+          "reason": "quota_exceeded_rpm"
+        }
       ]
     }
   }
@@ -730,6 +797,7 @@ When a model's quota is exceeded:
 3. **Retry behavior:** Always retryable (try different provider/model)
 
 **Example Flow:**
+
 ```
 Attempt 1: groq/llama-3.3-70b
 → Quota exceeded (ModelQuotaExceededError)
@@ -764,6 +832,7 @@ Attempt 2: cerebras/llama-3.3-70b
 
 **Trigger:** Estimated tokens differ from actual
 **Behavior:**
+
 - Pre-request: Uses estimate (may reject valid requests)
 - Post-request: Records actual (corrects for next time)
 

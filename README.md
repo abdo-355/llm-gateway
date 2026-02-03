@@ -1,6 +1,6 @@
 # LLM Gateway
 
-A secure, production-ready LLM Gateway that exposes an OpenAI-compatible API and routes requests to multiple upstream providers (Groq, OpenRouter, Cerebras, Mistral, Vertex) with automatic failover, quota management, and health monitoring.
+A secure, production-ready LLM Gateway that exposes an OpenAI-compatible API and routes requests to multiple upstream providers (Groq, Cerebras, Mistral, Vertex) with automatic failover, quota management, and health monitoring.
 
 ## Features
 
@@ -57,7 +57,11 @@ Edit `src/config/providers.ts` to add/remove providers:
       "auth": { "type": "bearer", "env": "CEREBRAS_API_KEY" },
       "models": {
         "mode": "allowlist",
-        "list": ["llama-4-scout-17b-16e-instruct", "llama-3.3-70b", "llama3.1-8b"]
+        "list": [
+          "llama-4-scout-17b-16e-instruct",
+          "llama-3.3-70b",
+          "llama3.1-8b"
+        ]
       },
       "capabilities": {
         "streaming": true,
@@ -72,7 +76,11 @@ Edit `src/config/providers.ts` to add/remove providers:
       "auth": { "type": "bearer", "env": "MISTRAL_API_KEY" },
       "models": {
         "mode": "allowlist",
-        "list": ["mistral-large-latest", "mistral-medium-latest", "codestral-latest"]
+        "list": [
+          "mistral-large-latest",
+          "mistral-medium-latest",
+          "codestral-latest"
+        ]
       },
       "capabilities": {
         "streaming": true,
@@ -83,11 +91,15 @@ Edit `src/config/providers.ts` to add/remove providers:
     },
     {
       "id": "vertex",
-      "baseUrl": "https://us-central1-aiplatform.googleapis.com/v1",
-      "auth": { "type": "bearer", "env": "GOOGLE_VERTEX_API_KEY" },
+      "baseUrl": "https://aiplatform.googleapis.com/v1",
+      "auth": {
+        "type": "header",
+        "env": "GOOGLE_VERTEX_API_KEY",
+        "headerName": "x-goog-api-key"
+      },
       "models": {
         "mode": "allowlist",
-        "list": ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-1.5-pro", "gemini-1.5-flash"]
+        "list": ["gemini-3-pro-preview", "gemini-3-flash-preview"]
       },
       "capabilities": {
         "streaming": true,
@@ -98,9 +110,52 @@ Edit `src/config/providers.ts` to add/remove providers:
     }
   ],
   "certifications": [
-    { "provider": "groq", "model": "llama-3.3-70b-versatile", "strictSchema": true },
+    {
+      "provider": "groq",
+      "model": "llama-3.3-70b-versatile",
+      "strictSchema": true
+    },
+    {
+      "provider": "groq",
+      "model": "llama-3.1-8b-instant",
+      "strictSchema": true
+    },
+    {
+      "provider": "groq",
+      "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+      "strictSchema": true
+    },
+    {
+      "provider": "groq",
+      "model": "meta-llama/llama-4-maverick-17b-128e-instruct",
+      "strictSchema": true
+    },
     { "provider": "cerebras", "model": "llama-3.3-70b", "strictSchema": true },
-    { "provider": "mistral", "model": "mistral-large-latest", "strictSchema": true }
+    {
+      "provider": "mistral",
+      "model": "mistral-large-latest",
+      "strictSchema": true
+    },
+    {
+      "provider": "mistral",
+      "model": "codestral-2405",
+      "strictSchema": true
+    },
+    {
+      "provider": "mistral",
+      "model": "codestral-2501",
+      "strictSchema": true
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3-pro-preview",
+      "strictSchema": true
+    },
+    {
+      "provider": "vertex",
+      "model": "gemini-3-flash-preview",
+      "strictSchema": true
+    }
   ]
 }
 ```
@@ -132,37 +187,38 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `GATEWAY_API_KEY` | Yes | - | API key for authenticating requests (min 32 chars) |
-| `GROQ_API_KEY` | Yes | - | Groq API key |
-| `CEREBRAS_API_KEY` | Yes | - | Cerebras API key |
-| `MISTRAL_API_KEY` | Yes | - | Mistral API key |
-| `GOOGLE_VERTEX_API_KEY` | Yes | - | Google Vertex AI API key |
-| `PORT` | No | 8080 | Server port |
-| `RATE_LIMIT_PER_IP` | No | 100 | Max requests per IP per window |
-| `RATE_LIMIT_WINDOW_MS` | No | 60000 | Rate limit window in ms |
-| `CORS_ORIGINS` | No | - | Comma-separated allowed origins |
-| `REDIS_URL` | No | redis://redis:6379 | Redis connection URL |
-| `LOG_LEVEL` | No | info | Log level (debug, info, warn, error) |
+| Variable                | Required | Default            | Description                                        |
+| ----------------------- | -------- | ------------------ | -------------------------------------------------- |
+| `GATEWAY_API_KEY`       | Yes      | -                  | API key for authenticating requests (min 32 chars) |
+| `GROQ_API_KEY`          | Yes      | -                  | Groq API key                                       |
+| `CEREBRAS_API_KEY`      | Yes      | -                  | Cerebras API key                                   |
+| `MISTRAL_API_KEY`       | Yes      | -                  | Mistral API key                                    |
+| `GOOGLE_VERTEX_API_KEY` | Yes      | -                  | Google Vertex AI API key                           |
+| `PORT`                  | No       | 8080               | Server port                                        |
+| `RATE_LIMIT_PER_IP`     | No       | 100                | Max requests per IP per window                     |
+| `RATE_LIMIT_WINDOW_MS`  | No       | 60000              | Rate limit window in ms                            |
+| `CORS_ORIGINS`          | No       | -                  | Comma-separated allowed origins                    |
+| `REDIS_URL`             | No       | redis://redis:6379 | Redis connection URL                               |
+| `LOG_LEVEL`             | No       | info               | Log level (debug, info, warn, error)               |
 
 ## Logical Models
 
 Instead of managing individual provider models, use **logical models** that automatically route to the best available provider based on your requirements:
 
-| Logical Model | Task | Description | Default Providers |
-|--------------|------|-------------|-------------------|
-| `chat-lite` | Chat | Fast, cost-effective responses | Groq (llama-3.1-8b) → Mistral (small) |
-| `chat-pro` | Chat | Balanced quality and speed | Groq (llama-3.3-70b) → Cerebras → Mistral |
-| `chat-max` | Chat | Maximum reasoning capability | Large MoE models with failover |
-| `json-fast` | JSON | Quick structured output extraction | Optimized for speed over strictness |
-| `json-safe` | JSON | Guaranteed schema compliance | Only strict-schema-certified models |
-| `code-fast` | Code | Quick code generation | Codestral and fast code models |
-| `code-pro` | Code | Production code generation | Best code models with large context |
-| `tools-pro` | Tools | Function calling & orchestration | Models with excellent tool support |
-| `analysis-pro` | Analysis | Deep reasoning and research | Largest available reasoning models |
+| Logical Model  | Task     | Description                        | Default Providers                         |
+| -------------- | -------- | ---------------------------------- | ----------------------------------------- |
+| `chat-lite`    | Chat     | Fast, cost-effective responses     | Groq (llama-3.1-8b) → Mistral (small)     |
+| `chat-pro`     | Chat     | Balanced quality and speed         | Groq (llama-3.3-70b) → Cerebras → Mistral |
+| `chat-max`     | Chat     | Maximum reasoning capability       | Large MoE models with failover            |
+| `json-fast`    | JSON     | Quick structured output extraction | Optimized for speed over strictness       |
+| `json-safe`    | JSON     | Guaranteed schema compliance       | Only strict-schema-certified models       |
+| `code-fast`    | Code     | Quick code generation              | Codestral and fast code models            |
+| `code-pro`     | Code     | Production code generation         | Best code models with large context       |
+| `tools-pro`    | Tools    | Function calling & orchestration   | Models with excellent tool support        |
+| `analysis-pro` | Analysis | Deep reasoning and research        | Largest available reasoning models        |
 
 The gateway automatically:
+
 - Routes to the best available provider based on health and quota
 - Fails over to backup providers if the primary fails
 - Adds response headers showing the actual provider used
@@ -254,29 +310,29 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/chat/completions` | POST | Main chat completions endpoint |
-| `/health` | GET | Health check with provider status |
-| `/metrics` | GET | Prometheus metrics |
+| Endpoint               | Method | Description                       |
+| ---------------------- | ------ | --------------------------------- |
+| `/v1/chat/completions` | POST   | Main chat completions endpoint    |
+| `/health`              | GET    | Health check with provider status |
+| `/metrics`             | GET    | Prometheus metrics                |
 
 ## Router Hints Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `profile` | string | Routing profile: `cheap_fast`, `reliable_structured`, `balanced` |
-| `requirements.output` | string | `text`, `json_schema_strict` |
-| `requirements.streaming` | string | `required`, `preferred`, `forbidden` |
-| `requirements.tools` | string | `required`, `allowed`, `forbidden` |
-| `slo.max_latency_ms` | number | Per-attempt timeout |
-| `slo.hard_timeout_ms` | number | Total timeout across attempts |
-| `providers.allow` | string[] | Whitelist provider IDs |
-| `providers.deny` | string[] | Blacklist provider IDs |
-| `providers.prefer` | string[] | Preferred provider order |
-| `fallback.max_attempts` | number | Max retry attempts (1-5) |
-| `fallback.on_429` | boolean | Retry on rate limit |
-| `fallback.on_timeout` | boolean | Retry on timeout |
-| `fallback.on_5xx` | boolean | Retry on server error |
+| Field                    | Type     | Description                                                      |
+| ------------------------ | -------- | ---------------------------------------------------------------- |
+| `profile`                | string   | Routing profile: `cheap_fast`, `reliable_structured`, `balanced` |
+| `requirements.output`    | string   | `text`, `json_schema_strict`                                     |
+| `requirements.streaming` | string   | `required`, `preferred`, `forbidden`                             |
+| `requirements.tools`     | string   | `required`, `allowed`, `forbidden`                               |
+| `slo.max_latency_ms`     | number   | Per-attempt timeout                                              |
+| `slo.hard_timeout_ms`    | number   | Total timeout across attempts                                    |
+| `providers.allow`        | string[] | Whitelist provider IDs                                           |
+| `providers.deny`         | string[] | Blacklist provider IDs                                           |
+| `providers.prefer`       | string[] | Preferred provider order                                         |
+| `fallback.max_attempts`  | number   | Max retry attempts (1-5)                                         |
+| `fallback.on_429`        | boolean  | Retry on rate limit                                              |
+| `fallback.on_timeout`    | boolean  | Retry on timeout                                                 |
+| `fallback.on_5xx`        | boolean  | Retry on server error                                            |
 
 ## Architecture
 
