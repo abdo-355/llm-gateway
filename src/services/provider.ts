@@ -1,7 +1,19 @@
-import { ChatCompletionRequest, ChatCompletionResponse, ProviderAuth, ProviderType, SSEChunk, VertexAIResponse } from '../types';
-import { logger } from '../utils/logger';
-import { vertexAIAdapter } from './adapters/vertex';
-import { ProviderError, TimeoutError, PaymentRequiredError, RateLimitHeaders } from '../errors';
+import {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  ProviderAuth,
+  ProviderType,
+  SSEChunk,
+  VertexAIResponse,
+} from "../types";
+import { logger } from "../utils/logger";
+import { vertexAIAdapter } from "./adapters/vertex";
+import {
+  ProviderError,
+  TimeoutError,
+  PaymentRequiredError,
+  RateLimitHeaders,
+} from "../errors";
 
 export class ProviderService {
   /**
@@ -15,7 +27,7 @@ export class ProviderService {
       return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
     } catch {
       // If URL parsing fails, return a safe placeholder
-      return '[invalid-url]';
+      return "[invalid-url]";
     }
   }
 
@@ -25,66 +37,66 @@ export class ProviderService {
    */
   private extractRateLimitHeaders(response: Response): RateLimitHeaders {
     const headers: RateLimitHeaders = {};
-    
+
     // Helper to get header value case-insensitively
     const getHeader = (name: string): string | null => {
       return response.headers.get(name);
     };
 
     // retry-after (seconds until rate limit resets)
-    const retryAfter = getHeader('retry-after');
+    const retryAfter = getHeader("retry-after");
     if (retryAfter) {
       headers.retryAfter = parseInt(retryAfter, 10);
     }
 
     // x-ratelimit-* headers (OpenAI, OpenRouter style)
-    const limitRequests = getHeader('x-ratelimit-limit-requests');
+    const limitRequests = getHeader("x-ratelimit-limit-requests");
     if (limitRequests) {
       headers.limitRequests = parseInt(limitRequests, 10);
     }
 
-    const remainingRequests = getHeader('x-ratelimit-remaining-requests');
+    const remainingRequests = getHeader("x-ratelimit-remaining-requests");
     if (remainingRequests) {
       headers.remainingRequests = parseInt(remainingRequests, 10);
     }
 
-    const resetRequests = getHeader('x-ratelimit-reset-requests');
+    const resetRequests = getHeader("x-ratelimit-reset-requests");
     if (resetRequests) {
       headers.resetRequests = resetRequests;
     }
 
-    const limitTokens = getHeader('x-ratelimit-limit-tokens');
+    const limitTokens = getHeader("x-ratelimit-limit-tokens");
     if (limitTokens) {
       headers.limitTokens = parseInt(limitTokens, 10);
     }
 
-    const remainingTokens = getHeader('x-ratelimit-remaining-tokens');
+    const remainingTokens = getHeader("x-ratelimit-remaining-tokens");
     if (remainingTokens) {
       headers.remainingTokens = parseInt(remainingTokens, 10);
     }
 
-    const resetTokens = getHeader('x-ratelimit-reset-tokens');
+    const resetTokens = getHeader("x-ratelimit-reset-tokens");
     if (resetTokens) {
       headers.resetTokens = resetTokens;
     }
 
     // Also check for x-ratelimit-* without the dash (some providers)
     if (!headers.limitRequests) {
-      const altLimitRequests = getHeader('x-ratelimit-limit');
+      const altLimitRequests = getHeader("x-ratelimit-limit");
       if (altLimitRequests) {
         headers.limitRequests = parseInt(altLimitRequests, 10);
       }
     }
 
     if (!headers.remainingRequests) {
-      const altRemaining = getHeader('x-ratelimit-remaining');
+      const altRemaining = getHeader("x-ratelimit-remaining");
       if (altRemaining) {
         headers.remainingRequests = parseInt(altRemaining, 10);
       }
     }
 
     // Check for RateLimit-Reset (standard HTTP header)
-    const rateLimitReset = getHeader('ratelimit-reset');
+    const rateLimitReset = getHeader("ratelimit-reset");
     if (rateLimitReset && !headers.resetRequests) {
       headers.resetRequests = rateLimitReset;
     }
@@ -115,10 +127,10 @@ export class ProviderService {
     request: ChatCompletionRequest,
     timeoutMs: number,
     abortSignal?: AbortSignal,
-    providerType: ProviderType = 'openai',
-    auth?: ProviderAuth
+    providerType: ProviderType = "openai",
+    auth?: ProviderAuth,
   ): Promise<ChatCompletionResponse> {
-    if (providerType === 'vertex') {
+    if (providerType === "vertex") {
       return this.callVertexProvider(
         baseUrl,
         apiKey,
@@ -126,7 +138,7 @@ export class ProviderService {
         request,
         timeoutMs,
         abortSignal,
-        auth
+        auth,
       );
     }
 
@@ -137,7 +149,7 @@ export class ProviderService {
       request,
       timeoutMs,
       abortSignal,
-      auth
+      auth,
     );
   }
 
@@ -148,7 +160,7 @@ export class ProviderService {
     request: ChatCompletionRequest,
     timeoutMs: number,
     abortSignal?: AbortSignal,
-    auth?: ProviderAuth
+    auth?: ProviderAuth,
   ): Promise<ChatCompletionResponse> {
     const url = `${baseUrl}/chat/completions`;
     const startTime = Date.now();
@@ -161,21 +173,21 @@ export class ProviderService {
     };
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     };
 
     if (apiKey) {
-      if (auth?.type === 'header' && auth.headerName) {
+      if (auth?.type === "header" && auth.headerName) {
         headers[auth.headerName] = apiKey;
       } else {
-        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers["Authorization"] = `Bearer ${apiKey}`;
       }
     }
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(body),
         signal: abortSignal || AbortSignal.timeout(timeoutMs),
@@ -187,9 +199,9 @@ export class ProviderService {
         const errorText = await response.text();
         const isRetryable = this.isRetryableStatus(response.status);
         const rateLimitHeaders = this.extractRateLimitHeaders(response);
-        
+
         logger.error({
-          event: 'provider_error',
+          event: "provider_error",
           baseUrl: this.sanitizeUrlForLogging(baseUrl),
           model,
           status: response.status,
@@ -202,7 +214,7 @@ export class ProviderService {
         if (response.status === 402) {
           throw new PaymentRequiredError(
             `Provider returned 402 (Payment Required): ${errorText}`,
-            rateLimitHeaders
+            rateLimitHeaders,
           );
         }
 
@@ -211,14 +223,14 @@ export class ProviderService {
           `Provider returned ${response.status}: ${errorText}`,
           response.status,
           isRetryable,
-          rateLimitHeaders
+          rateLimitHeaders,
         );
       }
 
-      const data = await response.json() as ChatCompletionResponse;
+      const data = (await response.json()) as ChatCompletionResponse;
 
       logger.info({
-        event: 'provider_success',
+        event: "provider_success",
         baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         latency_ms: latencyMs,
@@ -231,22 +243,18 @@ export class ProviderService {
         throw error;
       }
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new TimeoutError('Request timed out', 'request');
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new TimeoutError("Request timed out", "request");
       }
 
       logger.error({
-        event: 'provider_exception',
+        event: "provider_exception",
         baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         error: error instanceof Error ? error.message : String(error),
       });
 
-      throw new ProviderError(
-        `Failed to call provider: ${error}`,
-        500,
-        true
-      );
+      throw new ProviderError(`Failed to call provider: ${error}`, 500, true);
     }
   }
 
@@ -257,7 +265,7 @@ export class ProviderService {
     request: ChatCompletionRequest,
     timeoutMs: number,
     abortSignal?: AbortSignal,
-    auth?: ProviderAuth
+    auth?: ProviderAuth,
   ): Promise<ChatCompletionResponse> {
     const startTime = Date.now();
     const requestId = `vertex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -266,21 +274,21 @@ export class ProviderService {
     const url = vertexAIAdapter.buildEndpointUrl(baseUrl, model, false);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     };
 
     if (apiKey) {
       if (auth?.headerName) {
         headers[auth.headerName] = apiKey;
       } else {
-        headers['x-goog-api-key'] = apiKey;
+        headers["x-goog-api-key"] = apiKey;
       }
     }
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(vertexRequest),
         signal: abortSignal || AbortSignal.timeout(timeoutMs),
@@ -292,15 +300,15 @@ export class ProviderService {
         const errorText = await response.text();
         const isRetryable = this.isRetryableStatus(response.status);
         const rateLimitHeaders = this.extractRateLimitHeaders(response);
-        
+
         logger.error({
-          event: 'provider_error',
+          event: "provider_error",
           baseUrl: this.sanitizeUrlForLogging(baseUrl),
           model,
           status: response.status,
           latency_ms: latencyMs,
           error: errorText,
-          provider_type: 'vertex',
+          provider_type: "vertex",
           rate_limit_headers: rateLimitHeaders,
         });
 
@@ -308,7 +316,7 @@ export class ProviderService {
         if (response.status === 402) {
           throw new PaymentRequiredError(
             `Provider returned 402 (Payment Required): ${errorText}`,
-            rateLimitHeaders
+            rateLimitHeaders,
           );
         }
 
@@ -316,20 +324,24 @@ export class ProviderService {
           `Provider returned ${response.status}: ${errorText}`,
           response.status,
           isRetryable,
-          rateLimitHeaders
+          rateLimitHeaders,
         );
       }
 
-      const vertexResponse = await response.json() as VertexAIResponse;
-      const data = vertexAIAdapter.transformResponse(vertexResponse, model, requestId);
+      const vertexResponse = (await response.json()) as VertexAIResponse;
+      const data = vertexAIAdapter.transformResponse(
+        vertexResponse,
+        model,
+        requestId,
+      );
 
       logger.info({
-        event: 'provider_success',
+        event: "provider_success",
         baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         latency_ms: latencyMs,
         tokens_used: data.usage?.total_tokens,
-        provider_type: 'vertex',
+        provider_type: "vertex",
       });
 
       return data;
@@ -338,23 +350,19 @@ export class ProviderService {
         throw error;
       }
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new TimeoutError('Request timed out', 'request');
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new TimeoutError("Request timed out", "request");
       }
 
       logger.error({
-        event: 'provider_exception',
+        event: "provider_exception",
         baseUrl: this.sanitizeUrlForLogging(baseUrl),
         model,
         error: error instanceof Error ? error.message : String(error),
-        provider_type: 'vertex',
+        provider_type: "vertex",
       });
 
-      throw new ProviderError(
-        `Failed to call provider: ${error}`,
-        500,
-        true
-      );
+      throw new ProviderError(`Failed to call provider: ${error}`, 500, true);
     }
   }
 
@@ -366,10 +374,10 @@ export class ProviderService {
     timeoutMs: number,
     onChunk: (chunk: SSEChunk) => void,
     abortSignal?: AbortSignal,
-    providerType: ProviderType = 'openai',
-    auth?: ProviderAuth
+    providerType: ProviderType = "openai",
+    auth?: ProviderAuth,
   ): Promise<void> {
-    if (providerType === 'vertex') {
+    if (providerType === "vertex") {
       return this.streamVertexProvider(
         baseUrl,
         apiKey,
@@ -378,7 +386,7 @@ export class ProviderService {
         timeoutMs,
         onChunk,
         abortSignal,
-        auth
+        auth,
       );
     }
 
@@ -390,7 +398,7 @@ export class ProviderService {
       timeoutMs,
       onChunk,
       abortSignal,
-      auth
+      auth,
     );
   }
 
@@ -402,10 +410,10 @@ export class ProviderService {
     timeoutMs: number,
     onChunk: (chunk: SSEChunk) => void,
     abortSignal?: AbortSignal,
-    auth?: ProviderAuth
+    auth?: ProviderAuth,
   ): Promise<void> {
     const url = `${baseUrl}/chat/completions`;
-    
+
     // Strip internal gateway fields before sending to provider
     const { router, ...cleanRequest } = request;
     const body = {
@@ -415,21 +423,21 @@ export class ProviderService {
     };
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
     };
 
     if (apiKey) {
-      if (auth?.type === 'header' && auth.headerName) {
+      if (auth?.type === "header" && auth.headerName) {
         headers[auth.headerName] = apiKey;
       } else {
-        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers["Authorization"] = `Bearer ${apiKey}`;
       }
     }
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(body),
         signal: abortSignal || AbortSignal.timeout(timeoutMs),
@@ -444,7 +452,7 @@ export class ProviderService {
         if (response.status === 402) {
           throw new PaymentRequiredError(
             `Provider returned 402 (Payment Required): ${errorText}`,
-            rateLimitHeaders
+            rateLimitHeaders,
           );
         }
 
@@ -452,17 +460,17 @@ export class ProviderService {
           `Provider returned ${response.status}: ${errorText}`,
           response.status,
           isRetryable,
-          rateLimitHeaders
+          rateLimitHeaders,
         );
       }
 
       if (!response.body) {
-        throw new ProviderError('No response body for streaming', 500);
+        throw new ProviderError("No response body for streaming", 500);
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      let buffer = "";
       let lastChunkTime = Date.now();
       const inactivityTimeoutMs = 60000; // 60 seconds
 
@@ -473,7 +481,7 @@ export class ProviderService {
           if (timeSinceLastChunk > inactivityTimeoutMs) {
             throw new TimeoutError(
               `Streaming inactivity timeout: no data received for ${inactivityTimeoutMs}ms`,
-              'inactivity'
+              "inactivity",
             );
           }
 
@@ -484,20 +492,20 @@ export class ProviderService {
           lastChunkTime = Date.now();
 
           buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed || trimmed === 'data: [DONE]') continue;
+            if (!trimmed || trimmed === "data: [DONE]") continue;
 
-            if (trimmed.startsWith('data: ')) {
+            if (trimmed.startsWith("data: ")) {
               try {
                 const json = JSON.parse(trimmed.slice(6));
                 onChunk(json);
               } catch (e) {
                 logger.warn({
-                  event: 'sse_parse_error',
+                  event: "sse_parse_error",
                   line: trimmed,
                 });
               }
@@ -512,8 +520,8 @@ export class ProviderService {
         throw error;
       }
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new TimeoutError('Streaming request timed out', 'request');
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new TimeoutError("Streaming request timed out", "request");
       }
 
       throw new ProviderError(`Streaming failed: ${error}`, 500, true);
@@ -528,27 +536,27 @@ export class ProviderService {
     timeoutMs: number,
     onChunk: (chunk: SSEChunk) => void,
     abortSignal?: AbortSignal,
-    auth?: ProviderAuth
+    auth?: ProviderAuth,
   ): Promise<void> {
     const vertexRequest = vertexAIAdapter.transformRequest(request);
     const url = vertexAIAdapter.buildEndpointUrl(baseUrl, model, true);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
+      "Content-Type": "application/json",
+      Accept: "application/json",
     };
 
     if (apiKey) {
       if (auth?.headerName) {
         headers[auth.headerName] = apiKey;
       } else {
-        headers['x-goog-api-key'] = apiKey;
+        headers["x-goog-api-key"] = apiKey;
       }
     }
 
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(vertexRequest),
         signal: abortSignal || AbortSignal.timeout(timeoutMs),
@@ -563,7 +571,7 @@ export class ProviderService {
         if (response.status === 402) {
           throw new PaymentRequiredError(
             `Provider returned 402 (Payment Required): ${errorText}`,
-            rateLimitHeaders
+            rateLimitHeaders,
           );
         }
 
@@ -571,15 +579,15 @@ export class ProviderService {
           `Provider returned ${response.status}: ${errorText}`,
           response.status,
           isRetryable,
-          rateLimitHeaders
+          rateLimitHeaders,
         );
       }
 
       const responseText = await response.text();
-      
+
       // Vertex AI streaming returns newline-delimited JSON objects
-      const lines = responseText.split('\n').filter(line => line.trim());
-      
+      const lines = responseText.split("\n").filter((line) => line.trim());
+
       for (const line of lines) {
         try {
           const json: VertexAIResponse = JSON.parse(line);
@@ -589,7 +597,7 @@ export class ProviderService {
           }
         } catch (e) {
           logger.warn({
-            event: 'vertex_streaming_parse_error',
+            event: "vertex_streaming_parse_error",
             line: line.substring(0, 200),
           });
         }
@@ -599,8 +607,8 @@ export class ProviderService {
         throw error;
       }
 
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new TimeoutError('Streaming request timed out', 'request');
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new TimeoutError("Streaming request timed out", "request");
       }
 
       throw new ProviderError(`Streaming failed: ${error}`, 500, true);

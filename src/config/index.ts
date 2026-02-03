@@ -1,6 +1,6 @@
-import { AppConfig } from '../types';
-import { config } from './providers';
-import { getEnv } from './env';
+import { AppConfig } from "../types";
+import { config } from "./providers";
+import { getEnv } from "./env";
 
 /**
  * Get the application configuration.
@@ -17,24 +17,24 @@ export function loadConfig(): AppConfig {
  */
 export function getProviderApiKey(
   providerId: string,
-  config: AppConfig
+  config: AppConfig,
 ): string | undefined {
   const provider = config.providers.find((p) => p.id === providerId);
   if (!provider) return undefined;
 
-  if (provider.auth.type === 'none') {
+  if (provider.auth.type === "none") {
     return undefined;
   }
 
   const env = getEnv();
   switch (provider.auth.env) {
-    case 'GROQ_API_KEY':
+    case "GROQ_API_KEY":
       return env.GROQ_API_KEY;
-    case 'CEREBRAS_API_KEY':
+    case "CEREBRAS_API_KEY":
       return env.CEREBRAS_API_KEY;
-    case 'MISTRAL_API_KEY':
+    case "MISTRAL_API_KEY":
       return env.MISTRAL_API_KEY;
-    case 'GOOGLE_VERTEX_API_KEY':
+    case "GOOGLE_VERTEX_API_KEY":
       return env.GOOGLE_VERTEX_API_KEY;
     default:
       return undefined;

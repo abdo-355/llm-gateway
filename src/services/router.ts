@@ -1,10 +1,29 @@
-import { ChatCompletionRequest, ChatCompletionResponse, RouterHints, SSEChunk, GatewayError, ProviderConfig, Certification, DerivedRequirements, AppConfig, LogicalModelConfig } from '../types';
-import { getProviderApiKey } from '../config';
-import { quotaService, estimateTokens } from './quota';
-import { healthService } from './health';
-import { providerService } from './provider';
-import { ProviderError, RateLimitError, CircuitBreakerError, TimeoutError, ValidationError, ModelQuotaExceededError, GatewayErrorClass } from '../errors';
-import { logger } from '../utils/logger';
+import {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  RouterHints,
+  SSEChunk,
+  GatewayError,
+  ProviderConfig,
+  Certification,
+  DerivedRequirements,
+  AppConfig,
+  LogicalModelConfig,
+} from "../types";
+import { getProviderApiKey } from "../config";
+import { quotaService, estimateTokens } from "./quota";
+import { healthService } from "./health";
+import { providerService } from "./provider";
+import {
+  ProviderError,
+  RateLimitError,
+  CircuitBreakerError,
+  TimeoutError,
+  ValidationError,
+  ModelQuotaExceededError,
+  GatewayErrorClass,
+} from "../errors";
+import { logger } from "../utils/logger";
 
 export interface RoutingCandidate {
   provider: ProviderConfig;
@@ -30,8 +49,12 @@ export interface RoutingAttempt {
   apiKey: string | undefined;
   score: number;
   timeoutMs: number;
-  providerType: 'openai' | 'vertex';
-  auth: { type: 'none' | 'bearer' | 'header'; env: string; headerName?: string };
+  providerType: "openai" | "vertex";
+  auth: {
+    type: "none" | "bearer" | "header";
+    env: string;
+    headerName?: string;
+  };
 }
 
 export interface ExecutionResult {
@@ -49,7 +72,10 @@ export class RouterService {
     this.config = config;
   }
 
-  deriveRequirements(request: ChatCompletionRequest, hints?: RouterHints): DerivedRequirements {
+  deriveRequirements(
+    request: ChatCompletionRequest,
+    hints?: RouterHints,
+  ): DerivedRequirements {
     return deriveRequirements(request, hints);
   }
 
@@ -59,7 +85,8 @@ export class RouterService {
     for (const provider of this.config.providers) {
       for (const model of provider.models.list) {
         const isCertified = this.config.certifications.some(
-          (c: Certification) => c.provider === provider.id && c.model === model && c.strictSchema
+          (c: Certification) =>
+            c.provider === provider.id && c.model === model && c.strictSchema,
         );
 
         candidates.push({
@@ -79,15 +106,19 @@ export class RouterService {
    * Generate candidates from a logical model configuration
    * Only includes candidates specified in the logical model's candidate list
    */
-  async generateCandidatesFromLogicalModel(logicalModelConfig: LogicalModelConfig): Promise<RoutingCandidate[]> {
+  async generateCandidatesFromLogicalModel(
+    logicalModelConfig: LogicalModelConfig,
+  ): Promise<RoutingCandidate[]> {
     const candidates: RoutingCandidate[] = [];
 
     for (const candidateConfig of logicalModelConfig.candidates) {
       // Find the provider in the config
-      const provider = this.config.providers.find(p => p.id === candidateConfig.provider);
+      const provider = this.config.providers.find(
+        (p) => p.id === candidateConfig.provider,
+      );
       if (!provider) {
         logger.warn({
-          event: 'logical_model_provider_not_found',
+          event: "logical_model_provider_not_found",
           provider: candidateConfig.provider,
           model: candidateConfig.model,
           logical_model: logicalModelConfig.id,
@@ -98,7 +129,7 @@ export class RouterService {
       // Check if the model exists for this provider
       if (!provider.models.list.includes(candidateConfig.model)) {
         logger.warn({
-          event: 'logical_model_model_not_found',
+          event: "logical_model_model_not_found",
           provider: candidateConfig.provider,
           model: candidateConfig.model,
           logical_model: logicalModelConfig.id,
@@ -108,7 +139,10 @@ export class RouterService {
 
       // Check certification status
       const isCertified = this.config.certifications.some(
-        (c: Certification) => c.provider === provider.id && c.model === candidateConfig.model && c.strictSchema
+        (c: Certification) =>
+          c.provider === provider.id &&
+          c.model === candidateConfig.model &&
+          c.strictSchema,
       );
 
       candidates.push({
@@ -121,7 +155,7 @@ export class RouterService {
     }
 
     logger.info({
-      event: 'logical_model_candidates_generated',
+      event: "logical_model_candidates_generated",
       logical_model: logicalModelConfig.id,
       candidate_count: candidates.length,
     });
@@ -133,16 +167,20 @@ export class RouterService {
     candidates: RoutingCandidate[],
     requirements: DerivedRequirements,
     request: ChatCompletionRequest,
-    hints?: RouterHints
-  ): Promise<{ eligible: RoutingCandidate[]; filtered: Array<{ provider: string; model: string; reason: string }> }> {
+    hints?: RouterHints,
+  ): Promise<{
+    eligible: RoutingCandidate[];
+    filtered: Array<{ provider: string; model: string; reason: string }>;
+  }> {
     const eligible: RoutingCandidate[] = [];
-    const filtered: Array<{ provider: string; model: string; reason: string }> = [];
+    const filtered: Array<{ provider: string; model: string; reason: string }> =
+      [];
 
     // Estimate tokens once for all candidates
     const estimatedTokens = estimateTokens(request);
 
     logger.debug({
-      event: 'filter_candidates_start',
+      event: "filter_candidates_start",
       candidate_count: candidates.length,
       requirements_output: requirements.output,
       requirements_streaming: requirements.streaming,
@@ -153,73 +191,98 @@ export class RouterService {
       const { provider, model } = candidate;
 
       // Check allow/deny lists
-      if (hints?.providers?.allow && !hints.providers.allow.includes(provider.id)) {
+      if (
+        hints?.providers?.allow &&
+        !hints.providers.allow.includes(provider.id)
+      ) {
         logger.debug({
-          event: 'candidate_filtered',
+          event: "candidate_filtered",
           provider: provider.id,
           model,
-          reason: 'not_in_allowlist',
+          reason: "not_in_allowlist",
           allowlist: hints.providers.allow,
         });
-        filtered.push({ provider: provider.id, model, reason: 'not_in_allowlist' });
+        filtered.push({
+          provider: provider.id,
+          model,
+          reason: "not_in_allowlist",
+        });
         continue;
       }
 
       if (hints?.providers?.deny?.includes(provider.id)) {
         logger.debug({
-          event: 'candidate_filtered',
+          event: "candidate_filtered",
           provider: provider.id,
           model,
-          reason: 'in_denylist',
+          reason: "in_denylist",
         });
-        filtered.push({ provider: provider.id, model, reason: 'in_denylist' });
+        filtered.push({ provider: provider.id, model, reason: "in_denylist" });
         continue;
       }
 
       // Check budget mode
-      if (hints?.budget?.mode === 'free_only') {
+      if (hints?.budget?.mode === "free_only") {
         // This would need a flag on providers - skipping for now
       }
 
       // Check strict schema requirement
-      if (requirements.output === 'json_schema_strict' && !candidate.isCertifiedForStrictSchema) {
-        if (provider.capabilities.structuredOutputs !== 'json_schema_strict') {
+      if (
+        requirements.output === "json_schema_strict" &&
+        !candidate.isCertifiedForStrictSchema
+      ) {
+        if (provider.capabilities.structuredOutputs !== "json_schema_strict") {
           logger.debug({
-            event: 'candidate_filtered',
+            event: "candidate_filtered",
             provider: provider.id,
             model,
-            reason: 'not_certified_for_strict_schema',
+            reason: "not_certified_for_strict_schema",
             is_certified: candidate.isCertifiedForStrictSchema,
             structured_outputs: provider.capabilities.structuredOutputs,
           });
-          filtered.push({ provider: provider.id, model, reason: 'not_certified_for_strict_schema' });
+          filtered.push({
+            provider: provider.id,
+            model,
+            reason: "not_certified_for_strict_schema",
+          });
           continue;
         }
       }
 
       // Check streaming requirement
-      if (requirements.streaming === 'required' && !provider.capabilities.streaming) {
+      if (
+        requirements.streaming === "required" &&
+        !provider.capabilities.streaming
+      ) {
         logger.debug({
-          event: 'candidate_filtered',
+          event: "candidate_filtered",
           provider: provider.id,
           model,
-          reason: 'streaming_not_supported',
+          reason: "streaming_not_supported",
           supports_streaming: provider.capabilities.streaming,
         });
-        filtered.push({ provider: provider.id, model, reason: 'streaming_not_supported' });
+        filtered.push({
+          provider: provider.id,
+          model,
+          reason: "streaming_not_supported",
+        });
         continue;
       }
 
       // Check tools requirement
-      if (requirements.tools === 'required' && !provider.capabilities.tools) {
+      if (requirements.tools === "required" && !provider.capabilities.tools) {
         logger.debug({
-          event: 'candidate_filtered',
+          event: "candidate_filtered",
           provider: provider.id,
           model,
-          reason: 'tools_not_supported',
+          reason: "tools_not_supported",
           supports_tools: provider.capabilities.tools,
         });
-        filtered.push({ provider: provider.id, model, reason: 'tools_not_supported' });
+        filtered.push({
+          provider: provider.id,
+          model,
+          reason: "tools_not_supported",
+        });
         continue;
       }
 
@@ -227,33 +290,42 @@ export class RouterService {
       const canExecute = await healthService.canExecute(provider.id);
       if (!canExecute) {
         logger.debug({
-          event: 'candidate_filtered',
+          event: "candidate_filtered",
           provider: provider.id,
           model,
-          reason: 'circuit_breaker_open',
+          reason: "circuit_breaker_open",
         });
-        filtered.push({ provider: provider.id, model, reason: 'circuit_breaker_open' });
+        filtered.push({
+          provider: provider.id,
+          model,
+          reason: "circuit_breaker_open",
+        });
         continue;
       }
 
       // Check per-model quota
       const modelLimits = provider.models.limits?.[model] || {};
       try {
-        await quotaService.checkModelQuota(provider.id, model, modelLimits, estimatedTokens);
+        await quotaService.checkModelQuota(
+          provider.id,
+          model,
+          modelLimits,
+          estimatedTokens,
+        );
         // Quota check passed, candidate is eligible
       } catch (error) {
         if (error instanceof ModelQuotaExceededError) {
           logger.debug({
-            event: 'candidate_filtered',
+            event: "candidate_filtered",
             provider: provider.id,
             model,
             reason: `quota_exceeded_${error.limitType}`,
             limit_type: error.limitType,
           });
-          filtered.push({ 
-            provider: provider.id, 
-            model, 
-            reason: `quota_exceeded_${error.limitType}` 
+          filtered.push({
+            provider: provider.id,
+            model,
+            reason: `quota_exceeded_${error.limitType}`,
           });
           continue;
         }
@@ -267,26 +339,33 @@ export class RouterService {
     return { eligible, filtered };
   }
 
-  scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHints): RoutingCandidate[] {
+  scoreCandidates(
+    candidates: RoutingCandidate[],
+    hints?: RouterHints,
+  ): RoutingCandidate[] {
     return scoreCandidates(candidates, hints);
   }
 
   compilePlan(
-    candidates: RoutingCandidate[], 
-    hints?: RouterHints, 
-    logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number }
+    candidates: RoutingCandidate[],
+    hints?: RouterHints,
+    logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number },
   ): RoutingPlan {
     return compilePlan(candidates, this.config, hints, logicalModelSLO);
   }
 
-  shouldRetry(error: ProviderError, plan: RoutingPlan, attemptIndex: number): boolean {
+  shouldRetry(
+    error: ProviderError,
+    plan: RoutingPlan,
+    attemptIndex: number,
+  ): boolean {
     return shouldRetry(error, plan, attemptIndex);
   }
 
   async execute(
     plan: RoutingPlan,
     request: ChatCompletionRequest,
-    requestId: string
+    requestId: string,
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     let lastError: Error | undefined;
@@ -296,7 +375,7 @@ export class RouterService {
       const attemptStartTime = Date.now();
 
       logger.info({
-        event: 'attempt_start',
+        event: "attempt_start",
         request_id: requestId,
         attempt: i + 1,
         provider: attempt.providerId,
@@ -305,7 +384,10 @@ export class RouterService {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), attempt.timeoutMs);
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          attempt.timeoutMs,
+        );
 
         const response = await providerService.callProvider(
           attempt.baseUrl,
@@ -315,7 +397,7 @@ export class RouterService {
           attempt.timeoutMs,
           controller.signal,
           attempt.providerType,
-          attempt.auth
+          attempt.auth,
         );
 
         clearTimeout(timeoutId);
@@ -326,13 +408,17 @@ export class RouterService {
         await healthService.recordSuccess(attempt.providerId, latencyMs);
         // Use new per-model quota recording
         const tokensUsed = response.usage?.total_tokens || 0;
-        await quotaService.recordModelUsage(attempt.providerId, attempt.model, tokensUsed);
+        await quotaService.recordModelUsage(
+          attempt.providerId,
+          attempt.model,
+          tokensUsed,
+        );
 
         // Check for refusal
-        const hasRefusal = response.choices?.some(c => c.message?.refusal);
+        const hasRefusal = response.choices?.some((c) => c.message?.refusal);
         if (hasRefusal) {
           logger.info({
-            event: 'refusal_detected',
+            event: "refusal_detected",
             request_id: requestId,
             provider: attempt.providerId,
             model: attempt.model,
@@ -340,7 +426,7 @@ export class RouterService {
         }
 
         logger.info({
-          event: 'attempt_success',
+          event: "attempt_success",
           request_id: requestId,
           attempt: i + 1,
           provider: attempt.providerId,
@@ -361,7 +447,7 @@ export class RouterService {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         logger.error({
-          event: 'attempt_failed',
+          event: "attempt_failed",
           request_id: requestId,
           attempt: i + 1,
           provider: attempt.providerId,
@@ -377,7 +463,7 @@ export class RouterService {
         if (error instanceof ModelQuotaExceededError) {
           // Model quota exceeded - filter this candidate and continue to next attempt
           logger.warn({
-            event: 'model_quota_exceeded',
+            event: "model_quota_exceeded",
             request_id: requestId,
             provider: attempt.providerId,
             model: attempt.model,
@@ -389,11 +475,11 @@ export class RouterService {
 
         if (error instanceof ProviderError) {
           const providerError = error as ProviderError;
-          
+
           // Handle 402 Payment Required (OpenRouter specific) - non-retryable
           if (providerError.statusCode === 402) {
             logger.error({
-              event: 'payment_required',
+              event: "payment_required",
               request_id: requestId,
               provider: attempt.providerId,
               model: attempt.model,
@@ -405,44 +491,62 @@ export class RouterService {
           if (providerError.statusCode === 429) {
             try {
               // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
+              const rateLimitHeaders: Record<
+                string,
+                string | string[] | undefined
+              > = {};
               if (providerError.headers) {
                 // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
                 if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
+                  rateLimitHeaders["retry-after"] = String(
+                    providerError.headers.retryAfter,
+                  );
                 }
                 if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
+                  rateLimitHeaders["x-ratelimit-limit-requests"] = String(
+                    providerError.headers.limitRequests,
+                  );
                 }
                 if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
+                  rateLimitHeaders["x-ratelimit-remaining-requests"] = String(
+                    providerError.headers.remainingRequests,
+                  );
                 }
                 if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
+                  rateLimitHeaders["x-ratelimit-reset-requests"] =
+                    providerError.headers.resetRequests;
                 }
                 if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
+                  rateLimitHeaders["x-ratelimit-limit-tokens"] = String(
+                    providerError.headers.limitTokens,
+                  );
                 }
                 if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
+                  rateLimitHeaders["x-ratelimit-remaining-tokens"] = String(
+                    providerError.headers.remainingTokens,
+                  );
                 }
                 if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
+                  rateLimitHeaders["x-ratelimit-reset-tokens"] =
+                    providerError.headers.resetTokens;
                 }
               }
 
               await quotaService.handleProviderRateLimit(
                 attempt.providerId,
                 attempt.model,
-                { headers: rateLimitHeaders, statusCode: 429 }
+                { headers: rateLimitHeaders, statusCode: 429 },
               );
             } catch (syncError) {
               logger.warn({
-                event: 'rate_limit_sync_failed',
+                event: "rate_limit_sync_failed",
                 request_id: requestId,
                 provider: attempt.providerId,
                 model: attempt.model,
-                error: syncError instanceof Error ? syncError.message : String(syncError),
+                error:
+                  syncError instanceof Error
+                    ? syncError.message
+                    : String(syncError),
               });
             }
           }
@@ -456,8 +560,8 @@ export class RouterService {
     }
 
     throw this.createGatewayError(
-      lastError || new Error('All attempts failed'),
-      plan.attempts.length
+      lastError || new Error("All attempts failed"),
+      plan.attempts.length,
     );
   }
 
@@ -467,7 +571,7 @@ export class RouterService {
     requestId: string,
     onChunk: (chunk: SSEChunk) => void,
     onComplete: () => void,
-    onError: (error: GatewayError) => void
+    onError: (error: GatewayError) => void,
   ): Promise<void> {
     // Estimate tokens for quota tracking
     const estimatedTokens = estimateTokens(request);
@@ -487,23 +591,30 @@ export class RouterService {
           onChunk,
           controller.signal,
           attempt.providerType,
-          attempt.auth
+          attempt.auth,
         );
 
-        await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
-        
+        await healthService.recordSuccess(
+          attempt.providerId,
+          attempt.timeoutMs,
+        );
+
         // Record streaming usage - use estimated tokens since we don't have actual usage
-        await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
-        
+        await quotaService.recordModelUsage(
+          attempt.providerId,
+          attempt.model,
+          estimatedTokens,
+        );
+
         logger.info({
-          event: 'streaming_attempt_success',
+          event: "streaming_attempt_success",
           request_id: requestId,
           attempt: i + 1,
           provider: attempt.providerId,
           model: attempt.model,
           estimated_tokens: estimatedTokens,
         });
-        
+
         onComplete();
         return;
       } catch (error) {
@@ -512,7 +623,7 @@ export class RouterService {
         // Handle specific error types
         if (error instanceof ModelQuotaExceededError) {
           logger.warn({
-            event: 'streaming_model_quota_exceeded',
+            event: "streaming_model_quota_exceeded",
             request_id: requestId,
             provider: attempt.providerId,
             model: attempt.model,
@@ -524,11 +635,11 @@ export class RouterService {
 
         if (error instanceof ProviderError) {
           const providerError = error as ProviderError;
-          
+
           // Handle 402 Payment Required (OpenRouter specific) - non-retryable
           if (providerError.statusCode === 402) {
             logger.error({
-              event: 'streaming_payment_required',
+              event: "streaming_payment_required",
               request_id: requestId,
               provider: attempt.providerId,
               model: attempt.model,
@@ -541,44 +652,62 @@ export class RouterService {
           if (providerError.statusCode === 429) {
             try {
               // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
+              const rateLimitHeaders: Record<
+                string,
+                string | string[] | undefined
+              > = {};
               if (providerError.headers) {
                 // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
                 if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
+                  rateLimitHeaders["retry-after"] = String(
+                    providerError.headers.retryAfter,
+                  );
                 }
                 if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
+                  rateLimitHeaders["x-ratelimit-limit-requests"] = String(
+                    providerError.headers.limitRequests,
+                  );
                 }
                 if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
+                  rateLimitHeaders["x-ratelimit-remaining-requests"] = String(
+                    providerError.headers.remainingRequests,
+                  );
                 }
                 if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
+                  rateLimitHeaders["x-ratelimit-reset-requests"] =
+                    providerError.headers.resetRequests;
                 }
                 if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
+                  rateLimitHeaders["x-ratelimit-limit-tokens"] = String(
+                    providerError.headers.limitTokens,
+                  );
                 }
                 if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
+                  rateLimitHeaders["x-ratelimit-remaining-tokens"] = String(
+                    providerError.headers.remainingTokens,
+                  );
                 }
                 if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
+                  rateLimitHeaders["x-ratelimit-reset-tokens"] =
+                    providerError.headers.resetTokens;
                 }
               }
 
               await quotaService.handleProviderRateLimit(
                 attempt.providerId,
                 attempt.model,
-                { headers: rateLimitHeaders, statusCode: 429 }
+                { headers: rateLimitHeaders, statusCode: 429 },
               );
             } catch (syncError) {
               logger.warn({
-                event: 'streaming_rate_limit_sync_failed',
+                event: "streaming_rate_limit_sync_failed",
                 request_id: requestId,
                 provider: attempt.providerId,
                 model: attempt.model,
-                error: syncError instanceof Error ? syncError.message : String(syncError),
+                error:
+                  syncError instanceof Error
+                    ? syncError.message
+                    : String(syncError),
               });
             }
           }
@@ -592,40 +721,54 @@ export class RouterService {
       }
     }
 
-    onError(this.createGatewayError(new Error('All streaming attempts failed'), plan.attempts.length));
+    onError(
+      this.createGatewayError(
+        new Error("All streaming attempts failed"),
+        plan.attempts.length,
+      ),
+    );
   }
 
-  private createGatewayError(error: Error, attempts: number): GatewayErrorClass {
+  private createGatewayError(
+    error: Error,
+    attempts: number,
+  ): GatewayErrorClass {
     return createGatewayError(error, attempts);
   }
 }
 
 // Export pure functions for testing
-export function deriveRequirements(request: ChatCompletionRequest, hints?: RouterHints): DerivedRequirements {
-  let output: 'text' | 'json_schema_strict' = 'text';
-  let streaming: 'required' | 'preferred' | 'forbidden' = 'preferred';
-  let tools: 'required' | 'allowed' | 'forbidden' = 'forbidden';
+export function deriveRequirements(
+  request: ChatCompletionRequest,
+  hints?: RouterHints,
+): DerivedRequirements {
+  let output: "text" | "json_schema_strict" = "text";
+  let streaming: "required" | "preferred" | "forbidden" = "preferred";
+  let tools: "required" | "allowed" | "forbidden" = "forbidden";
 
   // Check for strict schema requirement
-  if (request.response_format?.type === 'json_schema' && request.response_format.json_schema?.strict) {
-    output = 'json_schema_strict';
+  if (
+    request.response_format?.type === "json_schema" &&
+    request.response_format.json_schema?.strict
+  ) {
+    output = "json_schema_strict";
   }
 
   // Streaming requirement
   if (request.stream === true) {
-    streaming = 'required';
+    streaming = "required";
   } else if (request.stream === false) {
-    streaming = 'forbidden';
+    streaming = "forbidden";
   }
 
   // Tools requirement
   if (request.tools && request.tools.length > 0) {
-    if (request.tool_choice === 'required') {
-      tools = 'required';
-    } else if (request.tool_choice === 'none') {
-      tools = 'forbidden';
+    if (request.tool_choice === "required") {
+      tools = "required";
+    } else if (request.tool_choice === "none") {
+      tools = "forbidden";
     } else {
-      tools = 'allowed';
+      tools = "allowed";
     }
   }
 
@@ -643,7 +786,10 @@ export function deriveRequirements(request: ChatCompletionRequest, hints?: Route
   return { output, streaming, tools };
 }
 
-export function scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHints): RoutingCandidate[] {
+export function scoreCandidates(
+  candidates: RoutingCandidate[],
+  hints?: RouterHints,
+): RoutingCandidate[] {
   const weights = {
     base: 1.0,
     prefer: 0.5,
@@ -651,7 +797,7 @@ export function scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHi
     health: 0.5,
   };
 
-  const scored = candidates.map(candidate => {
+  const scored = candidates.map((candidate) => {
     const breakdown: Record<string, number> = {};
 
     // Base weight
@@ -661,7 +807,8 @@ export function scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHi
     if (hints?.providers?.prefer) {
       const index = hints.providers.prefer.indexOf(candidate.provider.id);
       if (index !== -1) {
-        breakdown.prefer = (1 - index / hints.providers.prefer.length) * weights.prefer;
+        breakdown.prefer =
+          (1 - index / hints.providers.prefer.length) * weights.prefer;
       }
     }
 
@@ -669,7 +816,10 @@ export function scoreCandidates(candidates: RoutingCandidate[], hints?: RouterHi
     breakdown.health = weights.health * 0.5; // Default to neutral
 
     // Calculate total (preserve existing candidate score)
-    const calculatedScore = Object.values(breakdown).reduce((sum, val) => sum + val, 0);
+    const calculatedScore = Object.values(breakdown).reduce(
+      (sum, val) => sum + val,
+      0,
+    );
     const score = candidate.score + calculatedScore;
 
     return {
@@ -689,26 +839,30 @@ export function compilePlan(
   candidates: RoutingCandidate[],
   config: AppConfig,
   hints?: RouterHints,
-  logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number }
+  logicalModelSLO?: { maxLatencyMs?: number; maxAttempts?: number },
 ): RoutingPlan {
   // Use logical model SLO as defaults, override with explicit hints
-  const maxAttempts = hints?.fallback?.max_attempts ?? logicalModelSLO?.maxAttempts ?? 3;
+  const maxAttempts =
+    hints?.fallback?.max_attempts ?? logicalModelSLO?.maxAttempts ?? 3;
   const hardTimeoutMs = hints?.slo?.hard_timeout_ms;
 
-  const attempts: RoutingAttempt[] = candidates.slice(0, maxAttempts).map(candidate => {
-    const timeoutMs = hints?.slo?.max_latency_ms ?? logicalModelSLO?.maxLatencyMs ?? 30000;
+  const attempts: RoutingAttempt[] = candidates
+    .slice(0, maxAttempts)
+    .map((candidate) => {
+      const timeoutMs =
+        hints?.slo?.max_latency_ms ?? logicalModelSLO?.maxLatencyMs ?? 30000;
 
-    return {
-      providerId: candidate.provider.id,
-      model: candidate.model,
-      baseUrl: candidate.provider.baseUrl,
-      apiKey: getProviderApiKey(candidate.provider.id, config),
-      score: candidate.score,
-      timeoutMs,
-      providerType: candidate.provider.providerType ?? 'openai',
-      auth: candidate.provider.auth,
-    };
-  });
+      return {
+        providerId: candidate.provider.id,
+        model: candidate.model,
+        baseUrl: candidate.provider.baseUrl,
+        apiKey: getProviderApiKey(candidate.provider.id, config),
+        score: candidate.score,
+        timeoutMs,
+        providerType: candidate.provider.providerType ?? "openai",
+        auth: candidate.provider.auth,
+      };
+    });
 
   return {
     attempts,
@@ -720,7 +874,11 @@ export function compilePlan(
   };
 }
 
-export function shouldRetry(error: ProviderError, plan: RoutingPlan, attemptIndex: number): boolean {
+export function shouldRetry(
+  error: ProviderError,
+  plan: RoutingPlan,
+  attemptIndex: number,
+): boolean {
   if (attemptIndex >= plan.attempts.length - 1) {
     return false;
   }
@@ -762,27 +920,39 @@ export function shouldRetry(error: ProviderError, plan: RoutingPlan, attemptInde
   return false;
 }
 
-export function createGatewayError(error: Error, attempts: number, requestId?: string): GatewayErrorClass {
-  let code = 'UPSTREAM_ERROR';
-  let details: { attempts: number; retryAfter?: number; limitType?: string; providerId?: string; state?: string; timeoutType?: string; validationErrors?: Array<{ path: string; message: string }>; } = { attempts };
+export function createGatewayError(
+  error: Error,
+  attempts: number,
+  requestId?: string,
+): GatewayErrorClass {
+  let code = "UPSTREAM_ERROR";
+  let details: {
+    attempts: number;
+    retryAfter?: number;
+    limitType?: string;
+    providerId?: string;
+    state?: string;
+    timeoutType?: string;
+    validationErrors?: Array<{ path: string; message: string }>;
+  } = { attempts };
 
   // Handle new error types
   if (error instanceof RateLimitError) {
-    code = 'RATE_LIMITED';
+    code = "RATE_LIMITED";
     details.retryAfter = error.retryAfter;
     details.limitType = error.limitType;
   } else if (error instanceof CircuitBreakerError) {
-    code = 'CIRCUIT_BREAKER_OPEN';
+    code = "CIRCUIT_BREAKER_OPEN";
     details.providerId = error.providerId;
     details.state = error.state;
   } else if (error instanceof TimeoutError) {
-    code = 'TIMEOUT';
+    code = "TIMEOUT";
     details.timeoutType = error.timeoutType;
   } else if (error instanceof ValidationError) {
-    code = 'VALIDATION_ERROR';
+    code = "VALIDATION_ERROR";
     details.validationErrors = error.details;
   } else if (error instanceof ModelQuotaExceededError) {
-    code = 'QUOTA_EXCEEDED';
+    code = "QUOTA_EXCEEDED";
     details.providerId = error.providerId;
     details.limitType = error.limitType;
   } else {
@@ -790,23 +960,26 @@ export function createGatewayError(error: Error, attempts: number, requestId?: s
     const providerError = error as ProviderError;
     if (providerError.statusCode !== undefined) {
       if (providerError.statusCode === 429) {
-        code = 'RATE_LIMITED';
-      } else if (providerError.statusCode === 504 || providerError.statusCode === 499) {
-        code = 'TIMEOUT';
+        code = "RATE_LIMITED";
+      } else if (
+        providerError.statusCode === 504 ||
+        providerError.statusCode === 499
+      ) {
+        code = "TIMEOUT";
       } else if (providerError.statusCode === 400) {
-        code = 'INVALID_REQUEST';
+        code = "INVALID_REQUEST";
       } else if (providerError.statusCode === 402) {
-        code = 'PAYMENT_REQUIRED';
+        code = "PAYMENT_REQUIRED";
       }
     }
   }
 
   return new GatewayErrorClass(
-    'gateway_error',
+    "gateway_error",
     code,
     error.message,
     requestId,
-    details
+    details,
   );
 }
 

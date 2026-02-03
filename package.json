@@ -12,7 +12,9 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit",
-    "check-models": "tsx scripts/check-models.ts"
+    "check-models": "tsx scripts/check-models.ts",
+    "format": "prettier --write 'src/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts'"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
@@ -34,6 +36,7 @@
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
+    "prettier": "^3.8.1",
     "supertest": "^6.3.4",
     "ts-jest": "^29.1.1",
     "tsx": "^4.7.0",

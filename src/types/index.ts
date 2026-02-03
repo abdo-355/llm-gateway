@@ -6,19 +6,25 @@ export type JsonValue = JsonPrimitive | JsonArray | JsonObject;
 
 // OpenAI-compatible types for request/response
 export interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content?: string | Array<{ type: string; text?: string; image_url?: { url: string; detail?: string } }>;
+  role: "system" | "user" | "assistant" | "tool";
+  content?:
+    | string
+    | Array<{
+        type: string;
+        text?: string;
+        image_url?: { url: string; detail?: string };
+      }>;
   name?: string;
   tool_calls?: Array<{
     id: string;
-    type: 'function';
+    type: "function";
     function: { name: string; arguments: string };
   }>;
   tool_call_id?: string;
 }
 
 export interface OpenAITool {
-  type: 'function';
+  type: "function";
   function: {
     name: string;
     description?: string;
@@ -28,7 +34,7 @@ export interface OpenAITool {
 }
 
 export interface ResponseFormat {
-  type: 'text' | 'json_object' | 'json_schema';
+  type: "text" | "json_object" | "json_schema";
   json_schema?: {
     name: string;
     description?: string;
@@ -56,7 +62,11 @@ export interface ChatCompletionRequest {
   temperature?: number;
   top_p?: number;
   tools?: OpenAITool[];
-  tool_choice?: 'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
+  tool_choice?:
+    | "none"
+    | "auto"
+    | "required"
+    | { type: "function"; function: { name: string } };
   parallel_tool_calls?: boolean;
   user?: string;
   metadata?: JsonObject;
@@ -65,23 +75,29 @@ export interface ChatCompletionRequest {
 
 export interface ChatCompletionResponse {
   id: string;
-  object: 'chat.completion';
+  object: "chat.completion";
   created: number;
   model: string;
   choices: Array<{
     index: number;
     message: {
-      role: 'assistant';
+      role: "assistant";
       content: string | null;
       tool_calls?: Array<{
         id: string;
-        type: 'function';
+        type: "function";
         function: { name: string; arguments: string };
       }>;
       refusal?: string;
     };
     logprobs?: Logprobs;
-    finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | null;
+    finish_reason:
+      | "stop"
+      | "length"
+      | "tool_calls"
+      | "content_filter"
+      | "function_call"
+      | null;
   }>;
   usage?: {
     prompt_tokens: number;
@@ -119,25 +135,31 @@ export interface Logprobs {
 
 export interface SSEChunk {
   id: string;
-  object: 'chat.completion.chunk';
+  object: "chat.completion.chunk";
   created: number;
   model: string;
   system_fingerprint?: string;
   choices: Array<{
     index: number;
     delta: {
-      role?: 'assistant';
+      role?: "assistant";
       content?: string | null;
       tool_calls?: Array<{
         index: number;
         id?: string;
-        type?: 'function';
+        type?: "function";
         function?: { name?: string; arguments?: string };
       }>;
       refusal?: string;
     };
     logprobs?: Logprobs;
-    finish_reason?: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | null;
+    finish_reason?:
+      | "stop"
+      | "length"
+      | "tool_calls"
+      | "content_filter"
+      | "function_call"
+      | null;
   }>;
   usage?: {
     prompt_tokens: number;
@@ -148,14 +170,14 @@ export interface SSEChunk {
 
 // Router hints from request
 export interface RouterHints {
-  profile?: 'cheap_fast' | 'reliable_structured' | 'balanced';
+  profile?: "cheap_fast" | "reliable_structured" | "balanced";
   requirements?: {
-    output?: 'text' | 'json_schema_strict';
-    streaming?: 'required' | 'preferred' | 'forbidden';
-    tools?: 'required' | 'allowed' | 'forbidden';
+    output?: "text" | "json_schema_strict";
+    streaming?: "required" | "preferred" | "forbidden";
+    tools?: "required" | "allowed" | "forbidden";
   };
   budget?: {
-    mode: 'free_only' | 'allow_paid';
+    mode: "free_only" | "allow_paid";
   };
   slo?: {
     max_latency_ms?: number;
@@ -179,7 +201,7 @@ export interface RouterHints {
 }
 
 // Provider types
-export type ProviderAuthType = 'none' | 'bearer' | 'header';
+export type ProviderAuthType = "none" | "bearer" | "header";
 
 export interface ProviderAuth {
   type: ProviderAuthType;
@@ -189,14 +211,19 @@ export interface ProviderAuth {
 
 export interface ProviderModels {
   limits?: Record<string, ModelLimits>;
-  mode: 'allowlist' | 'denylist';
+  mode: "allowlist" | "denylist";
   list: string[];
 }
 
 export interface ProviderCapabilities {
   streaming: boolean;
   tools: boolean;
-  structuredOutputs: 'none' | 'json_object' | 'json_schema_strict' | 'model_dependent' | 'unknown';
+  structuredOutputs:
+    | "none"
+    | "json_object"
+    | "json_schema_strict"
+    | "model_dependent"
+    | "unknown";
 }
 
 export interface ProviderLimits {
@@ -205,25 +232,25 @@ export interface ProviderLimits {
   dailyRequests?: number;
   maxConcurrency?: number;
   // Extended limits for per-model tracking
-  rph?: number;        // Requests per hour
-  rpd?: number;        // Requests per day
-  tph?: number;        // Tokens per hour
-  tpd?: number;        // Tokens per day
-  tpmu?: number;       // Tokens per month
+  rph?: number; // Requests per hour
+  rpd?: number; // Requests per day
+  tph?: number; // Tokens per hour
+  tpd?: number; // Tokens per day
+  tpmu?: number; // Tokens per month
 }
 
 // Per-model limit configuration
 export interface ModelLimits {
   rpm?: number;
-  rph?: number;        // Requests per hour
-  rpd?: number;        // Requests per day
+  rph?: number; // Requests per hour
+  rpd?: number; // Requests per day
   tpm?: number;
-  tph?: number;        // Tokens per hour
-  tpd?: number;        // Tokens per day
-  tpmu?: number;       // Tokens per month
+  tph?: number; // Tokens per hour
+  tpd?: number; // Tokens per day
+  tpmu?: number; // Tokens per month
 }
 
-export type ProviderType = 'openai' | 'vertex';
+export type ProviderType = "openai" | "vertex";
 
 export interface ProviderConfig {
   id: string;
@@ -282,9 +309,9 @@ export interface AppConfig {
 
 // Derived requirements
 export interface DerivedRequirements {
-  output: 'text' | 'json_schema_strict';
-  streaming: 'required' | 'preferred' | 'forbidden';
-  tools: 'required' | 'allowed' | 'forbidden';
+  output: "text" | "json_schema_strict";
+  streaming: "required" | "preferred" | "forbidden";
+  tools: "required" | "allowed" | "forbidden";
 }
 
 // Gateway error interface (used for response serialization)
@@ -299,17 +326,17 @@ export interface GatewayError {
 // Logical Model Registry Types
 export type LogicalModelId = string;
 
-export type TaskType = 
-  | 'chat' 
-  | 'analysis' 
-  | 'json_extraction' 
-  | 'code' 
-  | 'tool_orchestration';
+export type TaskType =
+  | "chat"
+  | "analysis"
+  | "json_extraction"
+  | "code"
+  | "tool_orchestration";
 
 export interface LogicalModelCandidate {
-  provider: string;           // Provider ID (e.g., 'groq', 'mistral')
-  model: string;              // Provider-native model ID
-  weight?: number;            // Soft preference weight (0.0-1.0)
+  provider: string; // Provider ID (e.g., 'groq', 'mistral')
+  model: string; // Provider-native model ID
+  weight?: number; // Soft preference weight (0.0-1.0)
 }
 
 export interface LogicalModelSLO {
@@ -328,5 +355,3 @@ export interface LogicalModelConfig {
 
 // Registry type - maps logical model IDs to their configurations
 export type LogicalModelRegistry = Record<LogicalModelId, LogicalModelConfig>;
-
-

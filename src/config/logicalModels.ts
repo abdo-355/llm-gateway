@@ -2,15 +2,15 @@ import { LogicalModelRegistry, LogicalModelConfig } from "../types";
 
 /**
  * Logical Model Registry
- * 
+ *
  * Maps user-facing logical model IDs to internal routing configurations.
  * Each logical model defines a set of candidate (provider, model) pairs
  * with preference weights, allowing intelligent routing with automatic failover.
- * 
+ *
  * Usage in API:
  *   POST /v1/chat/completions
  *   { "model": "chat-pro", "messages": [...] }
- * 
+ *
  * The gateway will:
  * 1. Look up "chat-pro" in this registry
  * 2. Generate candidates from the configured list
@@ -33,9 +33,9 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "groq", model: "llama-3.1-8b-instant", weight: 0.5 },
       { provider: "groq", model: "qwen/qwen3-32b", weight: 0.3 },
-      { provider: "mistral", model: "mistral-small-2503", weight: 0.2 }
+      { provider: "mistral", model: "mistral-small-2503", weight: 0.2 },
     ],
-    slo: { maxLatencyMs: 15000, maxAttempts: 2 }
+    slo: { maxLatencyMs: 15000, maxAttempts: 2 },
   },
 
   /**
@@ -50,9 +50,9 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "groq", model: "llama-3.3-70b-versatile", weight: 0.5 },
       { provider: "cerebras", model: "llama-3.3-70b", weight: 0.3 },
-      { provider: "mistral", model: "mistral-large-latest", weight: 0.2 }
+      { provider: "mistral", model: "mistral-large-latest", weight: 0.2 },
     ],
-    slo: { maxLatencyMs: 30000, maxAttempts: 3 }
+    slo: { maxLatencyMs: 30000, maxAttempts: 3 },
   },
 
   /**
@@ -68,9 +68,9 @@ export const logicalModels: LogicalModelRegistry = {
       { provider: "groq", model: "openai/gpt-oss-120b", weight: 0.4 },
       { provider: "cerebras", model: "gpt-oss-120b", weight: 0.3 },
       { provider: "mistral", model: "open-mixtral-8x22b", weight: 0.2 },
-      { provider: "vertex", model: "gemini-3-pro-preview", weight: 0.1 }
+      { provider: "vertex", model: "gemini-3-pro-preview", weight: 0.1 },
     ],
-    slo: { maxLatencyMs: 40000, maxAttempts: 3 }
+    slo: { maxLatencyMs: 40000, maxAttempts: 3 },
   },
 
   // ========= Analysis / Reasoning =========
@@ -86,11 +86,19 @@ export const logicalModels: LogicalModelRegistry = {
     taskType: "analysis",
     candidates: [
       { provider: "groq", model: "openai/gpt-oss-120b", weight: 0.4 },
-      { provider: "groq", model: "meta-llama/llama-4-maverick-17b-128e-instruct", weight: 0.3 },
-      { provider: "cerebras", model: "qwen-3-235b-a22b-instruct-2507", weight: 0.2 },
-      { provider: "vertex", model: "gemini-3-pro-preview", weight: 0.1 }
+      {
+        provider: "groq",
+        model: "meta-llama/llama-4-maverick-17b-128e-instruct",
+        weight: 0.3,
+      },
+      {
+        provider: "cerebras",
+        model: "qwen-3-235b-a22b-instruct-2507",
+        weight: 0.2,
+      },
+      { provider: "vertex", model: "gemini-3-pro-preview", weight: 0.1 },
     ],
-    slo: { maxLatencyMs: 40000, maxAttempts: 3 }
+    slo: { maxLatencyMs: 40000, maxAttempts: 3 },
   },
 
   // ========= JSON / Structured Output =========
@@ -107,10 +115,10 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "mistral", model: "mistral-small-2503", weight: 0.4 },
       { provider: "mistral", model: "mistral-medium", weight: 0.3 },
-      { provider: "groq", model: "llama-3.1-8b-instant", weight: 0.3 }
+      { provider: "groq", model: "llama-3.1-8b-instant", weight: 0.3 },
     ],
     slo: { maxLatencyMs: 15000, maxAttempts: 2 },
-    requireStrictJson: true
+    requireStrictJson: true,
   },
 
   /**
@@ -130,7 +138,7 @@ export const logicalModels: LogicalModelRegistry = {
       { provider: "mistral", model: "mistral-small-2503", weight: 0.1 },
     ],
     slo: { maxLatencyMs: 25000, maxAttempts: 3 },
-    requireStrictJson: true
+    requireStrictJson: true,
   },
 
   // ========= Code Generation =========
@@ -147,9 +155,13 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "mistral", model: "codestral-2501", weight: 0.5 },
       { provider: "mistral", model: "codestral-2405", weight: 0.3 },
-      { provider: "groq", model: "meta-llama/llama-4-scout-17b-16e-instruct", weight: 0.2 }
+      {
+        provider: "groq",
+        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        weight: 0.2,
+      },
     ],
-    slo: { maxLatencyMs: 20000, maxAttempts: 2 }
+    slo: { maxLatencyMs: 20000, maxAttempts: 2 },
   },
 
   /**
@@ -164,9 +176,9 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "mistral", model: "codestral-2501", weight: 0.4 },
       { provider: "mistral", model: "mistral-large-latest", weight: 0.3 },
-      { provider: "groq", model: "openai/gpt-oss-120b", weight: 0.3 }
+      { provider: "groq", model: "openai/gpt-oss-120b", weight: 0.3 },
     ],
-    slo: { maxLatencyMs: 30000, maxAttempts: 3 }
+    slo: { maxLatencyMs: 30000, maxAttempts: 3 },
   },
 
   // ========= Tool Orchestration =========
@@ -183,11 +195,11 @@ export const logicalModels: LogicalModelRegistry = {
     candidates: [
       { provider: "mistral", model: "mistral-large-latest", weight: 0.4 },
       { provider: "vertex", model: "gemini-3-pro-preview", weight: 0.3 },
-      { provider: "mistral", model: "mistral-medium", weight: 0.3 }
+      { provider: "mistral", model: "mistral-medium", weight: 0.3 },
     ],
     slo: { maxLatencyMs: 30000, maxAttempts: 3 },
-    requireTools: true
-  }
+    requireTools: true,
+  },
 };
 
 /**
