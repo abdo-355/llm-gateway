@@ -482,104 +482,132 @@ export class RouterService {
     onComplete: () => void,
     onError: (error: GatewayError) => void
   ): Promise<void> {
-    // Estimate tokens for quota tracking
     const estimatedTokens = estimateTokens(request);
 
     for (let i = 0; i < plan.attempts.length; i++) {
       const attempt = plan.attempts[i];
 
       try {
-        const controller = new AbortController();
-
-        await providerService.streamProvider(
-          attempt.baseUrl,
-          attempt.apiKey,
-          attempt.model,
+        await this.executeStreamingAttempt(
+          attempt,
           request,
-          attempt.timeoutMs,
-          onChunk,
-          controller.signal,
-          attempt.providerType,
-          attempt.auth
+          estimatedTokens,
+          requestId,
+          onChunk
         );
-
-        await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
-        
-        // Record streaming usage - use estimated tokens since we don't have actual usage
-        await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
-        
-        logger.info({
-          event: 'streaming_attempt_success',
-          request_id: requestId,
-          attempt: i + 1,
-          provider: attempt.providerId,
-          model: attempt.model,
-          estimated_tokens: estimatedTokens,
-        });
-        
         onComplete();
         return;
       } catch (error) {
-        await healthService.recordFailure(attempt.providerId);
-
-        // Handle specific error types
-        if (error instanceof ModelQuotaExceededError) {
-          logger.warn({
-            event: 'streaming_model_quota_exceeded',
-            request_id: requestId,
-            provider: attempt.providerId,
-            model: attempt.model,
-            limit_type: error.limitType,
-          });
-          // Continue to next attempt
-          continue;
-        }
-
-        if (error instanceof ProviderError) {
-          const providerError = error as ProviderError;
-          
-          // Handle 402 Payment Required (OpenRouter specific) - non-retryable
-          if (providerError.statusCode === 402) {
-            logger.error({
-              event: 'streaming_payment_required',
-              request_id: requestId,
-              provider: attempt.providerId,
-              model: attempt.model,
-            });
-            onError(this.createGatewayError(error, i + 1));
-            return;
-          }
-
-          // Handle 429 rate limit
-          if (providerError.statusCode === 429) {
-            try {
-              const rateLimitHeaders = this.extractRateLimitHeadersFromError(providerError);
-              await quotaService.handleProviderRateLimit(
-                attempt.providerId,
-                attempt.model,
-                { headers: rateLimitHeaders, statusCode: 429 }
-              );
-            } catch (syncError) {
-              logger.warn({
-                event: 'streaming_rate_limit_sync_failed',
-                request_id: requestId,
-                provider: attempt.providerId,
-                model: attempt.model,
-                error: syncError instanceof Error ? syncError.message : String(syncError),
-              });
-            }
-          }
-
-          const shouldRetry = this.shouldRetry(error, plan, i);
-          if (!shouldRetry) {
-            onError(this.createGatewayError(error, i + 1));
-            return;
-          }
+        const shouldContinue = await this.handleStreamingAttemptError(
+          error,
+          attempt,
+          plan,
+          i,
+          requestId,
+          onError
+        );
+        if (!shouldContinue) {
+          return;
         }
       }
     }
 
     onError(this.createGatewayError(new Error('All streaming attempts failed'), plan.attempts.length));
+  }
+
+  /**
+   * Execute a single streaming provider attempt
+   * @throws ProviderError on failure
+   */
+  private async executeStreamingAttempt(
+    attempt: RoutingAttempt,
+    request: ChatCompletionRequest,
+    estimatedTokens: number,
+    requestId: string,
+    onChunk: (chunk: SSEChunk) => void
+  ): Promise<void> {
+    const controller = new AbortController();
+
+    try {
+      await providerService.streamProvider(
+        attempt.baseUrl,
+        attempt.apiKey,
+        attempt.model,
+        request,
+        attempt.timeoutMs,
+        onChunk,
+        controller.signal,
+        attempt.providerType,
+        attempt.auth
+      );
+
+      await healthService.recordSuccess(attempt.providerId, attempt.timeoutMs);
+      await quotaService.recordModelUsage(attempt.providerId, attempt.model, estimatedTokens);
+      
+      logger.info({
+        event: 'streaming_attempt_success',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        estimated_tokens: estimatedTokens,
+      });
+    } finally {
+      controller.abort();
+    }
+  }
+
+  /**
+   * Handle an error from a streaming attempt
+   * @returns true if we should continue to next attempt, false if we should stop
+   */
+  private async handleStreamingAttemptError(
+    error: unknown,
+    attempt: RoutingAttempt,
+    plan: RoutingPlan,
+    attemptIndex: number,
+    requestId: string,
+    onError: (error: GatewayError) => void
+  ): Promise<boolean> {
+    await healthService.recordFailure(attempt.providerId);
+
+    // Handle specific error types
+    if (error instanceof ModelQuotaExceededError) {
+      logger.warn({
+        event: 'streaming_model_quota_exceeded',
+        request_id: requestId,
+        provider: attempt.providerId,
+        model: attempt.model,
+        limit_type: error.limitType,
+      });
+      return true; // Continue to next attempt
+    }
+
+    if (error instanceof ProviderError) {
+      // Handle 402 Payment Required - non-retryable
+      if (error.statusCode === 402) {
+        logger.error({
+          event: 'streaming_payment_required',
+          request_id: requestId,
+          provider: attempt.providerId,
+          model: attempt.model,
+        });
+        onError(this.createGatewayError(error, attemptIndex + 1));
+        return false;
+      }
+
+      // Handle 429 rate limit
+      if (error.statusCode === 429) {
+        await this.syncRateLimitWithQuota(error, attempt, requestId);
+      }
+
+      const shouldRetry = this.shouldRetry(error, plan, attemptIndex);
+      if (!shouldRetry) {
+        onError(this.createGatewayError(error, attemptIndex + 1));
+        return false;
+      }
+    }
+
+    return true; // Continue for other errors
   }
 
   private createGatewayError(error: Error, attempts: number): GatewayErrorClass {
