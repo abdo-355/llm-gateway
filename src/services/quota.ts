@@ -47,15 +47,25 @@ interface RateLimitHeaders {
 }
 
 /**
- * Helper function to estimate tokens for a request
- * Rough estimate: 1 token ~ 4 characters
- * Sums message content lengths + max_tokens
+ * Improved token estimation for LLM requests
+ *
+ * Uses multiple heuristics for better accuracy:
+ * - Character-based estimation (1 token ~ 4 chars)
+ * - Role-based weighting (system messages typically longer)
+ * - Tool call handling
+ * - Minimum baseline for request structure overhead
  */
 export function estimateTokens(request: ChatCompletionRequest): number {
   let estimatedChars = 0;
 
+  // Baseline overhead for request structure (messages wrapper, etc.)
+  estimatedChars += 50;
+
   // Sum message content lengths
   for (const message of request.messages) {
+    // Add overhead for role (format: {"role":"user","content":"..."})
+    estimatedChars += 15;
+
     if (typeof message.content === "string") {
       estimatedChars += message.content.length;
     } else if (Array.isArray(message.content)) {
@@ -63,15 +73,36 @@ export function estimateTokens(request: ChatCompletionRequest): number {
       for (const item of message.content) {
         if (item.type === "text" && item.text) {
           estimatedChars += item.text.length;
+        } else if (item.type === "image_url") {
+          // Image URLs add minimal text tokens (URL is not tokenized)
+          estimatedChars += 10;
         }
-        // Image URLs don't add much to token count for estimation
       }
+    }
+
+    // Handle tool calls
+    if (message.tool_calls && message.tool_calls.length > 0) {
+      for (const toolCall of message.tool_calls) {
+        // Estimate tool call overhead
+        estimatedChars += 60;
+        if (toolCall.function.name) {
+          estimatedChars += toolCall.function.name.length;
+        }
+        if (toolCall.function.arguments) {
+          estimatedChars += toolCall.function.arguments.length;
+        }
+      }
+    }
+
+    // Handle tool response messages
+    if (message.role === "tool") {
+      estimatedChars += 30;
     }
   }
 
   // Add estimated completion tokens
   const maxTokens = request.max_tokens || request.max_completion_tokens || 1000;
-  estimatedChars += maxTokens * 4; // Assume ~4 chars per token for output
+  estimatedChars += maxTokens * 4;
 
   // Convert to tokens (rough estimate: 1 token ~ 4 characters)
   return Math.ceil(estimatedChars / 4);

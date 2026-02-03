@@ -55,10 +55,10 @@ describe("QuotaService", () => {
 
       const tokens = estimateTokens(request);
 
-      // "Hello world" = 11 chars, max_tokens = 100, estimated output = 100 * 4 = 400
-      // Total chars = 11 + 400 = 411, tokens = ceil(411/4) = 103
+      // Baseline 50 + role overhead 15 + "Hello world" 11 + max_tokens 100*4=400
+      // Total chars = 50 + 15 + 11 + 400 = 476, tokens = ceil(476/4) = 119
       expect(tokens).toBeGreaterThan(0);
-      expect(tokens).toBe(103);
+      expect(tokens).toBe(119);
     });
 
     it("should estimate tokens for array content", () => {
@@ -75,9 +75,9 @@ describe("QuotaService", () => {
 
       const tokens = estimateTokens(request);
 
-      // "Hello" = 5 chars, max_tokens = 50, estimated output = 50 * 4 = 200
-      // Total chars = 5 + 200 = 205, tokens = ceil(205/4) = 52
-      expect(tokens).toBe(52);
+      // Baseline 50 + role overhead 15 + "Hello" 5 + max_tokens 50*4=200
+      // Total chars = 50 + 15 + 5 + 200 = 270, tokens = ceil(270/4) = 68
+      expect(tokens).toBe(68);
     });
 
     it("should use default max_tokens when not specified", () => {
@@ -88,8 +88,9 @@ describe("QuotaService", () => {
 
       const tokens = estimateTokens(request);
 
-      // Default max_tokens = 1000
-      expect(tokens).toBeGreaterThan(250); // At least 1000/4
+      // Default max_tokens = 1000, output = 1000*4=4000
+      // Total chars = 50 + 15 + 2 + 4000 = 4067, tokens = ceil(4067/4) = 1017
+      expect(tokens).toBe(1017);
     });
 
     it("should handle empty messages", () => {
@@ -101,7 +102,9 @@ describe("QuotaService", () => {
 
       const tokens = estimateTokens(request);
 
-      expect(tokens).toBe(100); // Just the output tokens
+      // Just baseline 50 + max_tokens 100*4=400
+      // Total chars = 50 + 400 = 450, tokens = ceil(450/4) = 113
+      expect(tokens).toBe(113);
     });
   });
 
