@@ -404,33 +404,7 @@ export class RouterService {
           // Handle 429 rate limit - sync with provider state if available
           if (providerError.statusCode === 429) {
             try {
-              // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
-              if (providerError.headers) {
-                // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
-                if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
-                }
-                if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
-                }
-                if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
-                }
-                if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
-                }
-                if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
-                }
-                if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
-                }
-                if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
-                }
-              }
-
+              const rateLimitHeaders = this.extractRateLimitHeadersFromError(providerError);
               await quotaService.handleProviderRateLimit(
                 attempt.providerId,
                 attempt.model,
@@ -540,33 +514,7 @@ export class RouterService {
           // Handle 429 rate limit
           if (providerError.statusCode === 429) {
             try {
-              // Extract headers from the error - ProviderError includes rate limit headers
-              const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
-              if (providerError.headers) {
-                // Convert RateLimitHeaders to the format expected by handleProviderRateLimit
-                if (providerError.headers.retryAfter !== undefined) {
-                  rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
-                }
-                if (providerError.headers.limitRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
-                }
-                if (providerError.headers.remainingRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
-                }
-                if (providerError.headers.resetRequests !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
-                }
-                if (providerError.headers.limitTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
-                }
-                if (providerError.headers.remainingTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
-                }
-                if (providerError.headers.resetTokens !== undefined) {
-                  rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
-                }
-              }
-
+              const rateLimitHeaders = this.extractRateLimitHeadersFromError(providerError);
               await quotaService.handleProviderRateLimit(
                 attempt.providerId,
                 attempt.model,
@@ -597,6 +545,42 @@ export class RouterService {
 
   private createGatewayError(error: Error, attempts: number): GatewayErrorClass {
     return createGatewayError(error, attempts);
+  }
+
+  /**
+   * Extract rate limit headers from a ProviderError for quota synchronization
+   * Converts internal RateLimitHeaders to the format expected by handleProviderRateLimit
+   */
+  private extractRateLimitHeadersFromError(
+    providerError: ProviderError
+  ): Record<string, string | string[] | undefined> {
+    const rateLimitHeaders: Record<string, string | string[] | undefined> = {};
+    
+    if (providerError.headers) {
+      if (providerError.headers.retryAfter !== undefined) {
+        rateLimitHeaders['retry-after'] = String(providerError.headers.retryAfter);
+      }
+      if (providerError.headers.limitRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-limit-requests'] = String(providerError.headers.limitRequests);
+      }
+      if (providerError.headers.remainingRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-remaining-requests'] = String(providerError.headers.remainingRequests);
+      }
+      if (providerError.headers.resetRequests !== undefined) {
+        rateLimitHeaders['x-ratelimit-reset-requests'] = providerError.headers.resetRequests;
+      }
+      if (providerError.headers.limitTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-limit-tokens'] = String(providerError.headers.limitTokens);
+      }
+      if (providerError.headers.remainingTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-remaining-tokens'] = String(providerError.headers.remainingTokens);
+      }
+      if (providerError.headers.resetTokens !== undefined) {
+        rateLimitHeaders['x-ratelimit-reset-tokens'] = providerError.headers.resetTokens;
+      }
+    }
+    
+    return rateLimitHeaders;
   }
 }
 
