@@ -59,22 +59,22 @@ export const config: AppConfig = {
             tpm: 10000,
             tpd: 300000,
           },
-          "openai/gpt-oss-120b": { 
-            rpm: 30, 
-            rpd: 1000, 
-            tpm: 8000, 
+          "openai/gpt-oss-120b": {
+            rpm: 30,
+            rpd: 1000,
+            tpm: 8000,
             tpd: 200000,
           },
-          "openai/gpt-oss-20b": { 
-            rpm: 30, 
-            rpd: 1000, 
-            tpm: 8000, 
+          "openai/gpt-oss-20b": {
+            rpm: 30,
+            rpd: 1000,
+            tpm: 8000,
             tpd: 200000,
           },
-          "qwen/qwen3-32b": { 
-            rpm: 60, 
-            rpd: 1000, 
-            tpm: 6000, 
+          "qwen/qwen3-32b": {
+            rpm: 60,
+            rpd: 1000,
+            tpm: 6000,
             tpd: 500000,
           },
         },

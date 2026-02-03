@@ -1,12 +1,12 @@
-import { getRedisClient } from '../lib/redis';
-import { ModelQuotaExceededError } from '../errors';
-import { ChatCompletionRequest, ModelLimits } from '../types';
-import { logger } from '../utils/logger';
+import { getRedisClient } from "../lib/redis";
+import { ModelQuotaExceededError } from "../errors";
+import { ChatCompletionRequest, ModelLimits } from "../types";
+import { logger } from "../utils/logger";
 
-const QUOTA_PREFIX = 'quota:';
+const QUOTA_PREFIX = "quota:";
 
 // Time window types for quota tracking
-type LimitType = 'rpm' | 'rph' | 'rpd' | 'tpm' | 'tph' | 'tpd' | 'tpmu';
+type LimitType = "rpm" | "rph" | "rpd" | "tpm" | "tph" | "tpd" | "tpmu";
 
 // Quota check result
 export interface QuotaCheckResult {
@@ -56,12 +56,12 @@ export function estimateTokens(request: ChatCompletionRequest): number {
 
   // Sum message content lengths
   for (const message of request.messages) {
-    if (typeof message.content === 'string') {
+    if (typeof message.content === "string") {
       estimatedChars += message.content.length;
     } else if (Array.isArray(message.content)) {
       // Handle array content (e.g., multimodal)
       for (const item of message.content) {
-        if (item.type === 'text' && item.text) {
+        if (item.type === "text" && item.text) {
           estimatedChars += item.text.length;
         }
         // Image URLs don't add much to token count for estimation
@@ -89,9 +89,9 @@ export class QuotaService {
     monthSuffix: string;
   } {
     const year = now.getUTCFullYear();
-    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(now.getUTCDate()).padStart(2, '0');
-    const hour = String(now.getUTCHours()).padStart(2, '0');
+    const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(now.getUTCDate()).padStart(2, "0");
+    const hour = String(now.getUTCHours()).padStart(2, "0");
 
     return {
       hourSuffix: `${year}-${month}-${day}-${hour}`,
@@ -106,7 +106,11 @@ export class QuotaService {
   private buildKeys(
     providerId: string,
     model: string,
-    timeSuffixes: { hourSuffix: string; daySuffix: string; monthSuffix: string }
+    timeSuffixes: {
+      hourSuffix: string;
+      daySuffix: string;
+      monthSuffix: string;
+    },
   ): Record<LimitType, string> {
     const base = `${QUOTA_PREFIX}${providerId}:${model}`;
     return {
@@ -123,30 +127,37 @@ export class QuotaService {
   /**
    * Calculate retry-after time based on which limit was exceeded
    */
-  private calculateRetryAfter(limitType: LimitType, now: Date = new Date()): number {
+  private calculateRetryAfter(
+    limitType: LimitType,
+    now: Date = new Date(),
+  ): number {
     const currentSecond = Math.floor(now.getTime() / 1000) % 60;
 
     switch (limitType) {
-      case 'rpm':
-      case 'tpm':
+      case "rpm":
+      case "tpm":
         // Seconds until end of current minute
         return 60 - currentSecond;
 
-      case 'rph':
-      case 'tph':
+      case "rph":
+      case "tph":
         // Seconds until end of current hour
-        return (60 - currentSecond) + (59 - now.getUTCMinutes()) * 60;
+        return 60 - currentSecond + (59 - now.getUTCMinutes()) * 60;
 
-      case 'rpd':
-      case 'tpd':
+      case "rpd":
+      case "tpd":
         // Seconds until midnight UTC
         const tomorrow = new Date(now);
         tomorrow.setUTCHours(24, 0, 0, 0);
         return Math.ceil((tomorrow.getTime() - now.getTime()) / 1000);
 
-      case 'tpmu':
+      case "tpmu":
         // Seconds until end of calendar month
-        const nextMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+        const nextMonth = new Date(
+          now.getUTCFullYear(),
+          now.getUTCMonth() + 1,
+          1,
+        );
         nextMonth.setUTCHours(0, 0, 0, 0);
         return Math.ceil((nextMonth.getTime() - now.getTime()) / 1000);
 
@@ -163,7 +174,7 @@ export class QuotaService {
   private async getSlidingWindowCount(
     key: string,
     windowSeconds: number,
-    isTokenWindow: boolean = false
+    isTokenWindow: boolean = false,
   ): Promise<number> {
     const now = Date.now();
     const windowStart = now - windowSeconds * 1000;
@@ -178,7 +189,7 @@ export class QuotaService {
         const members = await this.redis.zrangebyscore(key, windowStart, now);
         let totalTokens = 0;
         for (const member of members) {
-          const tokenCount = parseInt(member.split('-')[0], 10);
+          const tokenCount = parseInt(member.split("-")[0], 10);
           if (!isNaN(tokenCount)) {
             totalTokens += tokenCount;
           }
@@ -189,7 +200,11 @@ export class QuotaService {
         return await this.redis.zcard(key);
       }
     } catch (error) {
-      logger.error({ event: 'quota_sliding_window_error', key, error: error instanceof Error ? error.message : String(error) });
+      logger.error({
+        event: "quota_sliding_window_error",
+        key,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return 0;
     }
   }
@@ -202,23 +217,34 @@ export class QuotaService {
       const value = await this.redis.get(key);
       return value ? parseInt(value, 10) : 0;
     } catch (error) {
-      logger.error({ event: 'quota_get_counter_error', key, error: error instanceof Error ? error.message : String(error) });
+      logger.error({
+        event: "quota_get_counter_error",
+        key,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return 0;
     }
   }
 
-
   /**
    * Set counter to a specific value (used for syncing with provider)
    */
-  private async setCounter(key: string, value: number, ttlSeconds: number = 86400): Promise<void> {
+  private async setCounter(
+    key: string,
+    value: number,
+    ttlSeconds: number = 86400,
+  ): Promise<void> {
     try {
       const pipeline = this.redis.pipeline();
       pipeline.set(key, value.toString());
       pipeline.expire(key, ttlSeconds);
       await pipeline.exec();
     } catch (error) {
-      logger.error({ event: 'quota_set_counter_error', key, error: error instanceof Error ? error.message : String(error) });
+      logger.error({
+        event: "quota_set_counter_error",
+        key,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -230,22 +256,14 @@ export class QuotaService {
     providerId: string,
     model: string,
     limits: ModelLimits,
-    estimatedTokens: number
+    estimatedTokens: number,
   ): Promise<QuotaCheckResult> {
     const now = new Date();
     const timeSuffixes = this.getTimeSuffixes(now);
     const keys = this.buildKeys(providerId, model, timeSuffixes);
 
     // Get current values for all limits
-    const [
-      rpm,
-      rph,
-      rpd,
-      tpm,
-      tph,
-      tpd,
-      tpmu,
-    ] = await Promise.all([
+    const [rpm, rph, rpd, tpm, tph, tpd, tpmu] = await Promise.all([
       this.getSlidingWindowCount(keys.rpm, 60, false),
       this.getCounter(keys.rph),
       this.getCounter(keys.rpd),
@@ -257,78 +275,78 @@ export class QuotaService {
 
     // Check RPM limit
     if (limits.rpm !== undefined && rpm + 1 > limits.rpm) {
-      const retryAfter = this.calculateRetryAfter('rpm', now);
+      const retryAfter = this.calculateRetryAfter("rpm", now);
       throw new ModelQuotaExceededError(
         `RPM limit exceeded for ${providerId}/${model}: ${rpm}/${limits.rpm}. Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'rpm'
+        "rpm",
       );
     }
 
     // Check RPH limit
     if (limits.rph !== undefined && rph + 1 > limits.rph) {
-      const retryAfter = this.calculateRetryAfter('rph', now);
+      const retryAfter = this.calculateRetryAfter("rph", now);
       throw new ModelQuotaExceededError(
         `RPH limit exceeded for ${providerId}/${model}: ${rph}/${limits.rph}. Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'rph'
+        "rph",
       );
     }
 
     // Check RPD limit
     if (limits.rpd !== undefined && rpd + 1 > limits.rpd) {
-      const retryAfter = this.calculateRetryAfter('rpd', now);
+      const retryAfter = this.calculateRetryAfter("rpd", now);
       throw new ModelQuotaExceededError(
         `RPD limit exceeded for ${providerId}/${model}: ${rpd}/${limits.rpd}. Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'rpd'
+        "rpd",
       );
     }
 
     // Check TPM limit (using estimated tokens)
     if (limits.tpm !== undefined && tpm + estimatedTokens > limits.tpm) {
-      const retryAfter = this.calculateRetryAfter('tpm', now);
+      const retryAfter = this.calculateRetryAfter("tpm", now);
       throw new ModelQuotaExceededError(
         `TPM limit exceeded for ${providerId}/${model}: ${tpm}/${limits.tpm} (estimated: ${estimatedTokens}). Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'tpm'
+        "tpm",
       );
     }
 
     // Check TPH limit
     if (limits.tph !== undefined && tph + estimatedTokens > limits.tph) {
-      const retryAfter = this.calculateRetryAfter('tph', now);
+      const retryAfter = this.calculateRetryAfter("tph", now);
       throw new ModelQuotaExceededError(
         `TPH limit exceeded for ${providerId}/${model}: ${tph}/${limits.tph} (estimated: ${estimatedTokens}). Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'tph'
+        "tph",
       );
     }
 
     // Check TPD limit
     if (limits.tpd !== undefined && tpd + estimatedTokens > limits.tpd) {
-      const retryAfter = this.calculateRetryAfter('tpd', now);
+      const retryAfter = this.calculateRetryAfter("tpd", now);
       throw new ModelQuotaExceededError(
         `TPD limit exceeded for ${providerId}/${model}: ${tpd}/${limits.tpd} (estimated: ${estimatedTokens}). Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'tpd'
+        "tpd",
       );
     }
 
     // Check TPMU limit
     if (limits.tpmu !== undefined && tpmu + estimatedTokens > limits.tpmu) {
-      const retryAfter = this.calculateRetryAfter('tpmu', now);
+      const retryAfter = this.calculateRetryAfter("tpmu", now);
       throw new ModelQuotaExceededError(
         `TPMU limit exceeded for ${providerId}/${model}: ${tpmu}/${limits.tpmu} (estimated: ${estimatedTokens}). Retry after: ${retryAfter}s`,
         providerId,
         model,
-        'tpmu'
+        "tpmu",
       );
     }
 
@@ -341,13 +359,20 @@ export class QuotaService {
       tph,
       tpd,
       tpmu,
-      remainingRpm: limits.rpm !== undefined ? Math.max(0, limits.rpm - rpm) : Infinity,
-      remainingRph: limits.rph !== undefined ? Math.max(0, limits.rph - rph) : Infinity,
-      remainingRpd: limits.rpd !== undefined ? Math.max(0, limits.rpd - rpd) : Infinity,
-      remainingTpm: limits.tpm !== undefined ? Math.max(0, limits.tpm - tpm) : Infinity,
-      remainingTph: limits.tph !== undefined ? Math.max(0, limits.tph - tph) : Infinity,
-      remainingTpd: limits.tpd !== undefined ? Math.max(0, limits.tpd - tpd) : Infinity,
-      remainingTpmu: limits.tpmu !== undefined ? Math.max(0, limits.tpmu - tpmu) : Infinity,
+      remainingRpm:
+        limits.rpm !== undefined ? Math.max(0, limits.rpm - rpm) : Infinity,
+      remainingRph:
+        limits.rph !== undefined ? Math.max(0, limits.rph - rph) : Infinity,
+      remainingRpd:
+        limits.rpd !== undefined ? Math.max(0, limits.rpd - rpd) : Infinity,
+      remainingTpm:
+        limits.tpm !== undefined ? Math.max(0, limits.tpm - tpm) : Infinity,
+      remainingTph:
+        limits.tph !== undefined ? Math.max(0, limits.tph - tph) : Infinity,
+      remainingTpd:
+        limits.tpd !== undefined ? Math.max(0, limits.tpd - tpd) : Infinity,
+      remainingTpmu:
+        limits.tpmu !== undefined ? Math.max(0, limits.tpmu - tpmu) : Infinity,
     };
 
     return {
@@ -361,7 +386,11 @@ export class QuotaService {
   /**
    * Record actual usage after a request completes
    */
-  async recordModelUsage(providerId: string, model: string, tokensUsed: number): Promise<void> {
+  async recordModelUsage(
+    providerId: string,
+    model: string,
+    tokensUsed: number,
+  ): Promise<void> {
     const now = new Date();
     const timestamp = now.getTime();
     const timeSuffixes = this.getTimeSuffixes(now);
@@ -403,7 +432,12 @@ export class QuotaService {
     try {
       await pipeline.exec();
     } catch (error) {
-      logger.error({ event: 'quota_record_usage_error', provider: providerId, model, error: error instanceof Error ? error.message : String(error) });
+      logger.error({
+        event: "quota_record_usage_error",
+        provider: providerId,
+        model,
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Don't throw - recording usage is best-effort
     }
   }
@@ -415,8 +449,15 @@ export class QuotaService {
   async handleProviderRateLimit(
     providerId: string,
     model: string,
-    response: { headers: Record<string, string | string[] | undefined>; statusCode: number }
-  ): Promise<{ isRateLimited: boolean; retryAfter?: number; isPaymentRequired?: boolean }> {
+    response: {
+      headers: Record<string, string | string[] | undefined>;
+      statusCode: number;
+    },
+  ): Promise<{
+    isRateLimited: boolean;
+    retryAfter?: number;
+    isPaymentRequired?: boolean;
+  }> {
     const { headers, statusCode } = response;
 
     // Handle 402 Payment Required (OpenRouter specific)
@@ -462,7 +503,10 @@ export class QuotaService {
     if (rateLimitHeaders.retryAfter !== undefined) {
       retryAfter = rateLimitHeaders.retryAfter;
     } else if (rateLimitHeaders.reset !== undefined) {
-      retryAfter = Math.max(0, Math.ceil(rateLimitHeaders.reset - Date.now() / 1000));
+      retryAfter = Math.max(
+        0,
+        Math.ceil(rateLimitHeaders.reset - Date.now() / 1000),
+      );
     }
 
     return {
@@ -475,34 +519,37 @@ export class QuotaService {
    * Parse rate limit headers from provider response
    */
   private parseRateLimitHeaders(
-    headers: Record<string, string | string[] | undefined>
+    headers: Record<string, string | string[] | undefined>,
   ): RateLimitHeaders {
     const result: RateLimitHeaders = {};
 
     // Helper to get header value (case-insensitive)
     const getHeader = (name: string): string | undefined => {
-      const key = Object.keys(headers).find((k) => k.toLowerCase() === name.toLowerCase());
+      const key = Object.keys(headers).find(
+        (k) => k.toLowerCase() === name.toLowerCase(),
+      );
       return key ? (headers[key] as string) : undefined;
     };
 
     // Standard headers
-    const limit = getHeader('x-ratelimit-limit');
-    const remaining = getHeader('x-ratelimit-remaining');
-    const reset = getHeader('x-ratelimit-reset');
-    const retryAfter = getHeader('retry-after');
+    const limit = getHeader("x-ratelimit-limit");
+    const remaining = getHeader("x-ratelimit-remaining");
+    const reset = getHeader("x-ratelimit-reset");
+    const retryAfter = getHeader("retry-after");
 
     // OpenAI-style headers
-    const requestsLimit = getHeader('x-ratelimit-limit-requests');
-    const requestsRemaining = getHeader('x-ratelimit-remaining-requests');
-    const tokensLimit = getHeader('x-ratelimit-limit-tokens');
-    const tokensRemaining = getHeader('x-ratelimit-remaining-tokens');
+    const requestsLimit = getHeader("x-ratelimit-limit-requests");
+    const requestsRemaining = getHeader("x-ratelimit-remaining-requests");
+    const tokensLimit = getHeader("x-ratelimit-limit-tokens");
+    const tokensRemaining = getHeader("x-ratelimit-remaining-tokens");
 
     if (limit) result.limit = parseInt(limit, 10);
     if (remaining) result.remaining = parseInt(remaining, 10);
     if (reset) result.reset = parseInt(reset, 10);
     if (retryAfter) result.retryAfter = parseInt(retryAfter, 10);
     if (requestsLimit) result.requestsLimit = parseInt(requestsLimit, 10);
-    if (requestsRemaining) result.requestsRemaining = parseInt(requestsRemaining, 10);
+    if (requestsRemaining)
+      result.requestsRemaining = parseInt(requestsRemaining, 10);
     if (tokensLimit) result.tokensLimit = parseInt(tokensLimit, 10);
     if (tokensRemaining) result.tokensRemaining = parseInt(tokensRemaining, 10);
 
@@ -512,20 +559,16 @@ export class QuotaService {
   /**
    * Get current quota status for a provider-model
    */
-  async getModelQuotaStatus(providerId: string, model: string, limits: ModelLimits): Promise<ModelQuotaStatus> {
+  async getModelQuotaStatus(
+    providerId: string,
+    model: string,
+    limits: ModelLimits,
+  ): Promise<ModelQuotaStatus> {
     const now = new Date();
     const timeSuffixes = this.getTimeSuffixes(now);
     const keys = this.buildKeys(providerId, model, timeSuffixes);
 
-    const [
-      rpm,
-      rph,
-      rpd,
-      tpm,
-      tph,
-      tpd,
-      tpmu,
-    ] = await Promise.all([
+    const [rpm, rph, rpd, tpm, tph, tpd, tpmu] = await Promise.all([
       this.getSlidingWindowCount(keys.rpm, 60, false),
       this.getCounter(keys.rph),
       this.getCounter(keys.rpd),
@@ -543,13 +586,20 @@ export class QuotaService {
       tph,
       tpd,
       tpmu,
-      remainingRpm: limits.rpm !== undefined ? Math.max(0, limits.rpm - rpm) : Infinity,
-      remainingRph: limits.rph !== undefined ? Math.max(0, limits.rph - rph) : Infinity,
-      remainingRpd: limits.rpd !== undefined ? Math.max(0, limits.rpd - rpd) : Infinity,
-      remainingTpm: limits.tpm !== undefined ? Math.max(0, limits.tpm - tpm) : Infinity,
-      remainingTph: limits.tph !== undefined ? Math.max(0, limits.tph - tph) : Infinity,
-      remainingTpd: limits.tpd !== undefined ? Math.max(0, limits.tpd - tpd) : Infinity,
-      remainingTpmu: limits.tpmu !== undefined ? Math.max(0, limits.tpmu - tpmu) : Infinity,
+      remainingRpm:
+        limits.rpm !== undefined ? Math.max(0, limits.rpm - rpm) : Infinity,
+      remainingRph:
+        limits.rph !== undefined ? Math.max(0, limits.rph - rph) : Infinity,
+      remainingRpd:
+        limits.rpd !== undefined ? Math.max(0, limits.rpd - rpd) : Infinity,
+      remainingTpm:
+        limits.tpm !== undefined ? Math.max(0, limits.tpm - tpm) : Infinity,
+      remainingTph:
+        limits.tph !== undefined ? Math.max(0, limits.tph - tph) : Infinity,
+      remainingTpd:
+        limits.tpd !== undefined ? Math.max(0, limits.tpd - tpd) : Infinity,
+      remainingTpmu:
+        limits.tpmu !== undefined ? Math.max(0, limits.tpmu - tpmu) : Infinity,
     };
   }
 }

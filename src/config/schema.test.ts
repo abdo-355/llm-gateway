@@ -11,87 +11,93 @@ import {
   ResponseFormatSchema,
   RouterHintsSchema,
   ChatCompletionRequestSchema,
-} from './schema';
+} from "./schema";
 
-describe('Schema Validation', () => {
-  describe('ProviderAuthSchema', () => {
-    it('should validate valid auth config', () => {
+describe("Schema Validation", () => {
+  describe("ProviderAuthSchema", () => {
+    it("should validate valid auth config", () => {
       const result = ProviderAuthSchema.safeParse({
-        type: 'bearer',
-        env: 'API_KEY',
+        type: "bearer",
+        env: "API_KEY",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate all auth types', () => {
-      const types = ['none', 'bearer', 'header'];
-      types.forEach(type => {
-        const result = ProviderAuthSchema.safeParse({ type, env: 'KEY' });
+    it("should validate all auth types", () => {
+      const types = ["none", "bearer", "header"];
+      types.forEach((type) => {
+        const result = ProviderAuthSchema.safeParse({ type, env: "KEY" });
         expect(result.success).toBe(true);
       });
     });
 
-    it('should reject invalid auth type', () => {
+    it("should reject invalid auth type", () => {
       const result = ProviderAuthSchema.safeParse({
-        type: 'invalid',
-        env: 'API_KEY',
+        type: "invalid",
+        env: "API_KEY",
       });
       expect(result.success).toBe(false);
     });
 
-    it('should require both fields', () => {
-      const result = ProviderAuthSchema.safeParse({ type: 'bearer' });
+    it("should require both fields", () => {
+      const result = ProviderAuthSchema.safeParse({ type: "bearer" });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ProviderModelsSchema', () => {
-    it('should validate allowlist mode', () => {
+  describe("ProviderModelsSchema", () => {
+    it("should validate allowlist mode", () => {
       const result = ProviderModelsSchema.safeParse({
-        mode: 'allowlist',
-        list: ['gpt-4', 'gpt-3.5'],
+        mode: "allowlist",
+        list: ["gpt-4", "gpt-3.5"],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate denylist mode', () => {
+    it("should validate denylist mode", () => {
       const result = ProviderModelsSchema.safeParse({
-        mode: 'denylist',
-        list: ['deprecated-model'],
+        mode: "denylist",
+        list: ["deprecated-model"],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should allow empty list', () => {
+    it("should allow empty list", () => {
       const result = ProviderModelsSchema.safeParse({
-        mode: 'allowlist',
+        mode: "allowlist",
         list: [],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid mode', () => {
+    it("should reject invalid mode", () => {
       const result = ProviderModelsSchema.safeParse({
-        mode: 'invalid',
-        list: ['model'],
+        mode: "invalid",
+        list: ["model"],
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ProviderCapabilitiesSchema', () => {
-    it('should validate full capabilities', () => {
+  describe("ProviderCapabilitiesSchema", () => {
+    it("should validate full capabilities", () => {
       const result = ProviderCapabilitiesSchema.safeParse({
         streaming: true,
         tools: true,
-        structuredOutputs: 'json_schema_strict',
+        structuredOutputs: "json_schema_strict",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate all structured output types', () => {
-      const types = ['none', 'json_object', 'json_schema_strict', 'model_dependent', 'unknown'];
-      types.forEach(type => {
+    it("should validate all structured output types", () => {
+      const types = [
+        "none",
+        "json_object",
+        "json_schema_strict",
+        "model_dependent",
+        "unknown",
+      ];
+      types.forEach((type) => {
         const result = ProviderCapabilitiesSchema.safeParse({
           streaming: false,
           tools: false,
@@ -101,18 +107,18 @@ describe('Schema Validation', () => {
       });
     });
 
-    it('should reject invalid structured output type', () => {
+    it("should reject invalid structured output type", () => {
       const result = ProviderCapabilitiesSchema.safeParse({
         streaming: true,
         tools: true,
-        structuredOutputs: 'invalid',
+        structuredOutputs: "invalid",
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ProviderLimitsSchema', () => {
-    it('should validate all optional limits', () => {
+  describe("ProviderLimitsSchema", () => {
+    it("should validate all optional limits", () => {
       const result = ProviderLimitsSchema.safeParse({
         rpm: 100,
         tpm: 10000,
@@ -122,122 +128,132 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should validate empty limits', () => {
+    it("should validate empty limits", () => {
       const result = ProviderLimitsSchema.safeParse({});
       expect(result.success).toBe(true);
     });
 
-    it('should reject negative values', () => {
+    it("should reject negative values", () => {
       const result = ProviderLimitsSchema.safeParse({ rpm: -100 });
       expect(result.success).toBe(false);
     });
 
-    it('should reject zero values', () => {
+    it("should reject zero values", () => {
       const result = ProviderLimitsSchema.safeParse({ tpm: 0 });
       expect(result.success).toBe(false);
     });
 
-    it('should reject decimal values', () => {
+    it("should reject decimal values", () => {
       const result = ProviderLimitsSchema.safeParse({ rpm: 100.5 });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ProviderConfigSchema', () => {
+  describe("ProviderConfigSchema", () => {
     const validProvider = {
-      id: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      auth: { type: 'bearer', env: 'OPENAI_API_KEY' },
-      models: { mode: 'allowlist', list: ['gpt-4'] },
-      capabilities: { streaming: true, tools: true, structuredOutputs: 'json_object' },
+      id: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      auth: { type: "bearer", env: "OPENAI_API_KEY" },
+      models: { mode: "allowlist", list: ["gpt-4"] },
+      capabilities: {
+        streaming: true,
+        tools: true,
+        structuredOutputs: "json_object",
+      },
       limits: { rpm: 100 },
     };
 
-    it('should validate full provider config', () => {
+    it("should validate full provider config", () => {
       const result = ProviderConfigSchema.safeParse(validProvider);
       expect(result.success).toBe(true);
     });
 
-    it('should reject empty id', () => {
+    it("should reject empty id", () => {
       const result = ProviderConfigSchema.safeParse({
         ...validProvider,
-        id: '',
+        id: "",
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject invalid URL', () => {
+    it("should reject invalid URL", () => {
       const result = ProviderConfigSchema.safeParse({
         ...validProvider,
-        baseUrl: 'not-a-url',
+        baseUrl: "not-a-url",
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject missing required fields', () => {
+    it("should reject missing required fields", () => {
       const result = ProviderConfigSchema.safeParse({
-        id: 'test',
-        baseUrl: 'https://api.test.com',
+        id: "test",
+        baseUrl: "https://api.test.com",
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('CertificationSchema', () => {
-    it('should validate certification', () => {
+  describe("CertificationSchema", () => {
+    it("should validate certification", () => {
       const result = CertificationSchema.safeParse({
-        provider: 'openai',
-        model: 'gpt-4',
+        provider: "openai",
+        model: "gpt-4",
         strictSchema: true,
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate with strictSchema false', () => {
+    it("should validate with strictSchema false", () => {
       const result = CertificationSchema.safeParse({
-        provider: 'anthropic',
-        model: 'claude-3',
+        provider: "anthropic",
+        model: "claude-3",
         strictSchema: false,
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject missing fields', () => {
+    it("should reject missing fields", () => {
       const result = CertificationSchema.safeParse({
-        provider: 'openai',
+        provider: "openai",
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('AppConfigSchema', () => {
+  describe("AppConfigSchema", () => {
     const validAppConfig = {
       providers: [
         {
-          id: 'openai',
-          baseUrl: 'https://api.openai.com/v1',
-          auth: { type: 'bearer', env: 'OPENAI_API_KEY' },
-          models: { mode: 'allowlist', list: ['gpt-4'] },
-          capabilities: { streaming: true, tools: true, structuredOutputs: 'json_object' },
+          id: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          auth: { type: "bearer", env: "OPENAI_API_KEY" },
+          models: { mode: "allowlist", list: ["gpt-4"] },
+          capabilities: {
+            streaming: true,
+            tools: true,
+            structuredOutputs: "json_object",
+          },
           limits: {},
         },
       ],
     };
 
-    it('should validate app config with providers', () => {
+    it("should validate app config with providers", () => {
       const result = AppConfigSchema.safeParse(validAppConfig);
       expect(result.success).toBe(true);
     });
 
-    it('should validate with certifications', () => {
+    it("should validate with certifications", () => {
       const result = AppConfigSchema.safeParse({
         ...validAppConfig,
-        certifications: [{ provider: 'openai', model: 'gpt-4', strictSchema: true }],
+        certifications: [
+          { provider: "openai", model: "gpt-4", strictSchema: true },
+        ],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should use default empty certifications', () => {
+    it("should use default empty certifications", () => {
       const result = AppConfigSchema.safeParse(validAppConfig);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -245,86 +261,86 @@ describe('Schema Validation', () => {
       }
     });
 
-    it('should reject empty providers array', () => {
+    it("should reject empty providers array", () => {
       const result = AppConfigSchema.safeParse({ providers: [] });
       expect(result.success).toBe(false);
     });
 
-    it('should reject missing providers', () => {
+    it("should reject missing providers", () => {
       const result = AppConfigSchema.safeParse({});
       expect(result.success).toBe(false);
     });
   });
 
-  describe('OpenAIMessageSchema', () => {
-    it('should validate user message', () => {
+  describe("OpenAIMessageSchema", () => {
+    it("should validate user message", () => {
       const result = OpenAIMessageSchema.safeParse({
-        role: 'user',
-        content: 'Hello',
+        role: "user",
+        content: "Hello",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate all roles', () => {
-      const roles = ['system', 'user', 'assistant', 'tool'];
-      roles.forEach(role => {
-        const result = OpenAIMessageSchema.safeParse({ role, content: 'test' });
+    it("should validate all roles", () => {
+      const roles = ["system", "user", "assistant", "tool"];
+      roles.forEach((role) => {
+        const result = OpenAIMessageSchema.safeParse({ role, content: "test" });
         expect(result.success).toBe(true);
       });
     });
 
-    it('should validate with array content', () => {
+    it("should validate with array content", () => {
       const result = OpenAIMessageSchema.safeParse({
-        role: 'user',
-        content: [{ type: 'text', text: 'Hello' }],
+        role: "user",
+        content: [{ type: "text", text: "Hello" }],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate with tool call fields', () => {
+    it("should validate with tool call fields", () => {
       const result = OpenAIMessageSchema.safeParse({
-        role: 'assistant',
-        tool_calls: [{ id: 'call_1', function: { name: 'test' } }],
+        role: "assistant",
+        tool_calls: [{ id: "call_1", function: { name: "test" } }],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate tool message with tool_call_id', () => {
+    it("should validate tool message with tool_call_id", () => {
       const result = OpenAIMessageSchema.safeParse({
-        role: 'tool',
-        content: 'Result',
-        tool_call_id: 'call_1',
+        role: "tool",
+        content: "Result",
+        tool_call_id: "call_1",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid role', () => {
+    it("should reject invalid role", () => {
       const result = OpenAIMessageSchema.safeParse({
-        role: 'invalid',
-        content: 'test',
+        role: "invalid",
+        content: "test",
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('OpenAIToolSchema', () => {
-    it('should validate function tool', () => {
+  describe("OpenAIToolSchema", () => {
+    it("should validate function tool", () => {
       const result = OpenAIToolSchema.safeParse({
-        type: 'function',
+        type: "function",
         function: {
-          name: 'get_weather',
-          description: 'Get weather for a location',
-          parameters: { type: 'object', properties: {} },
+          name: "get_weather",
+          description: "Get weather for a location",
+          parameters: { type: "object", properties: {} },
         },
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate with strict option', () => {
+    it("should validate with strict option", () => {
       const result = OpenAIToolSchema.safeParse({
-        type: 'function',
+        type: "function",
         function: {
-          name: 'calc',
+          name: "calc",
           parameters: {},
           strict: true,
         },
@@ -332,50 +348,50 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should reject non-function type', () => {
+    it("should reject non-function type", () => {
       const result = OpenAIToolSchema.safeParse({
-        type: 'retrieval',
-        function: { name: 'test', parameters: {} },
+        type: "retrieval",
+        function: { name: "test", parameters: {} },
       });
       expect(result.success).toBe(false);
     });
 
-    it('should require function field', () => {
+    it("should require function field", () => {
       const result = OpenAIToolSchema.safeParse({
-        type: 'function',
+        type: "function",
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ResponseFormatSchema', () => {
-    it('should validate text format', () => {
-      const result = ResponseFormatSchema.safeParse({ type: 'text' });
+  describe("ResponseFormatSchema", () => {
+    it("should validate text format", () => {
+      const result = ResponseFormatSchema.safeParse({ type: "text" });
       expect(result.success).toBe(true);
     });
 
-    it('should validate json_object format', () => {
-      const result = ResponseFormatSchema.safeParse({ type: 'json_object' });
+    it("should validate json_object format", () => {
+      const result = ResponseFormatSchema.safeParse({ type: "json_object" });
       expect(result.success).toBe(true);
     });
 
-    it('should validate json_schema format', () => {
+    it("should validate json_schema format", () => {
       const result = ResponseFormatSchema.safeParse({
-        type: 'json_schema',
+        type: "json_schema",
         json_schema: {
-          name: 'schema',
-          schema: { type: 'object' },
+          name: "schema",
+          schema: { type: "object" },
         },
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate json_schema with description', () => {
+    it("should validate json_schema with description", () => {
       const result = ResponseFormatSchema.safeParse({
-        type: 'json_schema',
+        type: "json_schema",
         json_schema: {
-          name: 'schema',
-          description: 'A test schema',
+          name: "schema",
+          description: "A test schema",
           schema: {},
           strict: true,
         },
@@ -383,32 +399,32 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid type', () => {
-      const result = ResponseFormatSchema.safeParse({ type: 'xml' });
+    it("should reject invalid type", () => {
+      const result = ResponseFormatSchema.safeParse({ type: "xml" });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('RouterHintsSchema', () => {
-    it('should validate minimal hints', () => {
+  describe("RouterHintsSchema", () => {
+    it("should validate minimal hints", () => {
       const result = RouterHintsSchema.safeParse({});
       expect(result.success).toBe(true);
     });
 
-    it('should validate full hints', () => {
+    it("should validate full hints", () => {
       const result = RouterHintsSchema.safeParse({
-        profile: 'balanced',
+        profile: "balanced",
         requirements: {
-          output: 'json_schema_strict',
-          streaming: 'required',
-          tools: 'allowed',
+          output: "json_schema_strict",
+          streaming: "required",
+          tools: "allowed",
         },
-        budget: { mode: 'allow_paid' },
+        budget: { mode: "allow_paid" },
         slo: { max_latency_ms: 5000, hard_timeout_ms: 10000 },
         providers: {
-          allow: ['openai'],
-          deny: ['unreliable'],
-          prefer: ['anthropic'],
+          allow: ["openai"],
+          deny: ["unreliable"],
+          prefer: ["anthropic"],
         },
         fallback: {
           max_attempts: 2,
@@ -417,27 +433,27 @@ describe('Schema Validation', () => {
           on_5xx: true,
         },
         trace: {
-          request_id: '550e8400-e29b-41d4-a716-446655440000',
-          tags: ['production', 'v1'],
+          request_id: "550e8400-e29b-41d4-a716-446655440000",
+          tags: ["production", "v1"],
         },
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate all profiles', () => {
-      const profiles = ['cheap_fast', 'reliable_structured', 'balanced'];
-      profiles.forEach(profile => {
+    it("should validate all profiles", () => {
+      const profiles = ["cheap_fast", "reliable_structured", "balanced"];
+      profiles.forEach((profile) => {
         const result = RouterHintsSchema.safeParse({ profile });
         expect(result.success).toBe(true);
       });
     });
 
-    it('should validate all requirement options', () => {
-      const streaming = ['required', 'preferred', 'forbidden'];
-      const tools = ['required', 'allowed', 'forbidden'];
+    it("should validate all requirement options", () => {
+      const streaming = ["required", "preferred", "forbidden"];
+      const tools = ["required", "allowed", "forbidden"];
 
-      streaming.forEach(s => {
-        tools.forEach(t => {
+      streaming.forEach((s) => {
+        tools.forEach((t) => {
           const result = RouterHintsSchema.safeParse({
             requirements: { streaming: s, tools: t },
           });
@@ -446,7 +462,7 @@ describe('Schema Validation', () => {
       });
     });
 
-    it('should use fallback defaults', () => {
+    it("should use fallback defaults", () => {
       const result = RouterHintsSchema.safeParse({
         fallback: {},
       });
@@ -459,68 +475,70 @@ describe('Schema Validation', () => {
       }
     });
 
-    it('should reject invalid max_attempts', () => {
+    it("should reject invalid max_attempts", () => {
       const result = RouterHintsSchema.safeParse({
         fallback: { max_attempts: 10 },
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject zero max_attempts', () => {
+    it("should reject zero max_attempts", () => {
       const result = RouterHintsSchema.safeParse({
         fallback: { max_attempts: 0 },
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject non-UUID request_id', () => {
+    it("should reject non-UUID request_id", () => {
       const result = RouterHintsSchema.safeParse({
-        trace: { request_id: 'not-a-uuid' },
+        trace: { request_id: "not-a-uuid" },
       });
       expect(result.success).toBe(false);
     });
   });
 
-  describe('ChatCompletionRequestSchema', () => {
+  describe("ChatCompletionRequestSchema", () => {
     const validRequest = {
-      messages: [{ role: 'user', content: 'Hello' }],
-      model: 'gpt-4',
+      messages: [{ role: "user", content: "Hello" }],
+      model: "gpt-4",
     };
 
-    it('should validate minimal request', () => {
+    it("should validate minimal request", () => {
       const result = ChatCompletionRequestSchema.safeParse(validRequest);
       expect(result.success).toBe(true);
     });
 
-    it('should validate full request', () => {
+    it("should validate full request", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         frequency_penalty: 0.5,
-        logit_bias: { '100': 1 },
+        logit_bias: { "100": 1 },
         logprobs: true,
         top_logprobs: 5,
         max_tokens: 100,
         max_completion_tokens: 100,
         n: 1,
         presence_penalty: 0.5,
-        response_format: { type: 'json_object' },
+        response_format: { type: "json_object" },
         seed: 123,
-        stop: 'END',
+        stop: "END",
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,
         top_p: 0.9,
-        tools: [{ type: 'function', function: { name: 'test', parameters: {} } }],
-        tool_choice: 'auto',
+        tools: [
+          { type: "function", function: { name: "test", parameters: {} } },
+        ],
+        tool_choice: "auto",
         parallel_tool_calls: false,
-        user: 'user-123',
-        metadata: { session: 'abc' },
-        router: { profile: 'balanced' },
+        user: "user-123",
+        metadata: { session: "abc" },
+        router: { profile: "balanced" },
       });
       expect(result.success).toBe(true);
     });
 
-    it('should use default n=1', () => {
+    it("should use default n=1", () => {
       const result = ChatCompletionRequestSchema.safeParse(validRequest);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -528,7 +546,7 @@ describe('Schema Validation', () => {
       }
     });
 
-    it('should use default stream=false', () => {
+    it("should use default stream=false", () => {
       const result = ChatCompletionRequestSchema.safeParse(validRequest);
       expect(result.success).toBe(true);
       if (result.success) {
@@ -536,7 +554,7 @@ describe('Schema Validation', () => {
       }
     });
 
-    it('should reject empty messages array', () => {
+    it("should reject empty messages array", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         messages: [],
@@ -544,15 +562,15 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject empty model', () => {
+    it("should reject empty model", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
-        model: '',
+        model: "",
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject frequency_penalty > 2', () => {
+    it("should reject frequency_penalty > 2", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         frequency_penalty: 3,
@@ -560,7 +578,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject frequency_penalty < -2', () => {
+    it("should reject frequency_penalty < -2", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         frequency_penalty: -3,
@@ -568,7 +586,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject n > 128', () => {
+    it("should reject n > 128", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         n: 200,
@@ -576,7 +594,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject negative n', () => {
+    it("should reject negative n", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         n: -1,
@@ -584,7 +602,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject top_logprobs > 20', () => {
+    it("should reject top_logprobs > 20", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         logprobs: true,
@@ -593,7 +611,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject negative top_logprobs', () => {
+    it("should reject negative top_logprobs", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         logprobs: true,
@@ -602,31 +620,31 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should validate stop as string', () => {
+    it("should validate stop as string", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
-        stop: 'END',
+        stop: "END",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate stop as array', () => {
+    it("should validate stop as array", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
-        stop: ['stop1', 'stop2'],
+        stop: ["stop1", "stop2"],
       });
       expect(result.success).toBe(true);
     });
 
-    it('should reject stop array > 4 items', () => {
+    it("should reject stop array > 4 items", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
-        stop: ['a', 'b', 'c', 'd', 'e'],
+        stop: ["a", "b", "c", "d", "e"],
       });
       expect(result.success).toBe(false);
     });
 
-    it('should reject temperature > 2', () => {
+    it("should reject temperature > 2", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         temperature: 3,
@@ -634,7 +652,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject negative temperature', () => {
+    it("should reject negative temperature", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         temperature: -0.1,
@@ -642,7 +660,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject top_p > 1', () => {
+    it("should reject top_p > 1", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         top_p: 1.1,
@@ -650,7 +668,7 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should reject negative top_p', () => {
+    it("should reject negative top_p", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         top_p: -0.1,
@@ -658,20 +676,20 @@ describe('Schema Validation', () => {
       expect(result.success).toBe(false);
     });
 
-    it('should validate tool_choice as string', () => {
+    it("should validate tool_choice as string", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
-        tool_choice: 'required',
+        tool_choice: "required",
       });
       expect(result.success).toBe(true);
     });
 
-    it('should validate tool_choice as object', () => {
+    it("should validate tool_choice as object", () => {
       const result = ChatCompletionRequestSchema.safeParse({
         ...validRequest,
         tool_choice: {
-          type: 'function',
-          function: { name: 'get_weather' },
+          type: "function",
+          function: { name: "get_weather" },
         },
       });
       expect(result.success).toBe(true);

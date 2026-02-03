@@ -1,20 +1,20 @@
-import { Request, Response, NextFunction } from 'express';
-import { ZodSchema } from 'zod';
-import { ValidationError } from '../errors';
+import { Request, Response, NextFunction } from "express";
+import { ZodSchema } from "zod";
+import { ValidationError } from "../errors";
 
 export function validateMiddleware(schema: ZodSchema) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
-      const validationDetails = result.error.errors.map(e => ({
-        path: e.path.join('.'),
+      const validationDetails = result.error.errors.map((e) => ({
+        path: e.path.join("."),
         message: e.message,
       }));
 
       const error = new ValidationError(
-        'Request validation failed',
-        validationDetails
+        "Request validation failed",
+        validationDetails,
       );
 
       next(error);

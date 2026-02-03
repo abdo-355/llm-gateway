@@ -1,10 +1,10 @@
-import { authMiddleware } from './auth';
-import { rateLimitMiddleware } from './rateLimit';
-import { requestIdMiddleware } from './requestId';
-import { validateMiddleware } from './validate';
-import { errorHandler } from './errorHandler';
-import { helmetMiddleware } from './helmet';
-import { corsMiddleware } from './cors';
+import { authMiddleware } from "./auth";
+import { rateLimitMiddleware } from "./rateLimit";
+import { requestIdMiddleware } from "./requestId";
+import { validateMiddleware } from "./validate";
+import { errorHandler } from "./errorHandler";
+import { helmetMiddleware } from "./helmet";
+import { corsMiddleware } from "./cors";
 
 export const middleware = {
   auth: authMiddleware,

@@ -22,20 +22,20 @@ export class ProviderError extends Error {
     message: string,
     public statusCode: number,
     public isRetryable: boolean = false,
-    public headers?: RateLimitHeaders
+    public headers?: RateLimitHeaders,
   ) {
     super(message);
-    this.name = 'ProviderError';
+    this.name = "ProviderError";
   }
 }
 
 export class ValidationError extends ProviderError {
   constructor(
     message: string,
-    public details: Array<{ path: string; message: string }>
+    public details: Array<{ path: string; message: string }>,
   ) {
     super(message, 400, false);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -43,20 +43,17 @@ export class RateLimitError extends ProviderError {
   constructor(
     message: string,
     public retryAfter: number, // seconds until reset
-    public limitType: 'rpm' | 'tpm' | 'daily'
+    public limitType: "rpm" | "tpm" | "daily",
   ) {
     super(message, 429, true);
-    this.name = 'RateLimitError';
+    this.name = "RateLimitError";
   }
 }
 
 export class PaymentRequiredError extends ProviderError {
-  constructor(
-    message: string,
-    headers?: RateLimitHeaders
-  ) {
+  constructor(message: string, headers?: RateLimitHeaders) {
     super(message, 402, false, headers);
-    this.name = 'PaymentRequiredError';
+    this.name = "PaymentRequiredError";
   }
 }
 
@@ -64,20 +61,20 @@ export class CircuitBreakerError extends ProviderError {
   constructor(
     message: string,
     public providerId: string,
-    public state: 'OPEN' | 'HALF_OPEN'
+    public state: "OPEN" | "HALF_OPEN",
   ) {
     super(message, 503, true);
-    this.name = 'CircuitBreakerError';
+    this.name = "CircuitBreakerError";
   }
 }
 
 export class TimeoutError extends ProviderError {
   constructor(
     message: string,
-    public timeoutType: 'request' | 'inactivity'
+    public timeoutType: "request" | "inactivity",
   ) {
     super(message, 504, true);
-    this.name = 'TimeoutError';
+    this.name = "TimeoutError";
   }
 }
 
@@ -86,10 +83,10 @@ export class ModelQuotaExceededError extends ProviderError {
     message: string,
     public providerId: string,
     public model: string,
-    public limitType: 'rpm' | 'rph' | 'rpd' | 'tpm' | 'tph' | 'tpd' | 'tpmu'
+    public limitType: "rpm" | "rph" | "rpd" | "tpm" | "tph" | "tpd" | "tpmu",
   ) {
     super(message, 429, true);
-    this.name = 'ModelQuotaExceededError';
+    this.name = "ModelQuotaExceededError";
   }
 }
 
@@ -108,10 +105,10 @@ export class GatewayErrorClass extends Error {
     code: string,
     message: string,
     request_id?: string,
-    details?: { [key: string]: unknown }
+    details?: { [key: string]: unknown },
   ) {
     super(message);
-    this.name = 'GatewayError';
+    this.name = "GatewayError";
     this.type = type;
     this.code = code;
     this.request_id = request_id;

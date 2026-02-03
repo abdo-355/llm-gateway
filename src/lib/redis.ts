@@ -1,6 +1,6 @@
-import Redis from 'ioredis';
-import { logger } from '../utils/logger';
-import { getEnv } from '../config/env';
+import Redis from "ioredis";
+import { logger } from "../utils/logger";
+import { getEnv } from "../config/env";
 
 let redisClient: Redis | null = null;
 
@@ -11,7 +11,7 @@ export function getRedisClient(): Redis {
     const keyPrefix = env.REDIS_KEY_PREFIX;
 
     redisClient = new Redis(redisUrl, {
-      keyPrefix: keyPrefix + ':',
+      keyPrefix: keyPrefix + ":",
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -19,12 +19,12 @@ export function getRedisClient(): Redis {
       maxRetriesPerRequest: 3,
     });
 
-    redisClient.on('error', (err) => {
-      logger.error({ event: 'redis_error', error: err.message });
+    redisClient.on("error", (err) => {
+      logger.error({ event: "redis_error", error: err.message });
     });
 
-    redisClient.on('connect', () => {
-      logger.info({ event: 'redis_connected' });
+    redisClient.on("connect", () => {
+      logger.info({ event: "redis_connected" });
     });
   }
 

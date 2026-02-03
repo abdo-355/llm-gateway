@@ -92,7 +92,7 @@ export class VertexAIAdapter {
 
     // Global endpoint only - no project/location specific URLs
     // Ensure baseUrl ends with /v1
-    const cleanBaseUrl = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+    const cleanBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
     return `${cleanBaseUrl}/publishers/google/models/${model}:${action}`;
   }
 
