@@ -1,13 +1,40 @@
-node_modules/
-dist/
-coverage/
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Air live reload
+tmp/
+
+# Environment variables
 .env
 .env.local
-.env.*.local
-*.log
-.DS_Store
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+
+# OS
+.DS_Store
+
+# Build artifacts
+dist/
+bin/
+gateway
