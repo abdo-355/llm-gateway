@@ -66,14 +66,7 @@ export interface ExecutionResult {
 }
 
 /**
- * RouterService - Intelligent LLM request routing with failover and load balancing
- *
- * This service handles:
- * - Provider candidate generation and scoring
- * - Circuit breaker awareness
- * - Quota-based filtering
- * - Automatic retries with exponential backoff
- * - Streaming and non-streaming request execution
+ * RouterService - Intelligent LLM request routing with failover
  */
 export class RouterService {
   private config: AppConfig;
@@ -82,12 +75,6 @@ export class RouterService {
     this.config = config;
   }
 
-  /**
-   * Derive requirements from the request and optional hints
-   * @param request - The chat completion request
-   * @param hints - Optional routing hints from the request
-   * @returns Derived requirements for routing decisions
-   */
   deriveRequirements(
     request: ChatCompletionRequest,
     hints?: RouterHints,
@@ -95,10 +82,6 @@ export class RouterService {
     return deriveRequirements(request, hints);
   }
 
-  /**
-   * Generate routing candidates from all configured providers
-   * @returns Array of provider-model combinations with certification info
-   */
   async generateCandidates(): Promise<RoutingCandidate[]> {
     const candidates: RoutingCandidate[] = [];
 

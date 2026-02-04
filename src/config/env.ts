@@ -33,11 +33,6 @@ export interface EnvConfig {
   CORS_ORIGINS: string;
 }
 
-/**
- * Validates all required environment variables
- * Throws an error with detailed message if any are missing
- * Does NOT log any sensitive values
- */
 export function validateAndLoadEnv(): EnvConfig {
   const required = [
     "GATEWAY_API_KEY",
@@ -51,9 +46,7 @@ export function validateAndLoadEnv(): EnvConfig {
 
   if (missing.length > 0) {
     throw new Error(
-      `❌ Environment validation failed - Server will not start\n\n` +
-        `Missing required environment variables:\n${missing.map((m) => `  ✗ ${m}`).join("\n")}\n\n` +
-        `Please set all required variables and restart the server.`,
+      `Missing required environment variables: ${missing.join(", ")}`,
     );
   }
 
@@ -80,7 +73,7 @@ export function validateAndLoadEnv(): EnvConfig {
   };
 }
 
-// Singleton instance - call validateAndLoadEnv() once at startup
+// Singleton instance
 let envInstance: EnvConfig | null = null;
 
 export function getEnv(): EnvConfig {

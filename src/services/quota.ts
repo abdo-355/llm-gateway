@@ -46,44 +46,26 @@ interface RateLimitHeaders {
   tokensRemaining?: number;
 }
 
-/**
- * Improved token estimation for LLM requests
- *
- * Uses multiple heuristics for better accuracy:
- * - Character-based estimation (1 token ~ 4 chars)
- * - Role-based weighting (system messages typically longer)
- * - Tool call handling
- * - Minimum baseline for request structure overhead
- */
 export function estimateTokens(request: ChatCompletionRequest): number {
-  let estimatedChars = 0;
+  let estimatedChars = 50;
 
-  // Baseline overhead for request structure (messages wrapper, etc.)
-  estimatedChars += 50;
-
-  // Sum message content lengths
   for (const message of request.messages) {
-    // Add overhead for role (format: {"role":"user","content":"..."})
     estimatedChars += 15;
 
     if (typeof message.content === "string") {
       estimatedChars += message.content.length;
     } else if (Array.isArray(message.content)) {
-      // Handle array content (e.g., multimodal)
       for (const item of message.content) {
         if (item.type === "text" && item.text) {
           estimatedChars += item.text.length;
         } else if (item.type === "image_url") {
-          // Image URLs add minimal text tokens (URL is not tokenized)
           estimatedChars += 10;
         }
       }
     }
 
-    // Handle tool calls
     if (message.tool_calls && message.tool_calls.length > 0) {
       for (const toolCall of message.tool_calls) {
-        // Estimate tool call overhead
         estimatedChars += 60;
         if (toolCall.function.name) {
           estimatedChars += toolCall.function.name.length;
@@ -94,26 +76,20 @@ export function estimateTokens(request: ChatCompletionRequest): number {
       }
     }
 
-    // Handle tool response messages
     if (message.role === "tool") {
       estimatedChars += 30;
     }
   }
 
-  // Add estimated completion tokens
   const maxTokens = request.max_tokens || request.max_completion_tokens || 1000;
   estimatedChars += maxTokens * 4;
 
-  // Convert to tokens (rough estimate: 1 token ~ 4 characters)
   return Math.ceil(estimatedChars / 4);
 }
 
 export class QuotaService {
   private redis = getRedisClient();
 
-  /**
-   * Generate time-based suffixes for counter keys
-   */
   private getTimeSuffixes(now: Date): {
     hourSuffix: string;
     daySuffix: string;
@@ -131,9 +107,6 @@ export class QuotaService {
     };
   }
 
-  /**
-   * Build Redis keys for a provider-model combination
-   */
   private buildKeys(
     providerId: string,
     model: string,
@@ -155,9 +128,6 @@ export class QuotaService {
     };
   }
 
-  /**
-   * Calculate retry-after time based on which limit was exceeded
-   */
   private calculateRetryAfter(
     limitType: LimitType,
     now: Date = new Date(),
@@ -167,23 +137,19 @@ export class QuotaService {
     switch (limitType) {
       case "rpm":
       case "tpm":
-        // Seconds until end of current minute
         return 60 - currentSecond;
 
       case "rph":
       case "tph":
-        // Seconds until end of current hour
         return 60 - currentSecond + (59 - now.getUTCMinutes()) * 60;
 
       case "rpd":
       case "tpd":
-        // Seconds until midnight UTC
         const tomorrow = new Date(now);
         tomorrow.setUTCHours(24, 0, 0, 0);
         return Math.ceil((tomorrow.getTime() - now.getTime()) / 1000);
 
       case "tpmu":
-        // Seconds until end of calendar month
         const nextMonth = new Date(
           now.getUTCFullYear(),
           now.getUTCMonth() + 1,
@@ -197,12 +163,6 @@ export class QuotaService {
     }
   }
 
-  /**
-   * Get count from sliding window (sorted set)
-   * For RPM: count entries
-   * For TPM: sum token counts from member values
-   * Optimized with Redis pipeline for better performance
-   */
   private async getSlidingWindowCount(
     key: string,
     windowSeconds: number,
@@ -212,24 +172,18 @@ export class QuotaService {
     const windowStart = now - windowSeconds * 1000;
 
     try {
-      // Use pipeline for atomic operations
       const pipeline = this.redis.pipeline();
       pipeline.zremrangebyscore(key, 0, windowStart);
 
       if (isTokenWindow) {
-        // For TPM, get members in window
         pipeline.zrangebyscore(key, windowStart, now);
-        pipeline.zcard(key); // Also get count for potential use
+        pipeline.zcard(key);
         const results = await pipeline.exec();
 
         if (!results) {
           return 0;
         }
 
-        // Parse results from pipeline
-        // results[0] = zremrangebyscore result
-        // results[1] = zrangebyscore result (array of members)
-        // results[2] = zcard result (count)
         const members = (results[1] as any)?.[1] || [];
         let totalTokens = 0;
         for (const member of members) {
@@ -240,7 +194,6 @@ export class QuotaService {
         }
         return totalTokens;
       } else {
-        // For RPM, just count entries after cleanup
         pipeline.zcard(key);
         const results = await pipeline.exec();
 
@@ -248,7 +201,6 @@ export class QuotaService {
           return 0;
         }
 
-        // Parse result from pipeline
         return (results[1] as any)?.[1] || 0;
       }
     } catch (error) {
@@ -261,9 +213,6 @@ export class QuotaService {
     }
   }
 
-  /**
-   * Get current value of a counter
-   */
   private async getCounter(key: string): Promise<number> {
     try {
       const value = await this.redis.get(key);
@@ -278,9 +227,6 @@ export class QuotaService {
     }
   }
 
-  /**
-   * Set counter to a specific value (used for syncing with provider)
-   */
   private async setCounter(
     key: string,
     value: number,
@@ -300,10 +246,6 @@ export class QuotaService {
     }
   }
 
-  /**
-   * Check all quota limits for a specific provider-model combination
-   * Throws RateLimitError if any limit is exceeded
-   */
   async checkModelQuota(
     providerId: string,
     model: string,
@@ -314,7 +256,6 @@ export class QuotaService {
     const timeSuffixes = this.getTimeSuffixes(now);
     const keys = this.buildKeys(providerId, model, timeSuffixes);
 
-    // Get current values for all limits
     const [rpm, rph, rpd, tpm, tph, tpd, tpmu] = await Promise.all([
       this.getSlidingWindowCount(keys.rpm, 60, false),
       this.getCounter(keys.rph),
@@ -325,7 +266,6 @@ export class QuotaService {
       this.getCounter(keys.tpmu),
     ]);
 
-    // Check RPM limit
     if (limits.rpm !== undefined && rpm + 1 > limits.rpm) {
       const retryAfter = this.calculateRetryAfter("rpm", now);
       throw new ModelQuotaExceededError(
@@ -336,7 +276,6 @@ export class QuotaService {
       );
     }
 
-    // Check RPH limit
     if (limits.rph !== undefined && rph + 1 > limits.rph) {
       const retryAfter = this.calculateRetryAfter("rph", now);
       throw new ModelQuotaExceededError(
@@ -347,7 +286,6 @@ export class QuotaService {
       );
     }
 
-    // Check RPD limit
     if (limits.rpd !== undefined && rpd + 1 > limits.rpd) {
       const retryAfter = this.calculateRetryAfter("rpd", now);
       throw new ModelQuotaExceededError(
@@ -358,7 +296,6 @@ export class QuotaService {
       );
     }
 
-    // Check TPM limit (using estimated tokens)
     if (limits.tpm !== undefined && tpm + estimatedTokens > limits.tpm) {
       const retryAfter = this.calculateRetryAfter("tpm", now);
       throw new ModelQuotaExceededError(
@@ -369,7 +306,6 @@ export class QuotaService {
       );
     }
 
-    // Check TPH limit
     if (limits.tph !== undefined && tph + estimatedTokens > limits.tph) {
       const retryAfter = this.calculateRetryAfter("tph", now);
       throw new ModelQuotaExceededError(
@@ -380,7 +316,6 @@ export class QuotaService {
       );
     }
 
-    // Check TPD limit
     if (limits.tpd !== undefined && tpd + estimatedTokens > limits.tpd) {
       const retryAfter = this.calculateRetryAfter("tpd", now);
       throw new ModelQuotaExceededError(
@@ -391,7 +326,6 @@ export class QuotaService {
       );
     }
 
-    // Check TPMU limit
     if (limits.tpmu !== undefined && tpmu + estimatedTokens > limits.tpmu) {
       const retryAfter = this.calculateRetryAfter("tpmu", now);
       throw new ModelQuotaExceededError(
@@ -402,7 +336,6 @@ export class QuotaService {
       );
     }
 
-    // Calculate remaining quotas
     const current: ModelQuotaStatus = {
       rpm,
       rph,
@@ -435,9 +368,6 @@ export class QuotaService {
     };
   }
 
-  /**
-   * Record actual usage after a request completes
-   */
   async recordModelUsage(
     providerId: string,
     model: string,
@@ -448,38 +378,30 @@ export class QuotaService {
     const timeSuffixes = this.getTimeSuffixes(now);
     const keys = this.buildKeys(providerId, model, timeSuffixes);
 
-    // Use pipeline for atomic operations
     const pipeline = this.redis.pipeline();
 
-    // Add to RPM sliding window
     const rpmMember = `${timestamp}-${Math.random().toString(36).substring(2, 11)}`;
     pipeline.zadd(keys.rpm, timestamp, rpmMember);
     pipeline.expire(keys.rpm, 60);
 
-    // Increment RPH counter (TTL: 2 hours)
     pipeline.incr(keys.rph);
     pipeline.expire(keys.rph, 7200);
 
-    // Increment RPD counter (TTL: 25 hours)
     pipeline.incr(keys.rpd);
     pipeline.expire(keys.rpd, 90000);
 
-    // Add to TPM sliding window with token count in member
     const tpmMember = `${tokensUsed}-${Math.random().toString(36).substring(2, 11)}`;
     pipeline.zadd(keys.tpm, timestamp, tpmMember);
     pipeline.expire(keys.tpm, 60);
 
-    // Increment TPH counter
     pipeline.incrby(keys.tph, tokensUsed);
     pipeline.expire(keys.tph, 7200);
 
-    // Increment TPD counter
     pipeline.incrby(keys.tpd, tokensUsed);
     pipeline.expire(keys.tpd, 90000);
 
-    // Increment TPMU counter
     pipeline.incrby(keys.tpmu, tokensUsed);
-    pipeline.expire(keys.tpmu, 2678400); // ~31 days
+    pipeline.expire(keys.tpmu, 2678400);
 
     try {
       await pipeline.exec();
@@ -490,14 +412,9 @@ export class QuotaService {
         model,
         error: error instanceof Error ? error.message : String(error),
       });
-      // Don't throw - recording usage is best-effort
     }
   }
 
-  /**
-   * Handle 429 rate limit response from provider
-   * Syncs local counters with provider-reported state
-   */
   async handleProviderRateLimit(
     providerId: string,
     model: string,
@@ -512,16 +429,14 @@ export class QuotaService {
   }> {
     const { headers, statusCode } = response;
 
-    // Handle 402 Payment Required (OpenRouter specific)
     if (statusCode === 402) {
       return {
         isRateLimited: true,
         isPaymentRequired: true,
-        retryAfter: undefined, // Non-retryable
+        retryAfter: undefined,
       };
     }
 
-    // Only handle 429 responses
     if (statusCode !== 429) {
       return { isRateLimited: false };
     }
@@ -530,12 +445,9 @@ export class QuotaService {
     const timeSuffixes = this.getTimeSuffixes(now);
     const keys = this.buildKeys(providerId, model, timeSuffixes);
 
-    // Parse rate limit headers
     const rateLimitHeaders = this.parseRateLimitHeaders(headers);
 
-    // Sync counters with provider state if available
     if (rateLimitHeaders.requestsRemaining !== undefined) {
-      // Provider reports remaining requests - sync our counters
       const rphUsed = rateLimitHeaders.requestsLimit
         ? rateLimitHeaders.requestsLimit - rateLimitHeaders.requestsRemaining
         : rateLimitHeaders.requestsLimit || 0;
@@ -543,14 +455,12 @@ export class QuotaService {
     }
 
     if (rateLimitHeaders.tokensRemaining !== undefined) {
-      // Provider reports remaining tokens - sync our counters
       const tphUsed = rateLimitHeaders.tokensLimit
         ? rateLimitHeaders.tokensLimit - rateLimitHeaders.tokensRemaining
         : rateLimitHeaders.tokensLimit || 0;
       await this.setCounter(keys.tph, tphUsed, 7200);
     }
 
-    // Determine retry-after from headers or calculate
     let retryAfter: number | undefined;
     if (rateLimitHeaders.retryAfter !== undefined) {
       retryAfter = rateLimitHeaders.retryAfter;
@@ -567,15 +477,11 @@ export class QuotaService {
     };
   }
 
-  /**
-   * Parse rate limit headers from provider response
-   */
   private parseRateLimitHeaders(
     headers: Record<string, string | string[] | undefined>,
   ): RateLimitHeaders {
     const result: RateLimitHeaders = {};
 
-    // Helper to get header value (case-insensitive)
     const getHeader = (name: string): string | undefined => {
       const key = Object.keys(headers).find(
         (k) => k.toLowerCase() === name.toLowerCase(),
@@ -583,13 +489,11 @@ export class QuotaService {
       return key ? (headers[key] as string) : undefined;
     };
 
-    // Standard headers
     const limit = getHeader("x-ratelimit-limit");
     const remaining = getHeader("x-ratelimit-remaining");
     const reset = getHeader("x-ratelimit-reset");
     const retryAfter = getHeader("retry-after");
 
-    // OpenAI-style headers
     const requestsLimit = getHeader("x-ratelimit-limit-requests");
     const requestsRemaining = getHeader("x-ratelimit-remaining-requests");
     const tokensLimit = getHeader("x-ratelimit-limit-tokens");
@@ -608,9 +512,6 @@ export class QuotaService {
     return result;
   }
 
-  /**
-   * Get current quota status for a provider-model
-   */
   async getModelQuotaStatus(
     providerId: string,
     model: string,

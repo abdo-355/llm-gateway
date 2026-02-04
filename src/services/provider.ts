@@ -16,40 +16,27 @@ import {
 } from "../errors";
 
 export class ProviderService {
-  /**
-   * Sanitize URL for logging - removes query parameters and auth info
-   * Ensures sensitive data is never logged
-   */
   private sanitizeUrlForLogging(url: string): string {
     try {
       const urlObj = new URL(url);
-      // Return only protocol, hostname, and pathname
       return `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
     } catch {
-      // If URL parsing fails, return a safe placeholder
       return "[invalid-url]";
     }
   }
 
-  /**
-   * Extract rate limit headers from provider response
-   * Handles various header naming conventions used by different providers
-   */
   private extractRateLimitHeaders(response: Response): RateLimitHeaders {
     const headers: RateLimitHeaders = {};
 
-    // Helper to get header value case-insensitively
     const getHeader = (name: string): string | null => {
       return response.headers.get(name);
     };
 
-    // retry-after (seconds until rate limit resets)
     const retryAfter = getHeader("retry-after");
     if (retryAfter) {
       headers.retryAfter = parseInt(retryAfter, 10);
     }
 
-    // x-ratelimit-* headers (OpenAI, OpenRouter style)
     const limitRequests = getHeader("x-ratelimit-limit-requests");
     if (limitRequests) {
       headers.limitRequests = parseInt(limitRequests, 10);
@@ -80,7 +67,6 @@ export class ProviderService {
       headers.resetTokens = resetTokens;
     }
 
-    // Also check for x-ratelimit-* without the dash (some providers)
     if (!headers.limitRequests) {
       const altLimitRequests = getHeader("x-ratelimit-limit");
       if (altLimitRequests) {
@@ -95,7 +81,6 @@ export class ProviderService {
       }
     }
 
-    // Check for RateLimit-Reset (standard HTTP header)
     const rateLimitReset = getHeader("ratelimit-reset");
     if (rateLimitReset && !headers.resetRequests) {
       headers.resetRequests = rateLimitReset;
