@@ -2,7 +2,10 @@
 // These types mirror the TypeScript implementation for compatibility.
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // OpenAIMessage represents a chat message in OpenAI format
 type OpenAIMessage struct {
@@ -274,8 +277,8 @@ type ProviderAuth struct {
 
 // ProviderModels represents model configuration for a provider
 type ProviderModels struct {
-	Mode   string                 `json:"mode"`   // allowlist, denylist
-	List   []string               `json:"list"`   // model names
+	Mode   string                 `json:"mode"`             // allowlist, denylist
+	List   []string               `json:"list"`             // model names
 	Limits map[string]ModelLimits `json:"limits,omitempty"` // per-model limits
 }
 
@@ -302,8 +305,8 @@ type ProviderLimits struct {
 // ModelLimits represents per-model limits
 type ModelLimits struct {
 	Rpm  *int `json:"rpm,omitempty"`
-	Rph  *int `json:"rph,omitempty"`  // Requests per hour
-	Rpd  *int `json:"rpd,omitempty"`  // Requests per day
+	Rph  *int `json:"rph,omitempty"` // Requests per hour
+	Rpd  *int `json:"rpd,omitempty"` // Requests per day
 	Tpm  *int `json:"tpm,omitempty"`
 	Tph  *int `json:"tph,omitempty"`  // Tokens per hour
 	Tpd  *int `json:"tpd,omitempty"`  // Tokens per day
@@ -325,18 +328,18 @@ type AppConfig struct {
 
 // LogicalModelConfig represents a logical model configuration
 type LogicalModelConfig struct {
-	ID               string                   `json:"id"`
-	TaskType         string                   `json:"taskType"` // chat, analysis, json_extraction, code, tool_orchestration
-	Candidates       []LogicalModelCandidate  `json:"candidates"`
-	SLO              *LogicalModelSLO         `json:"slo,omitempty"`
+	ID                string                  `json:"id"`
+	TaskType          string                  `json:"taskType"` // chat, analysis, json_extraction, code, tool_orchestration
+	Candidates        []LogicalModelCandidate `json:"candidates"`
+	SLO               *LogicalModelSLO        `json:"slo,omitempty"`
 	RequireStrictJSON *bool                   `json:"requireStrictJson,omitempty"`
-	RequireTools     *bool                    `json:"requireTools,omitempty"`
+	RequireTools      *bool                   `json:"requireTools,omitempty"`
 }
 
 // LogicalModelCandidate represents a candidate model for a logical model
 type LogicalModelCandidate struct {
-	Provider string  `json:"provider"` // Provider ID
-	Model    string  `json:"model"`    // Provider-native model ID
+	Provider string  `json:"provider"`         // Provider ID
+	Model    string  `json:"model"`            // Provider-native model ID
 	Weight   float64 `json:"weight,omitempty"` // Soft preference weight (0.0-1.0)
 }
 
@@ -355,11 +358,11 @@ type DerivedRequirements struct {
 
 // RoutingCandidate represents a candidate for routing
 type RoutingCandidate struct {
-	Provider                 ProviderConfig `json:"provider"`
-	Model                    string         `json:"model"`
-	IsCertifiedForStrictSchema bool         `json:"isCertifiedForStrictSchema"`
-	Score                    float64        `json:"score"`
-	ScoreBreakdown           map[string]float64 `json:"scoreBreakdown,omitempty"`
+	Provider                   ProviderConfig     `json:"provider"`
+	Model                      string             `json:"model"`
+	IsCertifiedForStrictSchema bool               `json:"isCertifiedForStrictSchema"`
+	Score                      float64            `json:"score"`
+	ScoreBreakdown             map[string]float64 `json:"scoreBreakdown,omitempty"`
 }
 
 // RoutingAttempt represents a single execution attempt
@@ -376,21 +379,21 @@ type RoutingAttempt struct {
 
 // RoutingPlan represents the compiled routing plan
 type RoutingPlan struct {
-	Attempts   []RoutingAttempt `json:"attempts"`
-	MaxAttempts int             `json:"maxAttempts"`
-	HardTimeoutMs *int          `json:"hardTimeoutMs,omitempty"`
-	RetryOn429  bool            `json:"retryOn429"`
-	RetryOnTimeout bool         `json:"retryOnTimeout"`
-	RetryOn5xx  bool            `json:"retryOn5xx"`
+	Attempts       []RoutingAttempt `json:"attempts"`
+	MaxAttempts    int              `json:"maxAttempts"`
+	HardTimeoutMs  *int             `json:"hardTimeoutMs,omitempty"`
+	RetryOn429     bool             `json:"retryOn429"`
+	RetryOnTimeout bool             `json:"retryOnTimeout"`
+	RetryOn5xx     bool             `json:"retryOn5xx"`
 }
 
 // ExecutionResult represents the result of executing a plan
 type ExecutionResult struct {
-	Response  ChatCompletionResponse `json:"response"`
-	Attempts  int                    `json:"attempts"`
-	ProviderID string                `json:"providerId"`
-	Model     string                 `json:"model"`
-	LatencyMs int64                  `json:"latencyMs"`
+	Response   ChatCompletionResponse `json:"response"`
+	Attempts   int                    `json:"attempts"`
+	ProviderID string                 `json:"providerId"`
+	Model      string                 `json:"model"`
+	LatencyMs  int64                  `json:"latencyMs"`
 }
 
 // GatewayError represents an error response from the gateway
@@ -402,13 +405,18 @@ type GatewayError struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 }
 
+// Error implements the error interface
+func (e *GatewayError) Error() string {
+	return fmt.Sprintf("[%s] %s: %s", e.Type, e.Code, e.Message)
+}
+
 // RateLimitHeaders represents rate limit information from provider responses
 type RateLimitHeaders struct {
-	RetryAfter       *int   `json:"retryAfter,omitempty"`
-	LimitRequests    *int   `json:"limitRequests,omitempty"`
-	RemainingRequests *int  `json:"remainingRequests,omitempty"`
-	ResetRequests    string `json:"resetRequests,omitempty"`
-	LimitTokens      *int   `json:"limitTokens,omitempty"`
-	RemainingTokens  *int   `json:"remainingTokens,omitempty"`
-	ResetTokens      string `json:"resetTokens,omitempty"`
+	RetryAfter        *int   `json:"retryAfter,omitempty"`
+	LimitRequests     *int   `json:"limitRequests,omitempty"`
+	RemainingRequests *int   `json:"remainingRequests,omitempty"`
+	ResetRequests     string `json:"resetRequests,omitempty"`
+	LimitTokens       *int   `json:"limitTokens,omitempty"`
+	RemainingTokens   *int   `json:"remainingTokens,omitempty"`
+	ResetTokens       string `json:"resetTokens,omitempty"`
 }
