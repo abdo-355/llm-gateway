@@ -63,8 +63,8 @@ Test files should be **co-located** with source files:
 
 | Task | Branch                 | Status         | Approved By |
 | ---- | ---------------------- | -------------- | ----------- |
-| 0    | `task-0/setup`         | 🟡 In Progress |             |
-| 1    | `task-1/foundation`    | ⬜ Not Started |             |
+| 0    | `task-0/setup`         | ✅ Complete    | abdo-355    |
+| 1    | `task-1/foundation`    | 🟡 In Progress |             |
 | 2    | `task-2/core-services` | ⬜ Not Started |             |
 | 3    | `task-3/http-layer`    | ⬜ Not Started |             |
 | 4    | `task-4/testing`       | ⬜ Not Started |             |
