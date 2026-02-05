@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/abdo-355/llm-gateway/internal/db"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
@@ -20,7 +21,7 @@ type QuotaService struct {
 
 func NewQuotaService() *QuotaService {
 	return &QuotaService{
-		redis:  logger.GetRedisClient(),
+		redis:  db.GetRedisClient(),
 		prefix: "quota",
 	}
 }

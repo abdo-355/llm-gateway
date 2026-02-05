@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abdo-355/llm-gateway/internal/db"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/redis/go-redis/v9"
@@ -38,7 +39,7 @@ type HealthService struct {
 
 func NewHealthService() *HealthService {
 	return &HealthService{
-		redis:            logger.GetRedisClient(),
+		redis:            db.GetRedisClient(),
 		failureThreshold: 5,
 		recoveryTimeout:  30 * time.Second,
 	}

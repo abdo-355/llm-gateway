@@ -218,7 +218,7 @@ func (s *ProviderService) buildVertexURL(baseURL, model string, streaming bool) 
 	return fmt.Sprintf("%s/publishers/google/models/%s:%s", cleanBaseURL, model, action)
 }
 
-func (s *ProviderService) handleResponse(resp *http.Response, providerType string, originalReq types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {
+func (s *ProviderService) handleResponse(resp *http.Response, providerType string, _ types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, errors.NewRateLimitError("Rate limited", 60, "rpm")
 	}
@@ -388,7 +388,7 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response) error {
 	}
 }
 
-func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.SSEChunk), providerType string) error {
+func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.SSEChunk), _ string) error {
 	scanner := bufio.NewScanner(reader)
 	inactivityTimeout := 60 * time.Second
 	lastActivity := time.Now()

@@ -1,4 +1,4 @@
-package logger
+package db
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -16,22 +17,20 @@ func GetRedisClient() *redis.Client {
 		env := config.GetEnv()
 
 		redisClient = redis.NewClient(&redis.Options{
-			Addr: env.RedisURL,
-			DB:   0,
-			// Retry strategy: exponential backoff up to 2s
+			Addr:            env.RedisURL,
+			DB:              0,
 			MaxRetries:      3,
 			MinRetryBackoff: 50 * time.Millisecond,
 			MaxRetryBackoff: 2 * time.Second,
 		})
 
-		// Test connection
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		if err := redisClient.Ping(ctx).Err(); err != nil {
-			Error("Failed to connect to Redis", "error", err)
+			logger.Error("Failed to connect to Redis", "error", err)
 		} else {
-			Info("Connected to Redis")
+			logger.Info("Connected to Redis")
 		}
 	}
 

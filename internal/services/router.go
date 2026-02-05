@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
@@ -125,13 +126,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		// Check if model exists in provider
-		found := false
-		for _, m := range provider.Models.List {
-			if m == candidate.Model {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(provider.Models.List, candidate.Model)
 
 		if !found {
 			logger.Warn("Model not found in provider for logical model candidate",
@@ -173,13 +168,7 @@ func (r *Router) FilterCandidates(
 		// Check allow/deny lists
 		if hints != nil && hints.Providers != nil {
 			if len(hints.Providers.Allow) > 0 {
-				found := false
-				for _, p := range hints.Providers.Allow {
-					if p == provider.ID {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(hints.Providers.Allow, provider.ID)
 				if !found {
 					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_not_in_allowlist"
 					continue
@@ -270,7 +259,7 @@ func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *typ
 	}
 
 	// Sort by score (bubble sort for simplicity)
-	for i := 0; i < len(candidates); i++ {
+	for i := range candidates {
 		for j := i + 1; j < len(candidates); j++ {
 			if candidates[j].Score > candidates[i].Score {
 				candidates[i], candidates[j] = candidates[j], candidates[i]
