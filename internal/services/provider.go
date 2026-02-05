@@ -144,7 +144,7 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 	return json.Marshal(request)
 }
 
-func (s *ProviderService) transformToVertexRequest(request types.ChatCompletionRequest) map[string]interface{} {
+func (s *ProviderService) transformToVertexRequest(request types.ChatCompletionRequest) map[string]any {
 	// Simple transformation - in real implementation, this would be more comprehensive
 	contents := []map[string]any{}
 
@@ -160,24 +160,24 @@ func (s *ProviderService) transformToVertexRequest(request types.ChatCompletionR
 			parts = append(parts, map[string]string{"text": content})
 		}
 
-		contents = append(contents, map[string]interface{}{
+		contents = append(contents, map[string]any{
 			"role":  role,
 			"parts": parts,
 		})
 	}
 
-	req := map[string]interface{}{
+	req := map[string]any{
 		"contents": contents,
 	}
 
 	if request.Temperature != nil {
-		req["generationConfig"] = map[string]interface{}{
+		req["generationConfig"] = map[string]any{
 			"temperature": *request.Temperature,
 		}
 	}
 
 	if request.MaxTokens != nil {
-		if config, ok := req["generationConfig"].(map[string]interface{}); ok {
+		if config, ok := req["generationConfig"].(map[string]any); ok {
 			config["maxOutputTokens"] = *request.MaxTokens
 		}
 	}
@@ -240,7 +240,7 @@ func (s *ProviderService) handleResponse(resp *http.Response, providerType strin
 
 func (s *ProviderService) transformVertexResponse(body []byte, model string) (*types.ChatCompletionResponse, error) {
 	// Simplified transformation
-	var vertexResp map[string]interface{}
+	var vertexResp map[string]any
 	if err := json.Unmarshal(body, &vertexResp); err != nil {
 		return nil, err
 	}
@@ -253,11 +253,11 @@ func (s *ProviderService) transformVertexResponse(body []byte, model string) (*t
 	}
 
 	// Extract content from candidates
-	if candidates, ok := vertexResp["candidates"].([]interface{}); ok && len(candidates) > 0 {
-		if candidate, ok := candidates[0].(map[string]interface{}); ok {
-			if content, ok := candidate["content"].(map[string]interface{}); ok {
-				if parts, ok := content["parts"].([]interface{}); ok && len(parts) > 0 {
-					if part, ok := parts[0].(map[string]interface{}); ok {
+	if candidates, ok := vertexResp["candidates"].([]any); ok && len(candidates) > 0 {
+		if candidate, ok := candidates[0].(map[string]any); ok {
+			if content, ok := candidate["content"].(map[string]any); ok {
+				if parts, ok := content["parts"].([]any); ok && len(parts) > 0 {
+					if part, ok := parts[0].(map[string]any); ok {
 						if text, ok := part["text"].(string); ok {
 							response.Choices = append(response.Choices, types.Choice{
 								Index: 0,

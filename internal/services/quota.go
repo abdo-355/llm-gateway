@@ -53,9 +53,9 @@ func (s *QuotaService) EstimateTokens(req types.ChatCompletionRequest) int {
 		switch content := msg.Content.(type) {
 		case string:
 			estimatedChars += len(content)
-		case []interface{}:
+		case []any:
 			for _, item := range content {
-				if part, ok := item.(map[string]interface{}); ok {
+				if part, ok := item.(map[string]any); ok {
 					if text, ok := part["text"].(string); ok {
 						estimatedChars += len(text)
 					}

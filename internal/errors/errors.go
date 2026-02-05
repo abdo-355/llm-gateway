@@ -137,25 +137,3 @@ func NewValidationError(message string, details []ValidationDetail) *ValidationE
 		Details: details,
 	}
 }
-
-type GatewayErrorClass struct {
-	Type      string
-	Code      string
-	Message   string
-	RequestID string
-	Details   map[string]any
-}
-
-func (e *GatewayErrorClass) Error() string {
-	return fmt.Sprintf("[%s] %s: %s", e.Type, e.Code, e.Message)
-}
-
-func NewGatewayError(errorType, code, message, requestID string, details map[string]any) *GatewayErrorClass {
-	return &GatewayErrorClass{
-		Type:      errorType,
-		Code:      code,
-		Message:   message,
-		RequestID: requestID,
-		Details:   details,
-	}
-}

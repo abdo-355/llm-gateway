@@ -445,7 +445,11 @@ func (r *Router) Execute(
 		}
 	}
 
-	return nil, errors.NewGatewayError("gateway_error", "ALL_ATTEMPTS_FAILED", "All provider attempts failed", requestID, nil)
+	return nil, &types.GatewayError{
+		Type:    "gateway_error",
+		Code:    "ALL_ATTEMPTS_FAILED",
+		Message: "All provider attempts failed",
+	}
 }
 
 // ExecuteStream executes a streaming request
@@ -556,7 +560,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "rate_limit_error",
 			Code:    "RATE_LIMITED",
 			Message: e.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"retry_after": e.RetryAfter,
 				"limit_type":  e.LimitType,
 				"attempts":    attempts,
@@ -567,7 +571,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "circuit_breaker_error",
 			Code:    "CIRCUIT_BREAKER_OPEN",
 			Message: e.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"provider_id": e.ProviderID,
 				"state":       e.State,
 				"attempts":    attempts,
@@ -578,7 +582,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "timeout_error",
 			Code:    "TIMEOUT",
 			Message: e.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"timeout_type": e.TimeoutType,
 				"attempts":     attempts,
 			},
@@ -588,7 +592,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "quota_error",
 			Code:    "QUOTA_EXCEEDED",
 			Message: e.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"provider_id": e.ProviderID,
 				"model":       e.Model,
 				"limit_type":  e.LimitType,
@@ -600,7 +604,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "payment_error",
 			Code:    "PAYMENT_REQUIRED",
 			Message: e.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"attempts": attempts,
 			},
 		}
@@ -609,7 +613,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Type:    "upstream_error",
 			Code:    "PROVIDER_ERROR",
 			Message: err.Error(),
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"attempts": attempts,
 			},
 		}
