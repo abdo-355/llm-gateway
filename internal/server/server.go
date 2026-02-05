@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +23,15 @@ type Server struct {
 }
 
 func New() *Server {
+	env := config.GetEnv()
+
+	// Set Gin mode BEFORE creating router
+	if strings.EqualFold(env.Environment, "production") {
+		gin.SetMode(gin.ReleaseMode)
+	} else {
+		gin.SetMode(gin.DebugMode)
+	}
+
 	r := gin.New()
 
 	r.Use(requestid.New())
@@ -36,8 +46,6 @@ func New() *Server {
 	authorized.Use(middleware.Auth(), middleware.RateLimit())
 	authorized.POST("/v1/chat/completions", handlers.Completions)
 	authorized.GET("/metrics", handlers.Metrics)
-
-	env := config.GetEnv()
 
 	return &Server{
 		Server: &http.Server{
