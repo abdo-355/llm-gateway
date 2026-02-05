@@ -375,3 +375,8 @@ type RateLimitHeaders struct {
 	RemainingTokens   *int   `json:"remainingTokens,omitempty"`
 	ResetTokens       string `json:"resetTokens,omitempty"`
 }
+
+type StreamResult struct {
+	Chunks <-chan *SSEChunk
+	Err    <-chan *GatewayError
+}

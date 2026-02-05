@@ -54,7 +54,11 @@ func (s *HealthService) GetCircuitState(providerID string) CircuitState {
 		return StateClosed
 	}
 	if err != nil {
-		logger.Error("Failed to get circuit state", "error", err)
+		logger.Error().
+			Str("type", "app").
+			Str("event", "health.circuit_state_failed").
+			Err(err).
+			Msg("Failed to get circuit state")
 		return StateClosed
 	}
 
@@ -283,10 +287,4 @@ func (s *HealthService) updateHealthScore(providerID string) {
 
 	scoreKey := fmt.Sprintf("health:%s:score", providerID)
 	s.redis.Set(ctx, scoreKey, score, time.Hour)
-}
-
-var healthService = NewHealthService()
-
-func GetHealthService() *HealthService {
-	return healthService
 }

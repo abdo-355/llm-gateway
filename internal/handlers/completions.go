@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/services"
@@ -25,7 +26,6 @@ func Completions(c *gin.Context) {
 		return
 	}
 
-	router := services.GetRouter()
 	routerService := services.GetRouter()
 
 	var logicalModel *types.LogicalModelConfig
@@ -73,21 +73,21 @@ func Completions(c *gin.Context) {
 		c.Header("Cache-Control", "no-cache")
 		c.Header("Connection", "keep-alive")
 
-		routerService.ExecuteStream(plan, req, requestID,
-			func(chunk *types.SSEChunk) {
-				c.SSEvent("message", chunk)
-			},
-			func() {
-				c.SSEvent("message", "[DONE]")
-			},
-			func(err *types.GatewayError) {
-				c.SSEvent("error", err)
-			},
-		)
+		streamResult := routerService.ExecuteStream(plan, req, requestID)
+
+		for chunk := range streamResult.Chunks {
+			c.SSEvent("message", chunk)
+		}
+
+		if err := <-streamResult.Err; err != nil {
+			c.SSEvent("error", err)
+		} else {
+			c.SSEvent("message", "[DONE]")
+		}
 		return
 	}
 
-	result, err := router.Execute(plan, req, requestID)
+	result, err := routerService.Execute(plan, req, requestID)
 	if err != nil {
 		gatewayErr, ok := err.(*types.GatewayError)
 		if !ok {
@@ -112,7 +112,7 @@ func Completions(c *gin.Context) {
 	if logicalModel != nil {
 		c.Header("X-Gateway-Logical-Model", logicalModel.ID)
 	}
-	c.Header("X-Gateway-Attempts", string(rune(result.Attempts)))
+	c.Header("X-Gateway-Attempts", strconv.Itoa(result.Attempts))
 
 	c.JSON(http.StatusOK, result.Response)
 }

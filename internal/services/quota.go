@@ -194,7 +194,11 @@ func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int
 	pipe.Expire(ctx, keys.TPMU, 31*24*time.Hour)
 
 	if _, err := pipe.Exec(ctx); err != nil {
-		logger.Error("Failed to record usage", "error", err)
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.record_failed").
+			Err(err).
+			Msg("Failed to record usage")
 	}
 }
 
@@ -313,10 +317,4 @@ func (s *QuotaService) parseResults(results []redis.Cmder) QuotaStatus {
 		status.Tpmu = atoi(results[6].(*redis.StringCmd).Val())
 	}
 	return status
-}
-
-var quotaService = NewQuotaService()
-
-func GetQuotaService() *QuotaService {
-	return quotaService
 }

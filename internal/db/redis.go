@@ -16,21 +16,34 @@ func GetRedisClient() *redis.Client {
 	if redisClient == nil {
 		env := config.GetEnv()
 
-		redisClient = redis.NewClient(&redis.Options{
-			Addr:            env.RedisURL,
-			DB:              0,
-			MaxRetries:      3,
-			MinRetryBackoff: 50 * time.Millisecond,
-			MaxRetryBackoff: 2 * time.Second,
-		})
+		opt, err := redis.ParseURL(env.RedisURL)
+		if err != nil {
+			logger.Error().
+				Str("type", "db").
+				Str("event", "redis.url_parse_failed").
+				Err(err).
+				Str("url", env.RedisURL).
+				Msg("Failed to parse Redis URL")
+			return nil
+		}
+
+		redisClient = redis.NewClient(opt)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		if err := redisClient.Ping(ctx).Err(); err != nil {
-			logger.Error("Failed to connect to Redis", "error", err)
+			logger.Error().
+				Str("type", "db").
+				Str("event", "redis.connect_failed").
+				Err(err).
+				Msg("Failed to connect to Redis")
 		} else {
-			logger.Info("Connected to Redis")
+			logger.Info().
+				Str("type", "db").
+				Str("event", "redis.connected").
+				Str("url", env.RedisURL).
+				Msg("Connected to Redis")
 		}
 	}
 

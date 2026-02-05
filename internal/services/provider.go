@@ -75,7 +75,7 @@ func (s *ProviderService) CallProvider(
 	return s.handleResponse(resp, providerType, request, model)
 }
 
-// StreamProvider makes a streaming request to a provider
+// StreamProvider makes a streaming request to a provider using callbacks
 func (s *ProviderService) StreamProvider(
 	baseURL, apiKey, model string,
 	request types.ChatCompletionRequest,
@@ -85,48 +85,89 @@ func (s *ProviderService) StreamProvider(
 	providerType string,
 	auth types.ProviderAuth,
 ) error {
-	reqBody, err := s.prepareRequest(request, model, providerType)
-	if err != nil {
-		return err
+	result := s.StreamProviderChannel(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
+
+	for chunk := range result.Chunks {
+		onChunk(chunk)
 	}
 
-	// Build URL
-	url := fmt.Sprintf("%s/chat/completions", baseURL)
-	if providerType == "vertex" {
-		url = s.buildVertexURL(baseURL, model, true)
-	}
+	return <-result.Err
+}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
-	if err != nil {
-		return err
-	}
+// StreamProviderChannel makes a streaming request to a provider using channels
+func (s *ProviderService) StreamProviderChannel(
+	baseURL, apiKey, model string,
+	request types.ChatCompletionRequest,
+	timeoutMs int,
+	ctx context.Context,
+	providerType string,
+	auth types.ProviderAuth,
+) types.StreamResult {
+	chunks := make(chan *types.SSEChunk)
+	errChan := make(chan *types.GatewayError, 1)
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
+	go func() {
+		defer close(chunks)
 
-	if auth.Type == "bearer" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-	} else if auth.Type == "header" && auth.HeaderName != "" {
-		req.Header.Set(auth.HeaderName, apiKey)
-	}
-
-	// Make request
-	client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
-	resp, err := client.Do(req)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return errors.NewTimeoutError("Request timeout", "request")
+		reqBody, err := s.prepareRequest(request, model, providerType)
+		if err != nil {
+			errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_PREP_FAILED", Message: err.Error()}
+			return
 		}
-		return err
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return s.handleErrorResponse(resp)
-	}
+		url := fmt.Sprintf("%s/chat/completions", baseURL)
+		if providerType == "vertex" {
+			url = s.buildVertexURL(baseURL, model, true)
+		}
 
-	return s.parseSSEStream(resp.Body, onChunk, providerType)
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+		if err != nil {
+			errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_CREATE_FAILED", Message: err.Error()}
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "text/event-stream")
+
+		if auth.Type == "bearer" {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+		} else if auth.Type == "header" && auth.HeaderName != "" {
+			req.Header.Set(auth.HeaderName, apiKey)
+		}
+
+		client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
+		resp, err := client.Do(req)
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
+			} else {
+				errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_FAILED", Message: err.Error()}
+			}
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			errChan <- s.convertToGatewayError(s.handleErrorResponse(resp))
+			return
+		}
+
+		if err := s.parseSSEStreamChannel(resp.Body, chunks); err != nil {
+			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
+		}
+	}()
+
+	return types.StreamResult{
+		Chunks: chunks,
+		Err:    errChan,
+	}
+}
+
+func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
+	if ge, ok := err.(*types.GatewayError); ok {
+		return ge
+	}
+	return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: err.Error()}
 }
 
 func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, model, providerType string) ([]byte, error) {
@@ -422,7 +463,12 @@ func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.S
 		// Parse chunk
 		var chunk types.SSEChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			logger.Error("Failed to parse SSE chunk", "error", err, "data", data)
+			logger.Error().
+				Str("type", "http").
+				Str("event", "sse.parse_failed").
+				Err(err).
+				Str("data", data).
+				Msg("Failed to parse SSE chunk")
 			continue
 		}
 
@@ -432,8 +478,49 @@ func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.S
 	return scanner.Err()
 }
 
-var providerService = NewProviderService()
+func (s *ProviderService) parseSSEStreamChannel(reader io.Reader, chunks chan<- *types.SSEChunk) error {
+	scanner := bufio.NewScanner(reader)
+	inactivityTimeout := 60 * time.Second
+	lastActivity := time.Now()
 
-func GetProviderService() *ProviderService {
-	return providerService
+	for scanner.Scan() {
+		line := scanner.Text()
+		lastActivity = time.Now()
+
+		if time.Since(lastActivity) > inactivityTimeout {
+			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
+		}
+
+		if line == "" {
+			continue
+		}
+
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+
+		if data == "[DONE]" {
+			return nil
+		}
+
+		var chunk types.SSEChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			logger.Error().
+				Str("type", "http").
+				Str("event", "sse.parse_failed").
+				Err(err).
+				Str("data", data).
+				Msg("Failed to parse SSE chunk")
+			continue
+		}
+
+		select {
+		case chunks <- &chunk:
+		default:
+		}
+	}
+
+	return scanner.Err()
 }

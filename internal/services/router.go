@@ -9,8 +9,8 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
+	"github.com/rs/zerolog/log"
 )
 
 type Router struct {
@@ -119,9 +119,12 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if provider == nil {
-			logger.Warn("Provider not found for logical model candidate",
-				"provider", candidate.Provider,
-				"model", logicalModel.ID)
+			log.Warn().
+				Str("type", "router").
+				Str("event", "logical_model.provider_not_found").
+				Str("provider", candidate.Provider).
+				Str("logical_model", logicalModel.ID).
+				Msg("Provider not found for logical model candidate")
 			continue
 		}
 
@@ -129,9 +132,12 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		found := slices.Contains(provider.Models.List, candidate.Model)
 
 		if !found {
-			logger.Warn("Model not found in provider for logical model candidate",
-				"provider", candidate.Provider,
-				"model", candidate.Model)
+			log.Warn().
+				Str("type", "router").
+				Str("event", "logical_model.model_not_found").
+				Str("provider", candidate.Provider).
+				Str("model", candidate.Model).
+				Msg("Model not found in provider for logical model candidate")
 			continue
 		}
 
@@ -445,73 +451,81 @@ func (r *Router) ExecuteStream(
 	plan types.RoutingPlan,
 	req types.ChatCompletionRequest,
 	requestID string,
-	onChunk func(*types.SSEChunk),
-	onComplete func(),
-	onError func(*types.GatewayError),
-) {
-	startTime := time.Now()
+) types.StreamResult {
+	chunks := make(chan *types.SSEChunk)
+	errChan := make(chan *types.GatewayError, 1)
 
-	for i, attempt := range plan.Attempts {
-		// Check hard timeout
-		if plan.HardTimeoutMs != nil {
-			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
-				onError(&types.GatewayError{
-					Type:    "gateway_error",
-					Code:    "HARD_TIMEOUT",
-					Message: "Hard timeout exceeded",
-				})
+	go func() {
+		defer close(chunks)
+		defer close(errChan)
+
+		startTime := time.Now()
+
+		for _, attempt := range plan.Attempts {
+			if plan.HardTimeoutMs != nil {
+				if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
+					errChan <- &types.GatewayError{
+						Type:    "gateway_error",
+						Code:    "HARD_TIMEOUT",
+						Message: "Hard timeout exceeded",
+					}
+					return
+				}
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
+
+			result := r.providerService.StreamProviderChannel(
+				attempt.BaseURL,
+				attempt.APIKey,
+				attempt.Model,
+				req,
+				attempt.TimeoutMs,
+				ctx,
+				attempt.ProviderType,
+				attempt.Auth,
+			)
+
+			for chunk := range result.Chunks {
+				select {
+				case chunks <- chunk:
+				default:
+				}
+			}
+
+			err := <-result.Err
+			cancel()
+
+			latencyMs := time.Since(startTime).Milliseconds()
+
+			if err == nil {
+				r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
+				tokensUsed := r.quotaService.EstimateTokens(req)
+				r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
 				return
+			}
+
+			r.healthService.RecordFailure(attempt.ProviderID)
+
+			if err.Code == "RATE_LIMITED" {
+				r.quotaService.HandleProviderRateLimit(attempt.ProviderID, attempt.Model, &http.Response{
+					StatusCode: 429,
+					Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", 1)}},
+				})
 			}
 		}
 
-		// Create context
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
-
-		// Make streaming request
-		err := r.providerService.StreamProvider(
-			attempt.BaseURL,
-			attempt.APIKey,
-			attempt.Model,
-			req,
-			attempt.TimeoutMs,
-			func(chunk *types.SSEChunk) {
-				onChunk(chunk)
-			},
-			ctx,
-			attempt.ProviderType,
-			attempt.Auth,
-		)
-
-		cancel()
-
-		latencyMs := time.Since(startTime).Milliseconds()
-
-		if err == nil {
-			// Success
-			r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
-
-			tokensUsed := r.quotaService.EstimateTokens(req)
-			r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
-
-			onComplete()
-			return
+		errChan <- &types.GatewayError{
+			Type:    "gateway_error",
+			Code:    "ALL_ATTEMPTS_FAILED",
+			Message: "All provider attempts failed",
 		}
+	}()
 
-		// Handle error
-		r.healthService.RecordFailure(attempt.ProviderID)
-
-		// Check if should retry
-		if !r.ShouldRetry(err, plan, i) {
-			onError(r.CreateGatewayError(err, i+1, requestID))
-			return
-		}
+	return types.StreamResult{
+		Chunks: chunks,
+		Err:    errChan,
 	}
-
-	onError(&types.GatewayError{
-		Type:    "gateway_error",
-		Code:    "ALL_ATTEMPTS_FAILED",
-		Message: "All provider attempts failed",
-	})
 }
 
 // ShouldRetry determines if an error should trigger a retry
@@ -615,10 +629,4 @@ func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {
 		}
 	}
 	return false
-}
-
-var router = NewRouter()
-
-func GetRouter() *Router {
-	return router
 }
