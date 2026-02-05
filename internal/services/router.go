@@ -1,4 +1,3 @@
-// Package services provides core business logic.
 package services
 
 import (
@@ -21,7 +20,6 @@ type Router struct {
 	providerService *ProviderService
 }
 
-// NewRouter creates a new router
 func NewRouter() *Router {
 	return &Router{
 		config:          config.LoadConfig(),
@@ -107,7 +105,6 @@ func (r *Router) GenerateCandidates() []types.RoutingCandidate {
 	return candidates
 }
 
-// GenerateCandidatesFromLogicalModel generates candidates from a logical model
 func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate {
 	var candidates []types.RoutingCandidate
 
@@ -122,7 +119,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if provider == nil {
-			lib.GetLogger().Warn("Provider not found for logical model candidate",
+			lib.Warn("Provider not found for logical model candidate",
 				"provider", candidate.Provider,
 				"model", logicalModel.ID)
 			continue
@@ -138,7 +135,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if !found {
-			lib.GetLogger().Warn("Model not found in provider for logical model candidate",
+			lib.Warn("Model not found in provider for logical model candidate",
 				"provider", candidate.Provider,
 				"model", candidate.Model)
 			continue
@@ -628,10 +625,8 @@ func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {
 	return false
 }
 
-// Global router instance
 var router = NewRouter()
 
-// GetRouter returns the global router
 func GetRouter() *Router {
 	return router
 }

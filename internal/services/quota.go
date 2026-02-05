@@ -1,4 +1,3 @@
-// Package services provides core business logic.
 package services
 
 import (
@@ -20,7 +19,6 @@ type QuotaService struct {
 	prefix string
 }
 
-// NewQuotaService creates a new quota service
 func NewQuotaService() *QuotaService {
 	return &QuotaService{
 		redis:  lib.GetRedisClient(),
@@ -30,16 +28,15 @@ func NewQuotaService() *QuotaService {
 
 // QuotaStatus represents current quota usage
 type QuotaStatus struct {
-	RPM  int
-	RPH  int
-	RPD  int
-	TPM  int
-	TPH  int
-	TPD  int
-	TPMU int
+	Rpm  int
+	Rph  int
+	Rpd  int
+	Tpm  int
+	Tph  int
+	Tpd  int
+	Tpmu int
 }
 
-// RateLimitInfo represents rate limit information from provider
 type RateLimitInfo struct {
 	IsRateLimited     bool
 	RetryAfter        int
@@ -89,7 +86,6 @@ func (s *QuotaService) EstimateTokens(req types.ChatCompletionRequest) int {
 	return (estimatedChars + 3) / 4 // Round up
 }
 
-// CheckModelQuota checks if request is within quota limits
 func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -106,12 +102,7 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 	pipe.Get(ctx, keys.TPD)
 	pipe.Get(ctx, keys.TPMU)
 
-	results, err := pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
-		lib.GetLogger().Error("Failed to check quota", "error", err)
-		return nil // Fail open
-	}
-
+	results, _ := pipe.Exec(ctx)
 	status := s.parseResults(results)
 
 	// Check limits
@@ -157,9 +148,9 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 		)
 	}
 
-	if limits.TpmU != nil && status.TpmU+estimatedTokens > *limits.TpmU {
+	if limits.Tpmu != nil && status.Tpmu+estimatedTokens > *limits.Tpmu {
 		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPMU limit exceeded: %d/%d (est: %d)", status.TpmU, *limits.TpmU, estimatedTokens),
+			fmt.Sprintf("TPMU limit exceeded: %d/%d (est: %d)", status.Tpmu, *limits.Tpmu, estimatedTokens),
 			providerID, model, "tpmu",
 		)
 	}
@@ -167,7 +158,6 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 	return nil
 }
 
-// RecordModelUsage records actual token usage
 func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int) {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -208,11 +198,10 @@ func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int
 	pipe.Expire(ctx, keys.TPMU, 31*24*time.Hour)
 
 	if _, err := pipe.Exec(ctx); err != nil {
-		lib.GetLogger().Error("Failed to record usage", "error", err)
+		lib.Error("Failed to record usage", "error", err)
 	}
 }
 
-// HandleProviderRateLimit processes rate limit response from provider
 func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *http.Response) RateLimitInfo {
 	result := RateLimitInfo{}
 
@@ -254,7 +243,6 @@ func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *h
 	return result
 }
 
-// GetModelQuotaStatus returns current quota status
 func (s *QuotaService) GetModelQuotaStatus(providerID, model string, limits types.ModelLimits) QuotaStatus {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -273,14 +261,22 @@ func (s *QuotaService) GetModelQuotaStatus(providerID, model string, limits type
 	pipe.Exec(ctx)
 
 	return QuotaStatus{
-		RPM:  int(cmd1.Val()),
-		RPH:  parseInt(cmd2.Val()),
-		RPD:  parseInt(cmd3.Val()),
-		TPM:  int(cmd4.Val()),
-		TPH:  parseInt(cmd5.Val()),
-		TPD:  parseInt(cmd6.Val()),
-		TPMU: parseInt(cmd7.Val()),
+		Rpm:  int(cmd1.Val()),
+		Rph:  atoi(cmd2.Val()),
+		Rpd:  atoi(cmd3.Val()),
+		Tpm:  int(cmd4.Val()),
+		Tph:  atoi(cmd5.Val()),
+		Tpd:  atoi(cmd6.Val()),
+		Tpmu: atoi(cmd7.Val()),
 	}
+}
+
+func atoi(s string) int {
+	if s == "" {
+		return 0
+	}
+	i, _ := strconv.Atoi(s)
+	return i
 }
 
 type quotaKeys struct {
@@ -313,30 +309,18 @@ func (s *QuotaService) parseResults(results []redis.Cmder) QuotaStatus {
 	status := QuotaStatus{}
 	if len(results) >= 7 {
 		status.Rpm = int(results[0].(*redis.IntCmd).Val())
-		status.Rph = parseInt(results[1].(*redis.StringCmd).Val())
-		status.Rpd = parseInt(results[2].(*redis.StringCmd).Val())
+		status.Rph = atoi(results[1].(*redis.StringCmd).Val())
+		status.Rpd = atoi(results[2].(*redis.StringCmd).Val())
 		status.Tpm = int(results[3].(*redis.IntCmd).Val())
-		status.Tph = parseInt(results[4].(*redis.StringCmd).Val())
-		status.Tpd = parseInt(results[5].(*redis.StringCmd).Val())
-		status.TpmU = parseInt(results[6].(*redis.StringCmd).Val())
+		status.Tph = atoi(results[4].(*redis.StringCmd).Val())
+		status.Tpd = atoi(results[5].(*redis.StringCmd).Val())
+		status.Tpmu = atoi(results[6].(*redis.StringCmd).Val())
 	}
 	return status
 }
 
-func parseInt(s string) int {
-	if s == "" {
-		return 0
-	}
-	if i, err := strconv.Atoi(s); err == nil {
-		return i
-	}
-	return 0
-}
-
-// Global quota service instance
 var quotaService = NewQuotaService()
 
-// GetQuotaService returns the global quota service
 func GetQuotaService() *QuotaService {
 	return quotaService
 }

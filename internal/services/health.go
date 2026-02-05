@@ -1,10 +1,10 @@
-// Package services provides core business logic.
 package services
 
 import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
@@ -12,7 +12,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// CircuitState represents the state of a circuit breaker
 type CircuitState string
 
 const (
@@ -21,7 +20,6 @@ const (
 	StateHalfOpen CircuitState = "HALF_OPEN"
 )
 
-// HealthMetrics represents health metrics for a provider
 type HealthMetrics struct {
 	ProviderID      string
 	CircuitState    CircuitState
@@ -39,7 +37,6 @@ type HealthService struct {
 	recoveryTimeout  time.Duration
 }
 
-// NewHealthService creates a new health service
 func NewHealthService() *HealthService {
 	return &HealthService{
 		redis:            lib.GetRedisClient(),
@@ -48,7 +45,6 @@ func NewHealthService() *HealthService {
 	}
 }
 
-// GetCircuitState returns the current circuit state
 func (s *HealthService) GetCircuitState(providerID string) CircuitState {
 	ctx := context.Background()
 	stateKey := fmt.Sprintf("circuit:%s:state", providerID)
@@ -58,14 +54,13 @@ func (s *HealthService) GetCircuitState(providerID string) CircuitState {
 		return StateClosed
 	}
 	if err != nil {
-		lib.GetLogger().Error("Failed to get circuit state", "error", err)
+		lib.Error("Failed to get circuit state", "error", err)
 		return StateClosed
 	}
 
 	return CircuitState(state)
 }
 
-// CanExecute checks if a provider can accept requests
 func (s *HealthService) CanExecute(providerID string) bool {
 	state := s.GetCircuitState(providerID)
 
@@ -103,34 +98,18 @@ func (s *HealthService) CanExecute(providerID string) bool {
 	return false
 }
 
-// CheckCircuitBreaker throws error if circuit is open
+// CheckCircuitBreaker checks if requests can be made to a provider
 func (s *HealthService) CheckCircuitBreaker(providerID string) error {
-	state := s.GetCircuitState(providerID)
-
-	if state == StateOpen {
+	if !s.CanExecute(providerID) {
+		state := s.GetCircuitState(providerID)
 		return errors.NewCircuitBreakerError(
-			fmt.Sprintf("Circuit breaker is OPEN for provider %s", providerID),
+			fmt.Sprintf("Circuit breaker is %s for provider %s", state, providerID),
 			providerID, string(state),
 		)
 	}
-
-	if state == StateHalfOpen {
-		ctx := context.Background()
-		successes, _ := s.redis.Get(ctx, fmt.Sprintf("circuit:%s:successes", providerID)).Int()
-		failures, _ := s.redis.Get(ctx, fmt.Sprintf("circuit:%s:failures", providerID)).Int()
-
-		if successes+failures >= 1 {
-			return errors.NewCircuitBreakerError(
-				fmt.Sprintf("Circuit breaker is HALF_OPEN for provider %s, probe limit reached", providerID),
-				providerID, string(state),
-			)
-		}
-	}
-
 	return nil
 }
 
-// RecordSuccess records a successful request
 func (s *HealthService) RecordSuccess(providerID string, latencyMs int) {
 	ctx := context.Background()
 	state := s.GetCircuitState(providerID)
@@ -138,27 +117,32 @@ func (s *HealthService) RecordSuccess(providerID string, latencyMs int) {
 	if state == StateHalfOpen {
 		successesKey := fmt.Sprintf("circuit:%s:successes", providerID)
 		successes, _ := s.redis.Incr(ctx, successesKey).Result()
+		s.redis.Expire(ctx, successesKey, 24*time.Hour)
 
 		if successes >= 1 {
 			// Close the circuit
 			s.setCircuitState(providerID, StateClosed)
-			s.redis.Set(ctx, fmt.Sprintf("circuit:%s:failures", providerID), 0, 0)
-			s.redis.Set(ctx, successesKey, 0, 0)
+			s.redis.Del(ctx, fmt.Sprintf("circuit:%s:failures", providerID))
+			s.redis.Del(ctx, successesKey)
 		}
 	} else if state == StateClosed {
 		// Reset failure count on success
-		s.redis.Set(ctx, fmt.Sprintf("circuit:%s:failures", providerID), 0, 0)
+		s.redis.Del(ctx, fmt.Sprintf("circuit:%s:failures", providerID))
 	}
 
-	// Record latency (1 hour TTL)
-	latencyKey := fmt.Sprintf("health:%s:latency", providerID)
-	s.redis.Set(ctx, latencyKey, latencyMs, time.Hour)
+	// Record latency in sorted set for averaging (keep last 100 entries, 1 hour TTL)
+	latencyKey := fmt.Sprintf("health:%s:latencies", providerID)
+	timestamp := float64(time.Now().UnixMilli())
+	s.redis.ZAdd(ctx, latencyKey, redis.Z{Score: timestamp, Member: latencyMs})
+	// Remove entries older than 1 hour
+	cutoff := float64(time.Now().Add(-time.Hour).UnixMilli())
+	s.redis.ZRemRangeByScore(ctx, latencyKey, "0", fmt.Sprintf("%f", cutoff))
+	// Set TTL on the sorted set
+	s.redis.Expire(ctx, latencyKey, time.Hour)
 
-	// Update health score
 	s.updateHealthScore(providerID)
 }
 
-// RecordFailure records a failed request
 func (s *HealthService) RecordFailure(providerID string) {
 	ctx := context.Background()
 	state := s.GetCircuitState(providerID)
@@ -167,7 +151,8 @@ func (s *HealthService) RecordFailure(providerID string) {
 	lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", providerID)
 
 	failures, _ := s.redis.Incr(ctx, failuresKey).Result()
-	s.redis.Set(ctx, lastFailureKey, time.Now().UnixMilli(), 0)
+	s.redis.Expire(ctx, failuresKey, 24*time.Hour)
+	s.redis.Set(ctx, lastFailureKey, time.Now().UnixMilli(), 24*time.Hour)
 
 	if state == StateHalfOpen {
 		// Re-open the circuit
@@ -177,11 +162,9 @@ func (s *HealthService) RecordFailure(providerID string) {
 		s.setCircuitState(providerID, StateOpen)
 	}
 
-	// Update health score
 	s.updateHealthScore(providerID)
 }
 
-// GetHealthMetrics returns health metrics for a provider
 func (s *HealthService) GetHealthMetrics(providerID string) HealthMetrics {
 	ctx := context.Background()
 
@@ -190,15 +173,16 @@ func (s *HealthService) GetHealthMetrics(providerID string) HealthMetrics {
 	failuresKey := fmt.Sprintf("circuit:%s:failures", providerID)
 	successesKey := fmt.Sprintf("circuit:%s:successes", providerID)
 	lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", providerID)
-	latencyKey := fmt.Sprintf("health:%s:latency", providerID)
+	latencyKey := fmt.Sprintf("health:%s:latencies", providerID)
 	scoreKey := fmt.Sprintf("health:%s:score", providerID)
 
 	pipe := s.redis.Pipeline()
 	failuresCmd := pipe.Get(ctx, failuresKey)
 	successesCmd := pipe.Get(ctx, successesKey)
 	lastFailureCmd := pipe.Get(ctx, lastFailureKey)
-	latencyCmd := pipe.Get(ctx, latencyKey)
 	scoreCmd := pipe.Get(ctx, scoreKey)
+	// Get all latency values from sorted set
+	latencyCmd := pipe.ZRange(ctx, latencyKey, 0, -1)
 
 	pipe.Exec(ctx)
 
@@ -212,11 +196,18 @@ func (s *HealthService) GetHealthMetrics(providerID string) HealthMetrics {
 		}
 	}
 
+	// Calculate average latency from sorted set
 	var avgLatency *int
-	if latencyCmd.Val() != "" {
-		if lat, err := strconv.Atoi(latencyCmd.Val()); err == nil {
-			avgLatency = &lat
+	latencies := latencyCmd.Val()
+	if len(latencies) > 0 {
+		sum := 0
+		for _, latStr := range latencies {
+			if lat, err := strconv.Atoi(latStr); err == nil {
+				sum += lat
+			}
 		}
+		avg := sum / len(latencies)
+		avgLatency = &avg
 	}
 
 	healthScore := 1.0
@@ -237,7 +228,6 @@ func (s *HealthService) GetHealthMetrics(providerID string) HealthMetrics {
 	}
 }
 
-// GetAllHealthMetrics returns health metrics for all providers
 func (s *HealthService) GetAllHealthMetrics() []HealthMetrics {
 	ctx := context.Background()
 
@@ -251,9 +241,10 @@ func (s *HealthService) GetAllHealthMetrics() []HealthMetrics {
 	var metrics []HealthMetrics
 	for _, key := range keys {
 		// Extract provider ID from key (circuit:{provider}:state)
-		var providerID string
-		fmt.Sscanf(key, "circuit:%s:state", &providerID)
-		if providerID != "" {
+		// Remove prefix "circuit:" and suffix ":state"
+		providerID := strings.TrimPrefix(key, "circuit:")
+		providerID = strings.TrimSuffix(providerID, ":state")
+		if providerID != "" && providerID != key {
 			metrics = append(metrics, s.GetHealthMetrics(providerID))
 		}
 	}
@@ -264,7 +255,7 @@ func (s *HealthService) GetAllHealthMetrics() []HealthMetrics {
 func (s *HealthService) setCircuitState(providerID string, state CircuitState) {
 	ctx := context.Background()
 	stateKey := fmt.Sprintf("circuit:%s:state", providerID)
-	s.redis.Set(ctx, stateKey, string(state), 0)
+	s.redis.Set(ctx, stateKey, string(state), 24*time.Hour)
 }
 
 func (s *HealthService) updateHealthScore(providerID string) {
@@ -294,10 +285,8 @@ func (s *HealthService) updateHealthScore(providerID string) {
 	s.redis.Set(ctx, scoreKey, score, time.Hour)
 }
 
-// Global health service instance
 var healthService = NewHealthService()
 
-// GetHealthService returns the global health service
 func GetHealthService() *HealthService {
 	return healthService
 }

@@ -1,4 +1,3 @@
-// Package services provides core business logic.
 package services
 
 import (
@@ -22,7 +21,6 @@ type ProviderService struct {
 	httpClient *http.Client
 }
 
-// NewProviderService creates a new provider service
 func NewProviderService() *ProviderService {
 	return &ProviderService{
 		httpClient: &http.Client{
@@ -31,7 +29,6 @@ func NewProviderService() *ProviderService {
 	}
 }
 
-// CallProvider makes a non-streaming request to a provider
 func (s *ProviderService) CallProvider(
 	baseURL, apiKey, model string,
 	request types.ChatCompletionRequest,
@@ -40,8 +37,6 @@ func (s *ProviderService) CallProvider(
 	providerType string,
 	auth types.ProviderAuth,
 ) (*types.ChatCompletionResponse, error) {
-
-	// Prepare request
 	reqBody, err := s.prepareRequest(request, model, providerType)
 	if err != nil {
 		return nil, err
@@ -53,13 +48,11 @@ func (s *ProviderService) CallProvider(
 		url = s.buildVertexURL(baseURL, model, false)
 	}
 
-	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
@@ -80,7 +73,6 @@ func (s *ProviderService) CallProvider(
 	}
 	defer resp.Body.Close()
 
-	// Handle response
 	return s.handleResponse(resp, providerType, request, model)
 }
 
@@ -94,8 +86,6 @@ func (s *ProviderService) StreamProvider(
 	providerType string,
 	auth types.ProviderAuth,
 ) error {
-
-	// Prepare request
 	reqBody, err := s.prepareRequest(request, model, providerType)
 	if err != nil {
 		return err
@@ -107,7 +97,6 @@ func (s *ProviderService) StreamProvider(
 		url = s.buildVertexURL(baseURL, model, true)
 	}
 
-	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return err
@@ -134,12 +123,10 @@ func (s *ProviderService) StreamProvider(
 	}
 	defer resp.Body.Close()
 
-	// Handle errors
 	if resp.StatusCode != http.StatusOK {
 		return s.handleErrorResponse(resp)
 	}
 
-	// Parse SSE stream
 	return s.parseSSEStream(resp.Body, onChunk, providerType)
 }
 
@@ -147,11 +134,9 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 	// Remove internal router field
 	request.Router = nil
 
-	// Set model
 	request.Model = model
 
 	if providerType == "vertex" {
-		// Transform to Vertex format
 		vertexReq := s.transformToVertexRequest(request)
 		return json.Marshal(vertexReq)
 	}
@@ -161,7 +146,7 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 
 func (s *ProviderService) transformToVertexRequest(request types.ChatCompletionRequest) map[string]interface{} {
 	// Simple transformation - in real implementation, this would be more comprehensive
-	contents := []map[string]interface{}{}
+	contents := []map[string]any{}
 
 	for _, msg := range request.Messages {
 		role := msg.Role
@@ -210,7 +195,6 @@ func (s *ProviderService) buildVertexURL(baseURL, model string, streaming bool) 
 }
 
 func (s *ProviderService) handleResponse(resp *http.Response, providerType string, originalReq types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {
-	// Check status code
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, errors.NewRateLimitError("Rate limited", 60, "rpm")
 	}
@@ -344,7 +328,7 @@ func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.S
 		// Parse chunk
 		var chunk types.SSEChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			lib.GetLogger().Error("Failed to parse SSE chunk", "error", err, "data", data)
+			lib.Error("Failed to parse SSE chunk", "error", err, "data", data)
 			continue
 		}
 
@@ -354,10 +338,8 @@ func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.S
 	return scanner.Err()
 }
 
-// Global provider service instance
 var providerService = NewProviderService()
 
-// GetProviderService returns the global provider service
 func GetProviderService() *ProviderService {
 	return providerService
 }

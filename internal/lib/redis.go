@@ -1,4 +1,3 @@
-// Package lib provides shared utilities.
 package lib
 
 import (
@@ -12,7 +11,6 @@ import (
 
 var redisClient *redis.Client
 
-// GetRedisClient returns the Redis client instance
 func GetRedisClient() *redis.Client {
 	if redisClient == nil {
 		env := config.GetEnv()
@@ -31,16 +29,15 @@ func GetRedisClient() *redis.Client {
 		defer cancel()
 
 		if err := redisClient.Ping(ctx).Err(); err != nil {
-			GetLogger().Error("Failed to connect to Redis", "error", err)
+			Error("Failed to connect to Redis", "error", err)
 		} else {
-			GetLogger().Info("Connected to Redis")
+			Info("Connected to Redis")
 		}
 	}
 
 	return redisClient
 }
 
-// CloseRedis closes the Redis connection
 func CloseRedis() error {
 	if redisClient != nil {
 		return redisClient.Close()
@@ -48,7 +45,6 @@ func CloseRedis() error {
 	return nil
 }
 
-// GetRedisKey returns a Redis key with the configured prefix
 func GetRedisKey(key string) string {
 	env := config.GetEnv()
 	return fmt.Sprintf("%s:%s", env.RedisKeyPrefix, key)

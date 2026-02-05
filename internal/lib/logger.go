@@ -1,88 +1,69 @@
-// Package lib provides shared utilities.
 package lib
 
 import (
 	"log/slog"
 	"os"
+
+	"github.com/abdo-355/llm-gateway/internal/config"
 )
 
-// Logger wraps slog.Logger with additional functionality
 type Logger struct {
 	*slog.Logger
 }
 
-// NewLogger creates a new logger instance
-func NewLogger() *Logger {
-	logLevel := getLogLevel()
+func NewLogger(env *config.EnvConfig) *Logger {
+	var level slog.Level
+	switch env.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
 
 	var handler slog.Handler
-	if os.Getenv("NODE_ENV") == "production" {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level: logLevel,
-		})
+	if env.Environment == "production" {
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			Level: logLevel,
-		})
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 	}
 
-	return &Logger{
-		Logger: slog.New(handler),
-	}
+	return &Logger{Logger: slog.New(handler)}
 }
 
-func getLogLevel() slog.Level {
-	level := os.Getenv("LOG_LEVEL")
-	switch level {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
+func (l *Logger) With(args ...any) *Logger {
+	return &Logger{Logger: l.Logger.With(args...)}
+}
+
+var logger *Logger
+
+func InitLogger(env *config.EnvConfig) {
+	logger = NewLogger(env)
+}
+
+func Info(msg string, args ...any) {
+	if logger != nil {
+		logger.Info(msg, args...)
 	}
 }
 
-// WithContext returns a logger with context fields
-func (l *Logger) WithContext(args ...interface{}) *Logger {
-	return &Logger{
-		Logger: l.Logger.With(args...),
+func Error(msg string, args ...any) {
+	if logger != nil {
+		logger.Error(msg, args...)
 	}
 }
 
-// WithRequestID returns a logger with request ID
-func (l *Logger) WithRequestID(requestID string) *Logger {
-	return l.WithContext("request_id", requestID)
+func Warn(msg string, args ...any) {
+	if logger != nil {
+		logger.Warn(msg, args...)
+	}
 }
 
-// Info logs an info message
-func (l *Logger) Info(msg string, args ...interface{}) {
-	l.Logger.Info(msg, args...)
-}
-
-// Error logs an error message
-func (l *Logger) Error(msg string, args ...interface{}) {
-	l.Logger.Error(msg, args...)
-}
-
-// Warn logs a warning message
-func (l *Logger) Warn(msg string, args ...interface{}) {
-	l.Logger.Warn(msg, args...)
-}
-
-// Debug logs a debug message
-func (l *Logger) Debug(msg string, args ...interface{}) {
-	l.Logger.Debug(msg, args...)
-}
-
-// global logger instance
-var globalLogger = NewLogger()
-
-// GetLogger returns the global logger instance
-func GetLogger() *Logger {
-	return globalLogger
+func Debug(msg string, args ...any) {
+	if logger != nil {
+		logger.Debug(msg, args...)
+	}
 }

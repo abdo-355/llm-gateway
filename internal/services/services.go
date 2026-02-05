@@ -1,4 +1,3 @@
-// Package services provides core business logic.
 package services
 
 // InitializeServices sets up all service dependencies
