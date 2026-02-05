@@ -30,7 +30,6 @@ type HealthMetrics struct {
 	HealthScore     float64
 }
 
-// HealthService handles provider health monitoring with circuit breaker
 type HealthService struct {
 	redis            *redis.Client
 	failureThreshold int

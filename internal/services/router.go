@@ -12,7 +12,6 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
-// Router handles the 6-stage routing pipeline
 type Router struct {
 	config          types.AppConfig
 	quotaService    *QuotaService

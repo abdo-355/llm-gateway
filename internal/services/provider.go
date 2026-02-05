@@ -16,7 +16,6 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
-// ProviderService handles HTTP calls to LLM providers
 type ProviderService struct {
 	httpClient *http.Client
 }

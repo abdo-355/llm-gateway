@@ -13,7 +13,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// QuotaService handles quota tracking and enforcement
 type QuotaService struct {
 	redis  *redis.Client
 	prefix string
@@ -26,7 +25,6 @@ func NewQuotaService() *QuotaService {
 	}
 }
 
-// QuotaStatus represents current quota usage
 type QuotaStatus struct {
 	Rpm  int
 	Rph  int
@@ -92,7 +90,6 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 
 	keys := s.buildKeys(providerID, model, now)
 
-	// Get current usage
 	pipe := s.redis.Pipeline()
 	pipe.ZCard(ctx, keys.RPM)
 	pipe.Get(ctx, keys.RPH)
@@ -104,8 +101,6 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 
 	results, _ := pipe.Exec(ctx)
 	status := s.parseResults(results)
-
-	// Check limits
 	if limits.Rpm != nil && status.Rpm+1 > *limits.Rpm {
 		return errors.NewModelQuotaExceededError(
 			fmt.Sprintf("RPM limit exceeded: %d/%d", status.Rpm, *limits.Rpm),
