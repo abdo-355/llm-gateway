@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/lib"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -38,7 +38,7 @@ type HealthService struct {
 
 func NewHealthService() *HealthService {
 	return &HealthService{
-		redis:            lib.GetRedisClient(),
+		redis:            logger.GetRedisClient(),
 		failureThreshold: 5,
 		recoveryTimeout:  30 * time.Second,
 	}
@@ -53,7 +53,7 @@ func (s *HealthService) GetCircuitState(providerID string) CircuitState {
 		return StateClosed
 	}
 	if err != nil {
-		lib.Error("Failed to get circuit state", "error", err)
+		logger.Error("Failed to get circuit state", "error", err)
 		return StateClosed
 	}
 

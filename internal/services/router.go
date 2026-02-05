@@ -8,7 +8,7 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/lib"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
@@ -118,7 +118,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if provider == nil {
-			lib.Warn("Provider not found for logical model candidate",
+			logger.Warn("Provider not found for logical model candidate",
 				"provider", candidate.Provider,
 				"model", logicalModel.ID)
 			continue
@@ -134,7 +134,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if !found {
-			lib.Warn("Model not found in provider for logical model candidate",
+			logger.Warn("Model not found in provider for logical model candidate",
 				"provider", candidate.Provider,
 				"model", candidate.Model)
 			continue

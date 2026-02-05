@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/lib"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/redis/go-redis/v9"
 )
@@ -20,7 +20,7 @@ type QuotaService struct {
 
 func NewQuotaService() *QuotaService {
 	return &QuotaService{
-		redis:  lib.GetRedisClient(),
+		redis:  logger.GetRedisClient(),
 		prefix: "quota",
 	}
 }
@@ -193,7 +193,7 @@ func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int
 	pipe.Expire(ctx, keys.TPMU, 31*24*time.Hour)
 
 	if _, err := pipe.Exec(ctx); err != nil {
-		lib.Error("Failed to record usage", "error", err)
+		logger.Error("Failed to record usage", "error", err)
 	}
 }
 

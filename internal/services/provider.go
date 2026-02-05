@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/lib"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
@@ -422,7 +422,7 @@ func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.S
 		// Parse chunk
 		var chunk types.SSEChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			lib.Error("Failed to parse SSE chunk", "error", err, "data", data)
+			logger.Error("Failed to parse SSE chunk", "error", err, "data", data)
 			continue
 		}
 
