@@ -1,4 +1,3 @@
-// Package errors provides custom error types for the LLM Gateway.
 package errors
 
 import "fmt"
@@ -38,7 +37,6 @@ func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("%s (retry after: %ds, limit type: %s)", e.Message, e.RetryAfter, e.LimitType)
 }
 
-// CircuitBreakerError represents a circuit breaker open error
 type CircuitBreakerError struct {
 	ProviderError
 	ProviderID string
@@ -61,7 +59,6 @@ func (e *CircuitBreakerError) Error() string {
 	return fmt.Sprintf("%s (provider: %s, state: %s)", e.Message, e.ProviderID, e.State)
 }
 
-// TimeoutError represents a timeout error
 type TimeoutError struct {
 	ProviderError
 	TimeoutType string // request, inactivity
@@ -82,7 +79,6 @@ func (e *TimeoutError) Error() string {
 	return fmt.Sprintf("%s (type: %s)", e.Message, e.TimeoutType)
 }
 
-// ModelQuotaExceededError represents a quota exceeded error
 type ModelQuotaExceededError struct {
 	ProviderError
 	ProviderID string
@@ -107,7 +103,6 @@ func (e *ModelQuotaExceededError) Error() string {
 	return fmt.Sprintf("%s (provider: %s, model: %s, limit: %s)", e.Message, e.ProviderID, e.Model, e.LimitType)
 }
 
-// PaymentRequiredError represents a payment required error (402)
 type PaymentRequiredError struct {
 	ProviderError
 }
@@ -122,7 +117,6 @@ func NewPaymentRequiredError(message string) *PaymentRequiredError {
 	}
 }
 
-// ValidationError represents a validation error
 type ValidationError struct {
 	ProviderError
 	Details []ValidationDetail
@@ -141,28 +135,5 @@ func NewValidationError(message string, details []ValidationDetail) *ValidationE
 			IsRetryable: false,
 		},
 		Details: details,
-	}
-}
-
-// GatewayErrorClass represents a gateway error for responses
-type GatewayErrorClass struct {
-	Type      string
-	Code      string
-	Message   string
-	RequestID string
-	Details   map[string]interface{}
-}
-
-func (e *GatewayErrorClass) Error() string {
-	return fmt.Sprintf("[%s] %s: %s", e.Type, e.Code, e.Message)
-}
-
-func NewGatewayError(errorType, code, message, requestID string, details map[string]interface{}) *GatewayErrorClass {
-	return &GatewayErrorClass{
-		Type:      errorType,
-		Code:      code,
-		Message:   message,
-		RequestID: requestID,
-		Details:   details,
 	}
 }

@@ -1,4 +1,3 @@
-// Package config provides logical model configurations.
 package config
 
 import "github.com/abdo-355/llm-gateway/internal/types"

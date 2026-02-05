@@ -1,9 +1,7 @@
-// Package config provides static configuration for providers and models.
 package config
 
 import "github.com/abdo-355/llm-gateway/internal/types"
 
-// GetProviders returns all provider configurations
 func GetProviders() []types.ProviderConfig {
 	return []types.ProviderConfig{
 		getGroqConfig(),
