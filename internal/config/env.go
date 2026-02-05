@@ -19,8 +19,6 @@ type EnvConfig struct {
 	RedisURL       string
 	RedisKeyPrefix string
 
-	LogLevel string
-
 	RateLimitPerIP    int
 	RateLimitWindowMs int
 
@@ -79,7 +77,6 @@ func LoadEnv() (*EnvConfig, error) {
 		GoogleVertexAPIKey: os.Getenv("GOOGLE_VERTEX_API_KEY"),
 		RedisURL:           getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:     getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
-		LogLevel:           getEnvString("LOG_LEVEL", "info"),
 		RateLimitPerIP:     rateLimitPerIP,
 		RateLimitWindowMs:  rateLimitWindowMs,
 		CORSOrigins:        os.Getenv("CORS_ORIGINS"),

@@ -12,23 +12,15 @@ type Logger struct {
 }
 
 func NewLogger(env *config.EnvConfig) *Logger {
-	var level slog.Level
-	switch env.LogLevel {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	default:
-		level = slog.LevelInfo
+	var handler slog.Handler
+	opts := &slog.HandlerOptions{
+		Level: slog.LevelDebug, // Allow all log levels through
 	}
 
-	var handler slog.Handler
 	if env.Environment == "production" {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		handler = slog.NewJSONHandler(os.Stdout, opts)
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
 
 	return &Logger{Logger: slog.New(handler)}
