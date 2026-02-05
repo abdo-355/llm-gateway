@@ -18,5 +18,5 @@ func main() {
 	logger.Init("llm-gateway", env.Environment)
 
 	srv := server.New()
-	server.Start(srv)
+	srv.Start()
 }

@@ -17,7 +17,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func New() *http.Server {
+type Server struct {
+	*http.Server
+}
+
+func New() *Server {
 	r := gin.New()
 
 	r.Use(requestid.New())
@@ -35,23 +39,25 @@ func New() *http.Server {
 
 	env := config.GetEnv()
 
-	return &http.Server{
-		Addr:         fmt.Sprintf(":%d", env.Port),
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+	return &Server{
+		Server: &http.Server{
+			Addr:         fmt.Sprintf(":%d", env.Port),
+			Handler:      r,
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 60 * time.Second,
+			IdleTimeout:  120 * time.Second,
+		},
 	}
 }
 
-func Start(srv *http.Server) {
+func (s *Server) Start() {
 	go func() {
 		logger.Info().
 			Str("type", "app").
 			Str("event", "server.starting").
-			Int("port", getPort(srv.Addr)).
+			Str("port", s.Addr).
 			Msg("Starting server")
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error().
 				Str("type", "app").
 				Str("event", "server.start_failed").
@@ -73,7 +79,7 @@ func Start(srv *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := s.Shutdown(ctx); err != nil {
 		logger.Error().
 			Str("type", "app").
 			Str("event", "server.shutdown_failed").
@@ -115,10 +121,4 @@ func accessLogMiddleware() gin.HandlerFunc {
 			Str("request_id", requestID).
 			Msg("HTTP request completed")
 	}
-}
-
-func getPort(addr string) int {
-	var port int
-	fmt.Sscanf(addr, ":%d", &port)
-	return port
 }

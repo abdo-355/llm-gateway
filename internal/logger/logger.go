@@ -8,31 +8,28 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var log zerolog.Logger
+var log *zerolog.Logger
 
 func Init(serviceName, env string) {
 	isProduction := strings.EqualFold(env, "production")
 
+	l := zerolog.New(os.Stdout).With().
+		Str("service", serviceName).
+		Str("env", strings.ToLower(env)).
+		Logger()
+
 	if isProduction {
 		zerolog.TimeFieldFormat = time.RFC3339Nano
-		log = zerolog.New(os.Stdout).With().
-			Str("service", serviceName).
-			Str("env", strings.ToLower(env)).
-			Logger()
 	} else {
-		log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().
+		l = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().
 			Str("service", serviceName).
 			Str("env", strings.ToLower(env)).
 			Logger()
 	}
+
+	log = &l
 }
 
-// Get returns the logger instance (for internal use)
-func Get() zerolog.Logger {
-	return log
-}
-
-// Convenience methods for clean API
 func Info() *zerolog.Event {
 	return log.Info()
 }
