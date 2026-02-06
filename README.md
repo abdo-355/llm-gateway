@@ -557,9 +557,3 @@ LOG_LEVEL=debug go run ./cmd/gateway
 ## Migration Notes
 
 See [CHANGELOG.md](./CHANGELOG.md) for migration guide from TypeScript v1.0.
-
----
-
-## License
-
-MIT License - See LICENSE file
