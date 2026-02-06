@@ -1,61 +1,50 @@
 package logger
 
 import (
-	"log/slog"
 	"os"
+	"strings"
+	"time"
 
-	"github.com/abdo-355/llm-gateway/internal/config"
+	"github.com/rs/zerolog"
 )
 
-type Logger struct {
-	*slog.Logger
-}
+var log *zerolog.Logger
 
-func NewLogger(env *config.EnvConfig) *Logger {
-	var handler slog.Handler
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}
+func Init(serviceName, env string) {
+	isProduction := strings.EqualFold(env, "production")
 
-	if env.Environment == "PRODUCTION" {
-		handler = slog.NewJSONHandler(os.Stdout, opts)
+	var l zerolog.Logger
+
+	if isProduction {
+		zerolog.TimeFieldFormat = time.RFC3339Nano
+		l = zerolog.New(os.Stdout).With().
+			Timestamp().
+			Str("service", serviceName).
+			Str("env", strings.ToLower(env)).
+			Logger()
 	} else {
-		handler = slog.NewTextHandler(os.Stdout, opts)
+		l = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().
+			Timestamp().
+			Str("service", serviceName).
+			Str("env", strings.ToLower(env)).
+			Logger()
 	}
 
-	return &Logger{Logger: slog.New(handler)}
+	log = &l
 }
 
-func (l *Logger) With(args ...any) *Logger {
-	return &Logger{Logger: l.Logger.With(args...)}
+func Info() *zerolog.Event {
+	return log.Info()
 }
 
-var logger *Logger
-
-func InitLogger(env *config.EnvConfig) {
-	logger = NewLogger(env)
+func Error() *zerolog.Event {
+	return log.Error()
 }
 
-func Info(msg string, args ...any) {
-	if logger != nil {
-		logger.Info(msg, args...)
-	}
+func Debug() *zerolog.Event {
+	return log.Debug()
 }
 
-func Error(msg string, args ...any) {
-	if logger != nil {
-		logger.Error(msg, args...)
-	}
-}
-
-func Warn(msg string, args ...any) {
-	if logger != nil {
-		logger.Warn(msg, args...)
-	}
-}
-
-func Debug(msg string, args ...any) {
-	if logger != nil {
-		logger.Debug(msg, args...)
-	}
+func Warn() *zerolog.Event {
+	return log.Warn()
 }

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/abdo-355/llm-gateway/internal/db"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
@@ -19,9 +19,9 @@ type QuotaService struct {
 	prefix string
 }
 
-func NewQuotaService() *QuotaService {
+func NewQuotaService(redis *redis.Client) *QuotaService {
 	return &QuotaService{
-		redis:  db.GetRedisClient(),
+		redis:  redis,
 		prefix: "quota",
 	}
 }
@@ -85,8 +85,7 @@ func (s *QuotaService) EstimateTokens(req types.ChatCompletionRequest) int {
 	return (estimatedChars + 3) / 4 // Round up
 }
 
-func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
-	ctx := context.Background()
+func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
 	now := time.Now().UTC()
 
 	keys := s.buildKeys(providerID, model, now)
@@ -100,62 +99,48 @@ func (s *QuotaService) CheckModelQuota(providerID, model string, limits types.Mo
 	pipe.Get(ctx, keys.TPD)
 	pipe.Get(ctx, keys.TPMU)
 
-	results, _ := pipe.Exec(ctx)
+	results, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.check_failed").
+			Err(err).
+			Msg("Failed to check quota")
+		return err
+	}
+
 	status := s.parseResults(results)
-	if limits.Rpm != nil && status.Rpm+1 > *limits.Rpm {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPM limit exceeded: %d/%d", status.Rpm, *limits.Rpm),
-			providerID, model, "rpm",
-		)
+
+	type quotaCheck struct {
+		name    string
+		current int
+		limit   *int
+		adding  int
 	}
 
-	if limits.Rph != nil && status.Rph+1 > *limits.Rph {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPH limit exceeded: %d/%d", status.Rph, *limits.Rph),
-			providerID, model, "rph",
-		)
+	checks := []quotaCheck{
+		{"rpm", status.Rpm, limits.Rpm, 1},
+		{"rph", status.Rph, limits.Rph, 1},
+		{"rpd", status.Rpd, limits.Rpd, 1},
+		{"tpm", status.Tpm, limits.Tpm, estimatedTokens},
+		{"tph", status.Tph, limits.Tph, estimatedTokens},
+		{"tpd", status.Tpd, limits.Tpd, estimatedTokens},
+		{"tpmu", status.Tpmu, limits.Tpmu, estimatedTokens},
 	}
 
-	if limits.Rpd != nil && status.Rpd+1 > *limits.Rpd {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPD limit exceeded: %d/%d", status.Rpd, *limits.Rpd),
-			providerID, model, "rpd",
-		)
-	}
-
-	if limits.Tpm != nil && status.Tpm+estimatedTokens > *limits.Tpm {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPM limit exceeded: %d/%d (est: %d)", status.Tpm, *limits.Tpm, estimatedTokens),
-			providerID, model, "tpm",
-		)
-	}
-
-	if limits.Tph != nil && status.Tph+estimatedTokens > *limits.Tph {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPH limit exceeded: %d/%d (est: %d)", status.Tph, *limits.Tph, estimatedTokens),
-			providerID, model, "tph",
-		)
-	}
-
-	if limits.Tpd != nil && status.Tpd+estimatedTokens > *limits.Tpd {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPD limit exceeded: %d/%d (est: %d)", status.Tpd, *limits.Tpd, estimatedTokens),
-			providerID, model, "tpd",
-		)
-	}
-
-	if limits.Tpmu != nil && status.Tpmu+estimatedTokens > *limits.Tpmu {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPMU limit exceeded: %d/%d (est: %d)", status.Tpmu, *limits.Tpmu, estimatedTokens),
-			providerID, model, "tpmu",
-		)
+	for _, check := range checks {
+		if check.limit != nil && check.current+check.adding > *check.limit {
+			return errors.NewModelQuotaExceededError(
+				fmt.Sprintf("%s limit exceeded: %d/%d", strings.ToUpper(check.name), check.current, *check.limit),
+				providerID, model, check.name,
+			)
+		}
 	}
 
 	return nil
 }
 
-func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int) {
-	ctx := context.Background()
+func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error {
 	now := time.Now().UTC()
 
 	keys := s.buildKeys(providerID, model, now)
@@ -193,12 +178,18 @@ func (s *QuotaService) RecordModelUsage(providerID, model string, tokensUsed int
 	pipe.IncrBy(ctx, keys.TPMU, int64(tokensUsed))
 	pipe.Expire(ctx, keys.TPMU, 31*24*time.Hour)
 
-	if _, err := pipe.Exec(ctx); err != nil {
-		logger.Error("Failed to record usage", "error", err)
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.record_failed").
+			Err(err).
+			Msg("Failed to record usage")
 	}
+	return err
 }
 
-func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *http.Response) RateLimitInfo {
+func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, model string, resp *http.Response) RateLimitInfo {
 	result := RateLimitInfo{}
 
 	if resp.StatusCode == 402 {
@@ -221,7 +212,6 @@ func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *h
 	}
 
 	// Update local quota based on provider state
-	ctx := context.Background()
 	now := time.Now().UTC()
 	keys := s.buildKeys(providerID, model, now)
 
@@ -230,7 +220,9 @@ func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *h
 			if limit, err1 := strconv.Atoi(reqLimit); err1 == nil {
 				if remaining, err2 := strconv.Atoi(reqRemaining); err2 == nil {
 					used := limit - remaining
-					s.redis.Set(ctx, keys.RPH, used, 2*time.Hour)
+					if used > 0 {
+						s.redis.Set(ctx, keys.RPM, used, 60*time.Second)
+					}
 				}
 			}
 		}
@@ -239,40 +231,30 @@ func (s *QuotaService) HandleProviderRateLimit(providerID, model string, resp *h
 	return result
 }
 
-func (s *QuotaService) GetModelQuotaStatus(providerID, model string, limits types.ModelLimits) QuotaStatus {
-	ctx := context.Background()
+func (s *QuotaService) GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) QuotaStatus {
 	now := time.Now().UTC()
-
 	keys := s.buildKeys(providerID, model, now)
 
 	pipe := s.redis.Pipeline()
-	cmd1 := pipe.ZCard(ctx, keys.RPM)
-	cmd2 := pipe.Get(ctx, keys.RPH)
-	cmd3 := pipe.Get(ctx, keys.RPD)
-	cmd4 := pipe.ZCard(ctx, keys.TPM)
-	cmd5 := pipe.Get(ctx, keys.TPH)
-	cmd6 := pipe.Get(ctx, keys.TPD)
-	cmd7 := pipe.Get(ctx, keys.TPMU)
+	pipe.ZCard(ctx, keys.RPM)
+	pipe.Get(ctx, keys.RPH)
+	pipe.Get(ctx, keys.RPD)
+	pipe.ZCard(ctx, keys.TPM)
+	pipe.Get(ctx, keys.TPH)
+	pipe.Get(ctx, keys.TPD)
+	pipe.Get(ctx, keys.TPMU)
 
-	pipe.Exec(ctx)
-
-	return QuotaStatus{
-		Rpm:  int(cmd1.Val()),
-		Rph:  atoi(cmd2.Val()),
-		Rpd:  atoi(cmd3.Val()),
-		Tpm:  int(cmd4.Val()),
-		Tph:  atoi(cmd5.Val()),
-		Tpd:  atoi(cmd6.Val()),
-		Tpmu: atoi(cmd7.Val()),
+	results, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.status_failed").
+			Err(err).
+			Msg("Failed to get quota status")
+		return QuotaStatus{}
 	}
-}
 
-func atoi(s string) int {
-	if s == "" {
-		return 0
-	}
-	i, _ := strconv.Atoi(s)
-	return i
+	return s.parseResults(results)
 }
 
 type quotaKeys struct {
@@ -286,37 +268,51 @@ type quotaKeys struct {
 }
 
 func (s *QuotaService) buildKeys(providerID, model string, now time.Time) quotaKeys {
-	base := fmt.Sprintf("%s:%s:%s", s.prefix, providerID, model)
-	year, month, day := now.Date()
-	hour := now.Hour()
-
+	prefix := fmt.Sprintf("%s:%s:%s", s.prefix, providerID, model)
 	return quotaKeys{
-		RPM:  fmt.Sprintf("%s:rpm", base),
-		RPH:  fmt.Sprintf("%s:rph:%d-%02d-%02d-%02d", base, year, month, day, hour),
-		RPD:  fmt.Sprintf("%s:rpd:%d-%02d-%02d", base, year, month, day),
-		TPM:  fmt.Sprintf("%s:tpm", base),
-		TPH:  fmt.Sprintf("%s:tph:%d-%02d-%02d-%02d", base, year, month, day, hour),
-		TPD:  fmt.Sprintf("%s:tpd:%d-%02d-%02d", base, year, month, day),
-		TPMU: fmt.Sprintf("%s:tpmu:%d-%02d", base, year, month),
+		RPM:  fmt.Sprintf("%s:rpm", prefix),
+		RPH:  fmt.Sprintf("%s:rph:%s", prefix, now.Format("2006-01-02-15")),
+		RPD:  fmt.Sprintf("%s:rpd:%s", prefix, now.Format("2006-01-02")),
+		TPM:  fmt.Sprintf("%s:tpm", prefix),
+		TPH:  fmt.Sprintf("%s:tph:%s", prefix, now.Format("2006-01-02-15")),
+		TPD:  fmt.Sprintf("%s:tpd:%s", prefix, now.Format("2006-01-02")),
+		TPMU: fmt.Sprintf("%s:tpmu:%s", prefix, now.Format("2006-01")),
 	}
 }
 
 func (s *QuotaService) parseResults(results []redis.Cmder) QuotaStatus {
 	status := QuotaStatus{}
-	if len(results) >= 7 {
-		status.Rpm = int(results[0].(*redis.IntCmd).Val())
-		status.Rph = atoi(results[1].(*redis.StringCmd).Val())
-		status.Rpd = atoi(results[2].(*redis.StringCmd).Val())
-		status.Tpm = int(results[3].(*redis.IntCmd).Val())
-		status.Tph = atoi(results[4].(*redis.StringCmd).Val())
-		status.Tpd = atoi(results[5].(*redis.StringCmd).Val())
-		status.Tpmu = atoi(results[6].(*redis.StringCmd).Val())
+
+	atoi := func(cmd *redis.StringCmd) int {
+		if val, err := cmd.Result(); err == nil {
+			if n, err := strconv.Atoi(val); err == nil {
+				return n
+			}
+		}
+		return 0
 	}
+
+	if len(results) > 0 {
+		status.Rpm = int(results[0].(*redis.IntCmd).Val())
+	}
+	if len(results) > 1 {
+		status.Rph = atoi(results[1].(*redis.StringCmd))
+	}
+	if len(results) > 2 {
+		status.Rpd = atoi(results[2].(*redis.StringCmd))
+	}
+	if len(results) > 3 {
+		status.Tpm = int(results[3].(*redis.IntCmd).Val())
+	}
+	if len(results) > 4 {
+		status.Tph = atoi(results[4].(*redis.StringCmd))
+	}
+	if len(results) > 5 {
+		status.Tpd = atoi(results[5].(*redis.StringCmd))
+	}
+	if len(results) > 6 {
+		status.Tpmu = atoi(results[6].(*redis.StringCmd))
+	}
+
 	return status
-}
-
-var quotaService = NewQuotaService()
-
-func GetQuotaService() *QuotaService {
-	return quotaService
 }

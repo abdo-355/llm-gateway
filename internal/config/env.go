@@ -19,6 +19,7 @@ type EnvConfig struct {
 	RedisURL       string
 	RedisKeyPrefix string
 
+	RateLimitGlobal   bool
 	RateLimitPerIP    int
 	RateLimitWindowMs int
 
@@ -67,6 +68,8 @@ func LoadEnv() (*EnvConfig, error) {
 		return nil, fmt.Errorf("RATE_LIMIT_WINDOW_MS must be positive")
 	}
 
+	rateLimitGlobal := getEnvBool("RATE_LIMIT_GLOBAL", false)
+
 	return &EnvConfig{
 		Environment:        environment,
 		Port:               port,
@@ -77,6 +80,7 @@ func LoadEnv() (*EnvConfig, error) {
 		GoogleVertexAPIKey: os.Getenv("GOOGLE_VERTEX_API_KEY"),
 		RedisURL:           getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:     getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
+		RateLimitGlobal:    rateLimitGlobal,
 		RateLimitPerIP:     rateLimitPerIP,
 		RateLimitWindowMs:  rateLimitWindowMs,
 		CORSOrigins:        os.Getenv("CORS_ORIGINS"),
@@ -84,6 +88,7 @@ func LoadEnv() (*EnvConfig, error) {
 }
 
 func getEnvString(key, defaultValue string) string {
+	// Return environment variable or default if not set
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
@@ -91,12 +96,24 @@ func getEnvString(key, defaultValue string) string {
 }
 
 func getEnvInt(key string, defaultValue int) int {
+	// Parse integer from environment variable, return default on error
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
 		}
 	}
 	return defaultValue
+}
+
+// getEnvBool parses boolean environment variables
+// Accepts: "true", "1", "TRUE", "True" as true values
+// Everything else (including empty) returns the default value
+func getEnvBool(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value == "true" || value == "1" || value == "TRUE" || value == "True"
 }
 
 // Singleton instance

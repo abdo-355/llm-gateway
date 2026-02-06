@@ -64,11 +64,11 @@ Test files should be **co-located** with source files:
 | Task | Branch                 | Status         | Approved By |
 | ---- | ---------------------- | -------------- | ----------- |
 | 0    | `task-0/setup`         | ✅ Complete    | abdo-355    |
-| 1    | `task-1/foundation`    | 🟡 In Progress |             |
-| 2    | `task-2/core-services` | ⬜ Not Started |             |
-| 3    | `task-3/http-layer`    | ⬜ Not Started |             |
-| 4    | `task-4/testing`       | ⬜ Not Started |             |
-| 5    | `task-5/deployment`    | ⬜ Not Started |             |
+| 1    | `task-1/foundation`    | ✅ Complete    | abdo-355    |
+| 2    | `task-2/core-services` | ✅ Complete    | abdo-355    |
+| 3    | `task-3/http-layer`    | ✅ Complete    | abdo-355    |
+| 4    | `task-4/testing`       | ✅ Complete    | abdo-355    |
+| 5    | `task-5/deployment`    | ✅ Complete    | abdo-355    |
 | 6    | `task-6/finalization`  | ⬜ Not Started |             |
 
 **Legend**: ⬜ Not Started | 🟡 In Progress | ✅ Complete
