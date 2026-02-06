@@ -20,12 +20,16 @@ type Router struct {
 	providerService *ProviderService
 }
 
-func NewRouter() *Router {
+func NewRouter(
+	quotaSvc *QuotaService,
+	healthSvc *HealthService,
+	providerSvc *ProviderService,
+) *Router {
 	return &Router{
 		config:          config.LoadConfig(),
-		quotaService:    GetQuotaService(),
-		healthService:   GetHealthService(),
-		providerService: GetProviderService(),
+		quotaService:    quotaSvc,
+		healthService:   healthSvc,
+		providerService: providerSvc,
 	}
 }
 
@@ -159,6 +163,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 
 // Stage 3: Filter Candidates
 func (r *Router) FilterCandidates(
+	ctx context.Context,
 	candidates []types.RoutingCandidate,
 	requirements types.DerivedRequirements,
 	req types.ChatCompletionRequest,
@@ -213,7 +218,7 @@ func (r *Router) FilterCandidates(
 		}
 
 		// Check circuit breaker
-		if !r.healthService.CanExecute(provider.ID) {
+		if !r.healthService.CanExecute(ctx, provider.ID) {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
 			continue
 		}
@@ -222,7 +227,7 @@ func (r *Router) FilterCandidates(
 		modelLimits := provider.Models.Limits[model]
 		estimatedTokens := r.quotaService.EstimateTokens(req)
 
-		if err := r.quotaService.CheckModelQuota(provider.ID, model, modelLimits, estimatedTokens); err != nil {
+		if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, estimatedTokens); err != nil {
 			if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
 				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
 			} else {
@@ -238,7 +243,7 @@ func (r *Router) FilterCandidates(
 }
 
 // Stage 4: Score Candidates
-func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
 	for i := range candidates {
 		candidate := &candidates[i]
 		baseScore := 1.0
@@ -256,7 +261,7 @@ func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *typ
 		}
 
 		// Health score
-		metrics := r.healthService.GetHealthMetrics(candidate.Provider.ID)
+		metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID)
 		healthScore := metrics.HealthScore
 		candidate.ScoreBreakdown["health_score"] = healthScore
 
@@ -367,6 +372,7 @@ func (r *Router) CompilePlan(
 
 // Stage 6: Execute
 func (r *Router) Execute(
+	ctx context.Context,
 	plan types.RoutingPlan,
 	req types.ChatCompletionRequest,
 	requestID string,
@@ -382,7 +388,7 @@ func (r *Router) Execute(
 		}
 
 		// Create context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
 
 		// Make request
 		resp, err := r.providerService.CallProvider(
@@ -391,7 +397,7 @@ func (r *Router) Execute(
 			attempt.Model,
 			req,
 			attempt.TimeoutMs,
-			ctx,
+			attemptCtx,
 			attempt.ProviderType,
 			attempt.Auth,
 		)
@@ -402,7 +408,7 @@ func (r *Router) Execute(
 
 		if err == nil {
 			// Success
-			r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
+			r.healthService.RecordSuccess(ctx, attempt.ProviderID, int(latencyMs))
 
 			// Record token usage (estimate if not provided)
 			tokensUsed := 0
@@ -411,7 +417,7 @@ func (r *Router) Execute(
 			} else {
 				tokensUsed = r.quotaService.EstimateTokens(req)
 			}
-			r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
+			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
 			return &types.ExecutionResult{
 				Response:   *resp,
@@ -423,7 +429,7 @@ func (r *Router) Execute(
 		}
 
 		// Handle error
-		r.healthService.RecordFailure(attempt.ProviderID)
+		r.healthService.RecordFailure(ctx, attempt.ProviderID)
 
 		// Check if should retry
 		if !r.ShouldRetry(err, plan, i) {
@@ -432,7 +438,7 @@ func (r *Router) Execute(
 
 		// Handle rate limit
 		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-			r.quotaService.HandleProviderRateLimit(attempt.ProviderID, attempt.Model, &http.Response{
+			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
 				StatusCode: 429,
 				Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", rateLimitErr.RetryAfter)}},
 			})
@@ -448,6 +454,7 @@ func (r *Router) Execute(
 
 // ExecuteStream executes a streaming request
 func (r *Router) ExecuteStream(
+	ctx context.Context,
 	plan types.RoutingPlan,
 	req types.ChatCompletionRequest,
 	requestID string,
@@ -473,7 +480,7 @@ func (r *Router) ExecuteStream(
 				}
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
+			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
 
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
@@ -481,7 +488,7 @@ func (r *Router) ExecuteStream(
 				attempt.Model,
 				req,
 				attempt.TimeoutMs,
-				ctx,
+				attemptCtx,
 				attempt.ProviderType,
 				attempt.Auth,
 			)
@@ -499,16 +506,16 @@ func (r *Router) ExecuteStream(
 			latencyMs := time.Since(startTime).Milliseconds()
 
 			if err == nil {
-				r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
+				r.healthService.RecordSuccess(ctx, attempt.ProviderID, int(latencyMs))
 				tokensUsed := r.quotaService.EstimateTokens(req)
-				r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
+				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 				return
 			}
 
-			r.healthService.RecordFailure(attempt.ProviderID)
+			r.healthService.RecordFailure(ctx, attempt.ProviderID)
 
 			if err.Code == "RATE_LIMITED" {
-				r.quotaService.HandleProviderRateLimit(attempt.ProviderID, attempt.Model, &http.Response{
+				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
 					StatusCode: 429,
 					Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", 1)}},
 				})

@@ -1,17 +1,40 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
-	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
-func Completions(c *gin.Context) {
-	requestID := c.GetString("request_id")
+// Router defines the interface for routing operations
+type Router interface {
+	DeriveRequirements(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
+	GenerateCandidates() []types.RoutingCandidate
+	GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate
+	FilterCandidates(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
+	ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
+	CompilePlan(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan
+	Execute(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
+	ExecuteStream(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
+}
+
+type CompletionsHandler struct {
+	router Router
+}
+
+func NewCompletionsHandler(router Router) *CompletionsHandler {
+	return &CompletionsHandler{
+		router: router,
+	}
+}
+
+func (h *CompletionsHandler) Completions(c *gin.Context) {
+	ctx := c.Request.Context()
+	requestID := c.GetString("requestId")
 
 	var req types.ChatCompletionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -26,23 +49,21 @@ func Completions(c *gin.Context) {
 		return
 	}
 
-	routerService := services.GetRouter()
-
 	var logicalModel *types.LogicalModelConfig
 	if req.Model != "" {
 		logicalModel = config.GetLogicalModel(req.Model)
 	}
 
-	requirements := routerService.DeriveRequirements(req, req.Router)
+	requirements := h.router.DeriveRequirements(req, req.Router)
 
 	var candidates []types.RoutingCandidate
 	if logicalModel != nil {
-		candidates = routerService.GenerateCandidatesFromLogicalModel(logicalModel)
+		candidates = h.router.GenerateCandidatesFromLogicalModel(logicalModel)
 	} else {
-		candidates = routerService.GenerateCandidates()
+		candidates = h.router.GenerateCandidates()
 	}
 
-	eligible, filtered := routerService.FilterCandidates(candidates, requirements, req, req.Router)
+	eligible, filtered := h.router.FilterCandidates(ctx, candidates, requirements, req, req.Router)
 
 	if len(eligible) == 0 {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{
@@ -59,21 +80,21 @@ func Completions(c *gin.Context) {
 		return
 	}
 
-	scored := routerService.ScoreCandidates(eligible, req.Router)
+	scored := h.router.ScoreCandidates(ctx, eligible, req.Router)
 
 	var slo *types.LogicalModelSLO
 	if logicalModel != nil {
 		slo = logicalModel.SLO
 	}
 
-	plan := routerService.CompilePlan(scored, req.Router, slo)
+	plan := h.router.CompilePlan(scored, req.Router, slo)
 
 	if requirements.Streaming == "required" || (requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Cache-Control", "no-cache")
 		c.Header("Connection", "keep-alive")
 
-		streamResult := routerService.ExecuteStream(plan, req, requestID)
+		streamResult := h.router.ExecuteStream(ctx, plan, req, requestID)
 
 		for chunk := range streamResult.Chunks {
 			c.SSEvent("message", chunk)
@@ -87,7 +108,7 @@ func Completions(c *gin.Context) {
 		return
 	}
 
-	result, err := routerService.Execute(plan, req, requestID)
+	result, err := h.router.Execute(ctx, plan, req, requestID)
 	if err != nil {
 		gatewayErr, ok := err.(*types.GatewayError)
 		if !ok {

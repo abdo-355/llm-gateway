@@ -13,7 +13,6 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/handlers"
 	"github.com/abdo-355/llm-gateway/internal/logger"
-	"github.com/abdo-355/llm-gateway/internal/middleware"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
@@ -22,7 +21,13 @@ type Server struct {
 	*http.Server
 }
 
-func New() *Server {
+func New(
+	healthHandler *handlers.HealthHandler,
+	completionsHandler *handlers.CompletionsHandler,
+	metricsHandler *handlers.MetricsHandler,
+	authMiddleware gin.HandlerFunc,
+	rateLimitMiddleware gin.HandlerFunc,
+) *Server {
 	env := config.GetEnv()
 
 	// Set Gin mode BEFORE creating router
@@ -38,14 +43,14 @@ func New() *Server {
 	r.Use(accessLogMiddleware())
 	r.Use(gin.Recovery())
 
-	r.GET("/health", handlers.Health)
+	r.GET("/health", healthHandler.Health)
 
-	r.Use(middleware.RateLimitGlobal())
+	r.Use(rateLimitMiddleware)
 
 	authorized := r.Group("/")
-	authorized.Use(middleware.Auth(), middleware.RateLimit())
-	authorized.POST("/v1/chat/completions", handlers.Completions)
-	authorized.GET("/metrics", handlers.Metrics)
+	authorized.Use(authMiddleware)
+	authorized.POST("/v1/chat/completions", completionsHandler.Completions)
+	authorized.GET("/v1/metrics", metricsHandler.Metrics)
 
 	return &Server{
 		Server: &http.Server{

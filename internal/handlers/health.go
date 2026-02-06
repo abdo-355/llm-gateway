@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -8,10 +9,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Health(c *gin.Context) {
-	healthService := services.GetHealthService()
+// HealthMonitor is the interface for health-related operations
+type HealthMonitor interface {
+	GetAllHealthMetrics(ctx context.Context) []services.HealthMetrics
+}
 
-	providers := healthService.GetAllHealthMetrics()
+type HealthHandler struct {
+	healthService HealthMonitor
+}
+
+func NewHealthHandler(healthSvc HealthMonitor) *HealthHandler {
+	return &HealthHandler{
+		healthService: healthSvc,
+	}
+}
+
+func (h *HealthHandler) Health(c *gin.Context) {
+	ctx := c.Request.Context()
+	providers := h.healthService.GetAllHealthMetrics(ctx)
 
 	status := "healthy"
 	for _, p := range providers {
