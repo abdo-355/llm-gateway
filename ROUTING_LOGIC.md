@@ -1,285 +1,608 @@
 # 6-Stage Routing Pipeline
 
-This document describes the intelligent routing algorithm used by the LLM Gateway.
-
-## Overview
-
-When a request arrives, the gateway executes a 6-stage pipeline to select the optimal provider and model. This ensures high availability, performance, and intelligent fallback.
+This document describes how the router selects which LLM provider to use for each request.
 
 ```
 Request → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5 → Stage 6 → Provider
            ↓         ↓         ↓         ↓         ↓         ↓
-        Requirements Candidates Filtering  Scoring   Plan     Execute
+        Derive   Generate   Filter    Score    Compile   Execute
+       Req's     Candidates           Candidates  Plan
 ```
 
-## Stage 1: Derive Requirements
+---
 
-**Purpose**: Understand what the request needs.
+## Data Structures
 
-### Input
-- `ChatCompletionRequest` with messages, model, etc.
-- Optional `RouterHints` for overrides
+### DerivedRequirements
+What the request needs (detected from request fields, can be overridden by hints).
 
-### Processing
-1. **Output Type Detection**
-   ```go
-   if response_format.type == "json_schema" && strict == true:
-       requirements.Output = "json_schema_strict"
-   else if response_format.type == "json_object":
-       requirements.Output = "json_object"
-   else:
-       requirements.Output = "text"
-   ```
-
-2. **Streaming Detection**
-   ```go
-   if stream == true:
-       requirements.Streaming = "required"
-   else if stream == false:
-       requirements.Streaming = "forbidden"
-   else:
-       requirements.Streaming = "preferred"
-   ```
-
-3. **Tools Detection**
-   ```go
-   if len(tools) > 0 && tool_choice != "none":
-       requirements.Tools = "required"
-   else if len(tools) == 0:
-       requirements.Tools = "forbidden"
-   else:
-       requirements.Tools = "allowed"
-   ```
-
-### Output
 ```go
 type DerivedRequirements struct {
-    Output    string // "text", "json_object", "json_schema_strict"
-    Streaming string // "required", "forbidden", "preferred"
-    Tools     string // "required", "forbidden", "allowed"
+    Output    string // text, json_schema_strict
+    Streaming string // required, preferred, forbidden
+    Tools     string // required, allowed, forbidden
 }
 ```
 
+### RouterHints
+Optional overrides from the client.
+
+```go
+type RouterHints struct {
+    Profile      *string              // e.g., "cheap_fast", "reliable_structured"
+    Requirements *RouterRequirements  // override derived requirements
+    Budget       *BudgetConfig        // e.g., free_only mode
+    SLO          *SLOConfig           // timeout settings
+    Providers    *ProviderPreferences  // allow, deny, prefer
+    Fallback     *FallbackConfig      // retry behavior
+    Trace        *TraceConfig         // request tracing
+}
+
+type ProviderPreferences struct {
+    Allow  []string // only use these providers
+    Deny   []string // don't use these providers
+    Prefer []string // in this order (first is highest priority)
+}
+
+type FallbackConfig struct {
+    MaxAttempts *int  // max providers to try (default 3)
+    On429       *bool // retry on rate limit
+    OnTimeout   *bool // retry on timeout
+    On5xx       *bool // retry on server errors
+}
+```
+
+### RoutingCandidate
+A provider/model pair that could handle the request.
+
+```go
+type RoutingCandidate struct {
+    Provider                   ProviderConfig
+    Model                      string
+    IsCertifiedForStrictSchema bool // strict JSON certification
+    Score                      float64
+    ScoreBreakdown             map[string]float64 // for debugging
+}
+```
+
+### RoutingPlan
+The execution plan with retry policy.
+
+```go
+type RoutingPlan struct {
+    Attempts       []RoutingAttempt
+    MaxAttempts    int
+    HardTimeoutMs  *int  // total time allowed for entire request
+    RetryOn429     bool
+    RetryOnTimeout bool
+    RetryOn5xx     bool
+}
+
+type RoutingAttempt struct {
+    ProviderID   string
+    Model        string
+    BaseURL      string
+    APIKey       string
+    Score        float64
+    TimeoutMs    int
+    ProviderType string // "openai" or "vertex"
+    Auth         ProviderAuth
+}
+```
+
+---
+
+## Stage 1: Derive Requirements
+
+**Purpose**: Figure out what the request needs by examining request fields.
+
+### Detection Logic
+
+**Output Format (JSON):**
+```go
+if req.ResponseFormat != nil &&
+   req.ResponseFormat.Type == "json_schema" &&
+   req.ResponseFormat.JSONSchema != nil &&
+   req.ResponseFormat.JSONSchema.Strict != nil &&
+   *req.ResponseFormat.JSONSchema.Strict {
+    requirements.Output = "json_schema_strict"
+}
+```
+
+**Streaming:**
+```go
+if req.Stream != nil {
+    if *req.Stream {
+        requirements.Streaming = "required"
+    } else {
+        requirements.Streaming = "forbidden"
+    }
+}
+```
+
+**Tools/Functions:**
+```go
+if len(req.Tools) > 0 {
+    switch req.ToolChoice {
+    case "required": requirements.Tools = "required"
+    case "none":      requirements.Tools = "forbidden"
+    default:          requirements.Tools = "allowed"
+    }
+}
+```
+
+### RouterHints Override
+
+Hints can override any derived value:
+```go
+if hints != nil && hints.Requirements != nil {
+    if hints.Requirements.Output != nil {
+        requirements.Output = *hints.Requirements.Output
+    }
+    // ... same for Streaming and Tools
+}
+```
+
+### Output
+`DerivedRequirements` struct with Output, Streaming, and Tools fields.
+
+---
+
 ## Stage 2: Generate Candidates
 
-**Purpose**: Build list of all models that could handle this request.
+**Purpose**: Build a list of provider/model pairs that could potentially handle the request.
 
-### Processing
-1. Expand logical model (e.g., "chat-pro") to concrete models
-2. Get all providers that support each model
-3. Create `RoutingCandidate` for each provider+model pair
+There are two ways to generate candidates:
 
-### Example
+### Path A: From Logical Model (Most Common)
+
+Uses the logical model configuration (e.g., "chat-pro") to find candidates.
+
 ```go
-Logical Model: "chat-pro"
-→ Candidates: [
-    {Provider: "groq", Model: "llama-3.3-70b-versatile"},
-    {Provider: "cerebras", Model: "llama-3.1-70b"},
-    {Provider: "mistral", Model: "mistral-large"},
-]
+func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *LogicalModelConfig) []RoutingCandidate {
+    var candidates []RoutingCandidate
+
+    for _, candidate := range logicalModel.Candidates {
+        // Find provider config by ID
+        provider := findProvider(candidate.Provider)
+
+        // Check if model exists in provider
+        if !slices.Contains(provider.Models.List, candidate.Model) {
+            log.Warn("Model not found in provider")
+            continue
+        }
+
+        // Check if certified for strict JSON
+        isCertified := r.isCertifiedForStrictSchema(candidate.Provider, candidate.Model)
+
+        candidates = append(candidates, RoutingCandidate{
+            Provider:                   *provider,
+            Model:                      candidate.Model,
+            IsCertifiedForStrictSchema: isCertified,
+            Score:                      candidate.Weight, // from logical model config
+            ScoreBreakdown: map[string]float64{
+                "logical_model_weight": candidate.Weight,
+            },
+        })
+    }
+
+    return candidates
+}
 ```
+
+### Path B: All Available Models
+
+Generates candidates for every model in every provider (used when no logical model is specified).
+
+```go
+func (r *Router) GenerateCandidates() []RoutingCandidate {
+    var candidates []RoutingCandidate
+
+    for _, provider := range r.config.Providers {
+        for _, model := range provider.Models.List {
+            isCertified := r.isCertifiedForStrictSchema(provider.ID, model)
+
+            candidates = append(candidates, RoutingCandidate{
+                Provider:                   provider,
+                Model:                      model,
+                IsCertifiedForStrictSchema: isCertified,
+                Score:                      0, // will be set in scoring
+                ScoreBreakdown:             make(map[string]float64),
+            })
+        }
+    }
+
+    return candidates
+}
+```
+
+### Output
+List of `RoutingCandidate` structs, one per provider/model combination.
+
+---
 
 ## Stage 3: Filter Candidates
 
 **Purpose**: Remove candidates that can't handle the request.
 
-### Filters Applied
+### Filters (in order)
 
-#### 1. Capability Matching
+**1. Allow/Deny Lists:**
 ```go
-if requirements.Output == "json_schema_strict" &&
-   !provider.Capabilities.StructuredOutputs == "json_schema_strict":
-    filter(candidate, "no_strict_json_support")
+if hints != nil && hints.Providers != nil {
+    if len(hints.Providers.Allow) > 0 {
+        if !slices.Contains(hints.Providers.Allow, provider.ID) {
+            filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_not_in_allowlist"
+            continue
+        }
+    }
+    if slices.Contains(hints.Providers.Deny, provider.ID) {
+        filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_in_denylist"
+        continue
+    }
+}
 ```
 
-#### 2. Allow/Deny Lists
+**2. Strict JSON Requirement:**
 ```go
-if hints.Providers.Allow != [] && !contains(hints.Providers.Allow, provider.ID):
-    filter(candidate, "provider_not_in_allowlist")
-
-if contains(hints.Providers.Deny, provider.ID):
-    filter(candidate, "provider_in_denylist")
+if requirements.Output == "json_schema_strict" {
+    // First check: is this specific model certified for strict JSON?
+    if !candidate.IsCertifiedForStrictSchema {
+        // Second check: does provider guarantee strict JSON capability?
+        if provider.Capabilities.StructuredOutputs != "json_schema_strict" {
+            filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "not_certified_for_strict_json"
+            continue
+        }
+    }
+}
 ```
 
-#### 3. Circuit Breaker
+**3. Streaming Support:**
 ```go
-if !healthService.CanExecute(ctx, provider.ID, model):
-    filter(candidate, "circuit_breaker_open")
+if requirements.Streaming == "required" && !provider.Capabilities.Streaming {
+    filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "streaming_not_supported"
+    continue
+}
 ```
 
-#### 4. Quota Check
+**4. Tools Support:**
 ```go
-if quotaService.CheckModelQuota(...) != nil:
-    filter(candidate, "quota_exceeded")
+if requirements.Tools == "required" && !provider.Capabilities.Tools {
+    filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
+    continue
+}
+```
+
+**5. Circuit Breaker:**
+```go
+if !r.healthService.CanExecute(ctx, provider.ID, model) {
+    filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
+    continue
+}
+```
+
+**6. Quota Check:**
+```go
+modelLimits := provider.Models.Limits[model]
+estimatedTokens := r.quotaService.EstimateTokens(req)
+
+if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, estimatedTokens); err != nil {
+    if quotaErr, ok := err.(*ModelQuotaExceededError); ok {
+        filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
+    } else {
+        filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "quota_check_failed"
+    }
+    continue
+}
 ```
 
 ### Output
-Filtered candidates list + map of filtered reasons for observability.
+- `eligible`: List of candidates that can handle the request
+- `filtered`: Map of `provider/model` → `reason` for observability
 
-## Stage 4: Score & Sort
+---
+
+## Stage 4: Score Candidates
 
 **Purpose**: Rank remaining candidates by preference and health.
 
-### Scoring Algorithm
+### Scoring Formula
 
 ```go
-score = baseWeight(1.0)
-
-// Preference bonus (highest to lowest rank)
-if provider in hints.Providers.Prefer:
-    rank = index(hints.Providers.Prefer, provider)
-    bonus = 0.20 * (1.0 - float64(rank)*0.05)
-    score += bonus
-
-// Health bonus
-health = healthService.GetHealthMetrics(provider.ID, model)
-score += health.HealthScore * 0.25
+score = (baseScore * 0.5) + (healthScore * 0.5) + logicalModelWeight
 ```
 
-### Example
+**Preference Bonus:**
 ```go
-Candidates after scoring:
-1. groq/llama-3.3-70b → Score: 1.45 (0.20 pref bonus + 1.0 health)
-2. cerebras/llama-3.1 → Score: 1.30 (0.15 pref bonus + 0.9 health)
-3. mistral/mistral-large → Score: 1.10 (0.0 pref bonus + 0.8 health)
+if hints != nil && hints.Providers != nil {
+    for j, pref := range hints.Providers.Prefer {
+        if pref == candidate.Provider.ID {
+            // First preference gets 0.5 bonus, decays with each position
+            bonus := 0.5 * (1.0 - float64(j)/float64(len(hints.Providers.Prefer)))
+            baseScore += bonus
+            candidate.ScoreBreakdown["preference_bonus"] = bonus
+            break
+        }
+    }
+}
+```
+
+**Health Score:**
+```go
+metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
+healthScore := metrics.HealthScore // 0.0 to 1.0
+candidate.ScoreBreakdown["health_score"] = healthScore
+```
+
+**Sorting:**
+```go
+slices.SortFunc(candidates, func(a, b RoutingCandidate) int {
+    if a.Score > b.Score {
+        return -1 // a comes first
+    }
+    if a.Score < b.Score {
+        return 1 // b comes first
+    }
+    return 0
+})
 ```
 
 ### Output
-Sorted list of candidates (highest score first).
+Candidates sorted by score (highest first).
+
+---
 
 ## Stage 5: Compile Plan
 
-**Purpose**: Create execution plan with retry policy.
+**Purpose**: Create an execution plan with retry policy and timeouts.
 
-### Plan Structure
+### Steps
+
+**1. Determine Max Attempts:**
 ```go
-type RoutingPlan struct {
-    Attempts       []RoutingAttempt
-    RetryOn429     bool
-    RetryOnTimeout bool
-    RetryOn5xx     bool
-    HardTimeoutMs  *int
-}
-
-type RoutingAttempt struct {
-    ProviderID string
-    Model      string
-    BaseURL    string
-    APIKey     string
-    TimeoutMs  int
-    Score      float64
-    Auth       ProviderAuth
+maxAttempts := 3 // default
+if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
+    maxAttempts = *hints.Fallback.MaxAttempts
+} else if logicalModelSLO != nil && logicalModelSLO.MaxAttempts != nil {
+    maxAttempts = *logicalModelSLO.MaxAttempts
 }
 ```
 
-### Processing
-1. Select top N candidates (max_attempts from hints, default 3)
-2. Set timeouts (SLO timeout or default 30s)
-3. Configure retry policy
-   - All retries enabled by default
-   - Can override via hints (e.g., `hints.Fallback.On429 = false`)
-4. Set hard timeout if specified
-
-### Example Plan
+**2. Determine Timeout:**
 ```go
-RoutingPlan{
-    Attempts: [
-        {Provider: "groq", Model: "llama-3.3-70b", TimeoutMs: 30000},
-        {Provider: "cerebras", Model: "llama-3.1-70b", TimeoutMs: 30000},
-        {Provider: "mistral", Model: "mistral-large", TimeoutMs: 30000},
-    ],
-    RetryOn429: true,
-    RetryOnTimeout: true,
-    RetryOn5xx: true,
+timeoutMs := 30000 // 30 seconds default
+if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
+    timeoutMs = *hints.SLO.MaxLatencyMs
+} else if logicalModelSLO != nil && logicalModelSLO.MaxLatencyMs != nil {
+    timeoutMs = *logicalModelSLO.MaxLatencyMs
 }
 ```
+
+**3. Build Attempts List:**
+```go
+var attempts []RoutingAttempt
+for i := 0; i < maxAttempts && i < len(candidates); i++ {
+    candidate := candidates[i]
+
+    // Get API key from environment based on provider
+    apiKey := ""
+    switch candidate.Provider.Auth.Env {
+    case "GROQ_API_KEY":         apiKey = config.GetEnv().GroqAPIKey
+    case "CEREBRAS_API_KEY":     apiKey = config.GetEnv().CerebrasAPIKey
+    case "MISTRAL_API_KEY":      apiKey = config.GetEnv().MistralAPIKey
+    case "GOOGLE_VERTEX_API_KEY": apiKey = config.GetEnv().GoogleVertexAPIKey
+    }
+
+    attempts = append(attempts, RoutingAttempt{
+        ProviderID:   candidate.Provider.ID,
+        Model:        candidate.Model,
+        BaseURL:      candidate.Provider.BaseURL,
+        APIKey:       apiKey,
+        Score:        candidate.Score,
+        TimeoutMs:    timeoutMs,
+        ProviderType: candidate.Provider.ProviderType,
+        Auth:         candidate.Provider.Auth,
+    })
+}
+```
+
+**4. Configure Retry Policy:**
+```go
+retryOn429 := true
+retryOnTimeout := true
+retryOn5xx := true
+
+if hints != nil && hints.Fallback != nil {
+    if hints.Fallback.On429 != nil {
+        retryOn429 = *hints.Fallback.On429
+    }
+    if hints.Fallback.OnTimeout != nil {
+        retryOnTimeout = *hints.Fallback.OnTimeout
+    }
+    if hints.Fallback.On5xx != nil {
+        retryOn5xx = *hints.Fallback.On5xx
+    }
+}
+```
+
+### Output
+`RoutingPlan` with attempts list, timeouts, and retry policy.
+
+---
 
 ## Stage 6: Execute
 
-**Purpose**: Execute plan with automatic fallback.
+**Purpose**: Try providers in order until one succeeds or all fail.
 
 ### Algorithm
+
 ```go
-func Execute(plan, request):
-    for i, attempt := range plan.Attempts:
-        response, err = callProvider(attempt, request)
-        
-        if err == nil:
-            recordSuccess(attempt.Provider, attempt.Model)
-            return response
-        
-        recordFailure(attempt.Provider, attempt.Model, err)
-        
-        if !shouldRetry(err, plan, i):
-            return GatewayError{...}
-    
-    return GatewayError{"All providers failed", attempts: len(plan.Attempts)}
+func (r *Router) Execute(ctx, plan, req, requestID) (*ExecutionResult, error) {
+    startTime := time.Now()
+
+    for i, attempt := range plan.Attempts {
+        // Check hard timeout (total request time)
+        if plan.HardTimeoutMs != nil {
+            if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
+                return nil, NewTimeoutError("Hard timeout exceeded", "request")
+            }
+        }
+
+        log.Info().
+            Str("request_id", requestID).
+            Int("attempt", i+1).
+            Str("provider", attempt.ProviderID).
+            Str("model", attempt.Model).
+            Float64("score", attempt.Score).
+            Msg("Trying provider")
+
+        // Call provider with timeout
+        attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+        resp, err := r.providerService.CallProvider(
+            attempt.BaseURL,
+            attempt.APIKey,
+            attempt.Model,
+            req,
+            attempt.TimeoutMs,
+            attemptCtx,
+            attempt.ProviderType,
+            attempt.Auth,
+        )
+        cancel()
+
+        latencyMs := time.Since(startTime).Milliseconds()
+
+        if err == nil {
+            // Success
+            r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+            tokensUsed := countTokens(resp) // or estimate from request
+            r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+
+            log.Info().
+                Str("request_id", requestID).
+                Str("provider", attempt.ProviderID).
+                Str("model", attempt.Model).
+                Int64("latency_ms", latencyMs).
+                Int("tokens", tokensUsed).
+                Int("attempts", i+1).
+                Msg("Request completed")
+
+            return &ExecutionResult{
+                Response:   *resp,
+                Attempts:   i + 1,
+                ProviderID: attempt.ProviderID,
+                Model:      attempt.Model,
+                LatencyMs:  latencyMs,
+            }, nil
+        }
+
+        // Failure - record and decide whether to retry
+        r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+
+        if !r.ShouldRetry(err, plan, i) {
+            return nil, r.CreateGatewayError(err, i+1, requestID)
+        }
+
+        // Handle rate limit - update quota tracking
+        if rateLimitErr, ok := err.(*RateLimitError); ok {
+            r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
+                StatusCode: 429,
+                Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", rateLimitErr.RetryAfter)}},
+            })
+        }
+    }
+
+    return nil, &GatewayError{
+        Type:    "gateway_error",
+        Code:    "ALL_ATTEMPTS_FAILED",
+        Message: "All provider attempts failed",
+    }
+}
 ```
 
-### Retry Logic
+### ShouldRetry Logic
+
 ```go
-func shouldRetry(err, plan, attemptIndex):
-    if attemptIndex >= len(plan.Attempts)-1:
-        return false  // Last attempt
-    
-    switch err.(type):
-    case RateLimitError:
+func (r *Router) ShouldRetry(err error, plan RoutingPlan, attemptIndex int) bool {
+    // No more attempts left
+    if attemptIndex >= len(plan.Attempts)-1 {
+        return false
+    }
+
+    switch e := err.(type) {
+    case *RateLimitError:
         return plan.RetryOn429
-    case TimeoutError:
+    case *TimeoutError:
         return plan.RetryOnTimeout
-    case ProviderError:
-        return err.IsRetryable && plan.RetryOn5xx
-    case CircuitBreakerError:
-        return true  // Try different provider
-    case ModelQuotaExceededError:
-        return true  // Try different provider
+    case *ProviderError:
+        return e.IsRetryable && plan.RetryOn5xx
+    case *CircuitBreakerError:
+        return true // Always try different provider
+    case *ModelQuotaExceededError:
+        return true // Always try different provider
+    case *PaymentRequiredError:
+        return false // Won't work on retry
+    case *ValidationError:
+        return false // Request is invalid
     default:
         return false
-```
-
-### Error Handling
-Creates `GatewayError` with:
-- Error type (RATE_LIMITED, TIMEOUT, UPSTREAM_ERROR, etc.)
-- Message from provider
-- Details: attempts count, retry info
-
-## Observability
-
-### Response Headers
-- `X-Gateway-Provider`: Provider used
-- `X-Gateway-Model`: Model used
-- `X-Gateway-Attempts`: Number of attempts
-
-### Logs
-```json
-{
-  "event": "attempt.start",
-  "provider": "groq",
-  "model": "llama-3.3-70b",
-  "attempt": 1,
-  "score": 1.45
-}
-{
-  "event": "attempt.failed",
-  "provider": "groq",
-  "error": "rate limited",
-  "attempt": 1
-}
-{
-  "event": "attempt.success",
-  "provider": "cerebras",
-  "model": "llama-3.1-70b",
-  "attempts": 2,
-  "latency_ms": 1250
+    }
 }
 ```
 
-## Performance
+---
 
-- **Routing Decision**: <1ms for 100 candidates
-- **Memory**: O(n) where n = number of candidates
-- **Scalability**: Stateless, scales horizontally
+## Error Types
 
-## Configuration
+| Error Type | Code | Retry? | Meaning |
+|------------|------|--------|---------|
+| `RateLimitError` | RATE_LIMITED | Configurable | Hit rate limit, retry after delay |
+| `TimeoutError` | TIMEOUT | Configurable | Request timed out |
+| `ProviderError` | PROVIDER_ERROR | Configurable | Provider returned error, depends on `IsRetryable` |
+| `CircuitBreakerError` | CIRCUIT_BREAKER_OPEN | Yes | Provider temporarily blocked |
+| `ModelQuotaExceededError` | QUOTA_EXCEEDED | Yes | Model-specific quota exceeded |
+| `PaymentRequiredError` | PAYMENT_REQUIRED | No | Subscription/account issue |
+| `ValidationError` | VALIDATION_ERROR | No | Invalid request format |
 
-See `internal/config/logical_models.go` for SLO and routing configuration.
+---
+
+## Streaming Execution
+
+For streaming requests, the router uses `ExecuteStream` which:
+
+1. Starts a goroutine to iterate through attempts
+2. Pipes SSE chunks from provider directly to response channel
+3. Falls back on error without waiting for complete response
+4. Returns chunks as they arrive from the successful provider
+
+```go
+func (r *Router) ExecuteStream(ctx, plan, req, requestID) StreamResult {
+    chunks := make(chan *SSEChunk)
+    errChan := make(chan *GatewayError, 1)
+
+    go func() {
+        startTime := time.Now()
+        for _, attempt := range plan.Attempts {
+            // ... similar to Execute but streams chunks
+            result := r.providerService.StreamProviderChannel(...)
+            for chunk := range result.Chunks {
+                chunks <- chunk
+            }
+            // on error, continue to next attempt
+        }
+        errChan <- GatewayError{Code: "ALL_ATTEMPTS_FAILED"}
+    }()
+
+    return StreamResult{Chunks: chunks, Err: errChan}
+}
+```
+
+---
+
+## Response Headers
+
+| Header | Example | Meaning |
+|--------|---------|---------|
+| `X-Gateway-Provider` | `groq` | Provider used |
+| `X-Gateway-Model` | `llama-3.3-70b-versatile` | Model used |
+| `X-Gateway-Attempts` | `2` | Number of providers tried |

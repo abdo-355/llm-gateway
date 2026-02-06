@@ -1,26 +1,72 @@
-# LLM Gateway Documentation
+# LLM Gateway
 
-## Table of Contents
-
-1. [Introduction](#introduction)
-2. [Architecture](#architecture)
-3. [Quick Start](#quick-start)
-4. [Configuration Reference](#configuration-reference)
-5. [API Reference](#api-reference)
-6. [Routing Logic](#routing-logic)
-7. [Deployment](#deployment)
-8. [Monitoring](#monitoring)
-9. [Troubleshooting](#troubleshooting)
+A production-ready API gateway for routing LLM requests across multiple providers with intelligent failover, rate limiting, and observability.
 
 ---
 
-## Introduction
+## What Is This?
 
-LLM Gateway is an API gateway for Large Language Models. It routes requests to different LLM providers (Groq, Cerebras, Mistral, and Google Vertex AI) and handles failover when providers have issues.
+LLM Gateway is a unified API interface that sits between your application and LLM providers. Instead of calling providers directly, you call the gateway and it:
+
+- **Routes requests intelligently** based on model requirements, provider health, and your preferences
+- **Handles failures automatically** - if one provider has issues, it falls back to another
+- **Tracks usage and limits** per-model, per-provider with Redis-backed quota management
+- **Provides a single API** that works like OpenAI's API, so you don't need to change your code when switching providers
+
+### Why Use It?
+
+| Problem | Solution |
+|---------|----------|
+| Provider goes down | Automatic failover to backup providers |
+| Rate limits hit | Routes to providers with remaining quota |
+| Different APIs | Unified OpenAI-compatible API |
+| Cost management | Per-model quotas and token tracking |
+| Debugging | Structured logging, health endpoints |
+
+### Supported Providers
+
+- **Groq** - Fast inference for Llama models
+- **Cerebras** - High-throughput Llama and Qwen models
+- **Mistral** - Mistral models including Codestral
+- **Google Vertex AI** - Gemini models
+
+---
+
+## Key Features
+
+### Intelligent Routing
+The gateway examines each request to determine what it needs (streaming, JSON output, tools, etc.) and routes to providers that can handle those requirements. It considers:
+- Model capabilities (which providers support the requested model)
+- Provider health (success rates, latency)
+- Your preferences (preferred providers, deny lists)
+- Weights from logical model configuration
+
+### Automatic Failover
+If a provider fails (timeout, error, rate limit), the gateway automatically tries the next available provider. This happens transparently - your code sees a successful response or a final error.
+
+### Circuit Breaker
+When a provider experiences repeated failures, the circuit breaker opens and temporarily stops sending requests. After a cooldown period, it allows尝试 requests again. This prevents hammering a struggling provider.
+
+### Quota Management
+Per-model, per-provider limits are tracked in Redis:
+- Requests per minute/hour/day
+- Tokens per minute/hour/day/month
+
+When a limit is reached, that model/provider is filtered out and other options are tried.
+
+### Unified API
+The gateway implements OpenAI's chat completions API. Your existing code calling OpenAI can switch to the gateway by changing the base URL.
+
+### Logical Models
+Abstract provider-specific models into semantic categories:
+- `chat-pro` - General purpose conversation
+- `json-safe` - Guaranteed JSON output
+- `code-pro` - Code generation
+- `tools-pro` - Function calling
+
+---
 
 ## Architecture
-
-### System Components
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -63,19 +109,19 @@ LLM Gateway is an API gateway for Large Language Models. It routes requests to d
 
 ### How Requests Flow
 
-1. Client sends a request to the gateway
-2. Gateway checks the API key
-3. Gateway checks rate limits
-4. Routing pipeline picks the best provider
-5. Request is sent to the LLM provider
-6. Response is returned to the client
-7. Success/failure is recorded for monitoring
+1. **Request arrives** - You call `/v1/chat/completions` with your API key
+2. **Authentication** - Gateway validates your API key
+3. **Rate limiting** - Checks per-IP limits to prevent abuse
+4. **Routing** - 6-stage pipeline picks the best provider based on model, health, and your preferences
+5. **Execution** - Calls the provider with automatic fallback on failure
+6. **Response** - Returns the LLM response in OpenAI format
+7. **Metrics** - Records success/failure for health tracking and quota updates
 
 ---
 
 ## Quick Start
 
-### What You Need
+### Prerequisites
 
 - Go 1.25 or later
 - Redis 7.x
@@ -119,22 +165,15 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ## Configuration
 
-### Required Settings
+### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `GATEWAY_API_KEY` | Your API key (minimum 32 characters) |
-
-You also need at least one provider key:
-
-| Variable | Provider |
-|----------|----------|
-| `GROQ_API_KEY` | Groq |
-| `CEREBRAS_API_KEY` | Cerebras |
-| `MISTRAL_API_KEY` | Mistral |
-| `GOOGLE_VERTEX_API_KEY` | Google Vertex |
-
-### Optional Settings
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GATEWAY_API_KEY` | Yes | Your API key (min 32 characters) |
+| `GROQ_API_KEY` | No | Groq API key |
+| `CEREBRAS_API_KEY` | No | Cerebras API key |
+| `MISTRAL_API_KEY` | No | Mistral API key |
+| `GOOGLE_VERTEX_API_KEY` | No | Google Vertex AI key |
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -142,52 +181,36 @@ You also need at least one provider key:
 | `ENV` | production | development or production |
 | `LOG_LEVEL` | info | debug, info, warn, error |
 | `REDIS_URL` | redis://localhost:6379 | Redis connection |
-| `RATE_LIMIT_PER_IP` | 100 | Max requests per IP |
-| `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window (ms) |
+| `RATE_LIMIT_PER_IP` | 100 | Max requests per IP per minute |
+| `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
 | `CORS_ORIGINS` | * | Allowed CORS origins |
 
 ### Logical Models
 
-Logical models are abstract names that map to specific provider models.
-
-```go
-var LogicalModels = map[string]LogicalModelConfig{
-    "chat-pro": {
-        Description: "High-quality conversational model",
-        SLO: SLOConfig{
-            TimeoutMs:    30000,
-            MaxRetries:   3,
-            HardTimeoutMs: intPtr(60000),
-        },
-        Routing: RoutingConfig{
-            Strategy: "preference",
-            Candidates: []string{
-                "groq/llama-3.3-70b-versatile",
-                "cerebras/llama-3.1-70b",
-                "mistral/mistral-large",
-            },
-        },
-    },
-}
-```
-
-### Available Models
+Logical models abstract provider-specific models into semantic categories:
 
 | Model | Use Case |
 |-------|----------|
 | `chat-lite` | Fast, simple responses |
-| `chat-pro` | General purpose |
+| `chat-pro` | General purpose conversation |
 | `chat-max` | Complex, long tasks |
 | `analysis-pro` | Reasoning and analysis |
 | `json-fast` | Quick JSON output |
-| `json-safe` | Strict JSON schema |
+| `json-safe` | Strict JSON schema output |
 | `code-fast` | Quick code generation |
 | `code-pro` | Production code |
 | `tools-pro` | Function calling |
 
+Models are configured in `internal/config/logical_models.go`.
+
 ### Provider Configuration
 
-See `internal/config/providers.go` for details.
+Providers are configured in `internal/config/providers.go` with:
+- Base URLs
+- Authentication (bearer, header)
+- Available models
+- Rate limits per model
+- Capabilities (streaming, tools, structured outputs)
 
 ---
 
@@ -199,7 +222,16 @@ See `internal/config/providers.go` for details.
 GET /health
 ```
 
-Returns system health and provider status.
+Returns system health and provider status:
+
+```json
+{
+  "status": "healthy",
+  "providers": {
+    "groq": { "circuit_state": "CLOSED", "health_score": 1.0 }
+  }
+}
+```
 
 ### Chat Completions
 
@@ -207,11 +239,11 @@ Returns system health and provider status.
 POST /v1/chat/completions
 ```
 
-Headers:
+**Headers:**
 - `Authorization: Bearer {GATEWAY_API_KEY}`
 - `Content-Type: application/json`
 
-Request:
+**Request:**
 
 ```json
 {
@@ -221,7 +253,7 @@ Request:
 }
 ```
 
-Response:
+**Response:**
 
 ```json
 {
@@ -240,117 +272,28 @@ Response:
 }
 ```
 
-Response Headers:
-- `X-Gateway-Provider`: groq
-- `X-Gateway-Model`: llama-3.3-70b-versatile
+**Response Headers:**
+- `X-Gateway-Provider` - Provider used (e.g., groq)
+- `X-Gateway-Model` - Model used (e.g., llama-3.3-70b-versatile)
 
 ### Streaming
 
-Set `stream: true` in your request. Response will be sent as Server-Sent Events:
+Set `stream: true` in your request:
 
-```
-data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello"}}]}
-
-data: [DONE]
-```
-
-### Errors
-
-**Rate Limited (429):**
-
-```json
-{
-  "error": {
-    "type": "rate_limit_error",
-    "message": "Rate limit exceeded. Try again in 60s."
-  }
-}
-```
-
-**Provider Unavailable (503):**
-
-```json
-{
-  "error": {
-    "type": "circuit_breaker_error",
-    "message": "Provider temporarily unavailable"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2026-02-06T22:45:00Z",
-  "providers": {
-    "groq": { "circuit_state": "CLOSED", "health_score": 1.0 },
-    "cerebras": { "circuit_state": "CLOSED", "health_score": 0.95 }
-  },
-  "quota_status": {
-    "groq/llama-3.3-70b": { "rpm_remaining": 25, "tpm_remaining": 5000 }
-  }
-}
-```
-
-#### Chat Completions
-
-```http
-POST /v1/chat/completions
-```
-
-**Headers:**
-- `Authorization: Bearer {GATEWAY_API_KEY}`
-- `Content-Type: application/json`
-
-**Request Body:**
 ```json
 {
   "model": "chat-pro",
-  "messages": [
-    {"role": "system", "content": "You are a helpful assistant."},
-    {"role": "user", "content": "Explain quantum computing."}
-  ],
-  "temperature": 0.7,
-  "max_tokens": 256,
-  "stream": false
+  "messages": [{"role": "user", "content": "Tell me a story"}],
+  "stream": true
 }
 ```
 
-**Response:**
-```json
-{
-  "id": "chatcmpl-123",
-  "object": "chat.completion",
-  "created": 1700000000,
-  "model": "llama-3.3-70b-versatile",
-  "choices": [{
-    "index": 0,
-    "message": {
-      "role": "assistant",
-      "content": "Quantum computing uses quantum bits..."
-    },
-    "finish_reason": "stop"
-  }],
-  "usage": {
-    "prompt_tokens": 15,
-    "completion_tokens": 50,
-    "total_tokens": 65
-  }
-}
-```
-
-**Response Headers:**
-- `X-Gateway-Provider`: groq
-- `X-Gateway-Model`: llama-3.3-70b-versatile
-- `X-Gateway-Attempts`: 1
-
-### Streaming
-
-Set `stream: true` in your request. Response will be sent as Server-Sent Events:
+Response is sent as Server-Sent Events:
 
 ```
-data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello"}}]}
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"Once"}}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":" upon"}}]}
 
 data: [DONE]
 ```
@@ -375,6 +318,18 @@ data: [DONE]
   "error": {
     "type": "circuit_breaker_error",
     "message": "Provider temporarily unavailable"
+  }
+}
+```
+
+**All Providers Failed:**
+
+```json
+{
+  "error": {
+    "type": "gateway_error",
+    "code": "ALL_ATTEMPTS_FAILED",
+    "message": "All provider attempts failed"
   }
 }
 ```
@@ -383,60 +338,18 @@ data: [DONE]
 
 ## Routing Logic
 
-See [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for details.
+The gateway uses a 6-stage pipeline to select the optimal provider:
 
-### The 6 Routing Steps
+1. **Derive Requirements** - Figure out what the request needs (streaming, JSON, tools)
+2. **Generate Candidates** - Find available provider/model combinations
+3. **Filter** - Remove candidates that can't handle the request
+4. **Score & Sort** - Rank by preference and health
+5. **Compile Plan** - Create execution plan with fallback order
+6. **Execute** - Call provider, retry on failure
 
-1. **Derive Requirements** - Figure out what the request needs
-2. **Generate Candidates** - Find available provider/model options
-3. **Filter** - Remove options that can't handle the request
-4. **Score & Sort** - Rank remaining options by preference and health
-5. **Compile Plan** - Create a fallback plan
-6. **Execute** - Call the provider, fall back on errors
+See [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for detailed documentation.
 
 ---
-
-## Deployment
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for full instructions.
-
-### Build Docker Image
-
-```bash
-docker build -t llm-gateway:latest .
-```
-
-### Run Docker Container
-
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -e GATEWAY_API_KEY=${GATEWAY_API_KEY} \
-  -e GROQ_API_KEY=${GROQ_API_KEY} \
-  -e REDIS_URL=redis://host:6379 \
-  llm-gateway:latest
-```
-
-### Docker Compose
-
-```yaml
-version: "3.8"
-services:
-  gateway:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      - GATEWAY_API_KEY=${GATEWAY_API_KEY}
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-  
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-```
 
 ## Monitoring
 
@@ -446,11 +359,11 @@ services:
 curl http://localhost:8080/health
 ```
 
-Returns system health and provider status.
+Returns circuit breaker state and health scores per provider.
 
 ### Logging
 
-Logs include request ID, provider, latency, and token usage:
+All logs are JSON with request context:
 
 ```json
 {
@@ -463,6 +376,13 @@ Logs include request ID, provider, latency, and token usage:
 }
 ```
 
+Key log fields:
+- `request_id` - Unique request identifier
+- `provider` - Provider used
+- `model` - Model used
+- `latency_ms` - Request latency
+- `attempts` - Number of providers tried
+
 ---
 
 ## Troubleshooting
@@ -473,7 +393,7 @@ Logs include request ID, provider, latency, and token usage:
 
 **Check:**
 1. All required API keys are set
-2. GATEWAY_API_KEY is at least 32 characters
+2. `GATEWAY_API_KEY` is at least 32 characters
 3. Redis is accessible
 
 ```bash
@@ -517,6 +437,5 @@ LOG_LEVEL=debug go run ./cmd/gateway
 
 ### Get Help
 
-- Check [CHANGELOG.md](./CHANGELOG.md) for known issues
 - Check [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for routing details
 - View logs with `docker-compose logs -f`
