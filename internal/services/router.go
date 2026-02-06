@@ -16,18 +16,32 @@ import (
 
 type Router struct {
 	config          types.AppConfig
-	quotaService    *QuotaService
-	healthService   *HealthService
-	providerService *ProviderService
+	quotaService    QuotaChecker
+	healthService   HealthChecker
+	providerService ProviderCaller
 }
 
 func NewRouter(
-	quotaSvc *QuotaService,
-	healthSvc *HealthService,
-	providerSvc *ProviderService,
+	quotaSvc QuotaChecker,
+	healthSvc HealthChecker,
+	providerSvc ProviderCaller,
 ) *Router {
 	return &Router{
 		config:          config.LoadConfig(),
+		quotaService:    quotaSvc,
+		healthService:   healthSvc,
+		providerService: providerSvc,
+	}
+}
+
+func NewRouterWithConfig(
+	cfg types.AppConfig,
+	quotaSvc QuotaChecker,
+	healthSvc HealthChecker,
+	providerSvc ProviderCaller,
+) *Router {
+	return &Router{
+		config:          cfg,
 		quotaService:    quotaSvc,
 		healthService:   healthSvc,
 		providerService: providerSvc,
