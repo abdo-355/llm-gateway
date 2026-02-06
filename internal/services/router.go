@@ -11,25 +11,47 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/types"
+	"github.com/rs/zerolog/log"
 )
 
 type Router struct {
 	config          types.AppConfig
-	quotaService    *QuotaService
-	healthService   *HealthService
-	providerService *ProviderService
+	quotaService    QuotaChecker
+	healthService   HealthChecker
+	providerService ProviderCaller
 }
 
-func NewRouter() *Router {
+func NewRouter(
+	quotaSvc QuotaChecker,
+	healthSvc HealthChecker,
+	providerSvc ProviderCaller,
+) *Router {
 	return &Router{
 		config:          config.LoadConfig(),
-		quotaService:    GetQuotaService(),
-		healthService:   GetHealthService(),
-		providerService: GetProviderService(),
+		quotaService:    quotaSvc,
+		healthService:   healthSvc,
+		providerService: providerSvc,
 	}
 }
 
-// Stage 1: Derive Requirements
+func NewRouterWithConfig(
+	cfg types.AppConfig,
+	quotaSvc QuotaChecker,
+	healthSvc HealthChecker,
+	providerSvc ProviderCaller,
+) *Router {
+	return &Router{
+		config:          cfg,
+		quotaService:    quotaSvc,
+		healthService:   healthSvc,
+		providerService: providerSvc,
+	}
+}
+
+// DeriveRequirements normalizes the raw request fields (response_format, stream, tools, tool_choice)
+// into a uniform set of requirement categories (output, streaming, tools) so that downstream stages
+// can filter and score providers generically without re-inspecting every request field combination.
+// Router hints can override the auto-detected values.
 func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
 	requirements := types.DerivedRequirements{
 		Output:    "text",
@@ -119,9 +141,12 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if provider == nil {
-			logger.Warn("Provider not found for logical model candidate",
-				"provider", candidate.Provider,
-				"model", logicalModel.ID)
+			log.Warn().
+				Str("type", "router").
+				Str("event", "logical_model.provider_not_found").
+				Str("provider", candidate.Provider).
+				Str("logical_model", logicalModel.ID).
+				Msg("Provider not found for logical model candidate")
 			continue
 		}
 
@@ -129,9 +154,12 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		found := slices.Contains(provider.Models.List, candidate.Model)
 
 		if !found {
-			logger.Warn("Model not found in provider for logical model candidate",
-				"provider", candidate.Provider,
-				"model", candidate.Model)
+			log.Warn().
+				Str("type", "router").
+				Str("event", "logical_model.model_not_found").
+				Str("provider", candidate.Provider).
+				Str("model", candidate.Model).
+				Msg("Model not found in provider for logical model candidate")
 			continue
 		}
 
@@ -153,6 +181,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 
 // Stage 3: Filter Candidates
 func (r *Router) FilterCandidates(
+	ctx context.Context,
 	candidates []types.RoutingCandidate,
 	requirements types.DerivedRequirements,
 	req types.ChatCompletionRequest,
@@ -207,7 +236,7 @@ func (r *Router) FilterCandidates(
 		}
 
 		// Check circuit breaker
-		if !r.healthService.CanExecute(provider.ID) {
+		if !r.healthService.CanExecute(ctx, provider.ID, model) {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
 			continue
 		}
@@ -216,7 +245,7 @@ func (r *Router) FilterCandidates(
 		modelLimits := provider.Models.Limits[model]
 		estimatedTokens := r.quotaService.EstimateTokens(req)
 
-		if err := r.quotaService.CheckModelQuota(provider.ID, model, modelLimits, estimatedTokens); err != nil {
+		if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, estimatedTokens); err != nil {
 			if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
 				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
 			} else {
@@ -232,7 +261,7 @@ func (r *Router) FilterCandidates(
 }
 
 // Stage 4: Score Candidates
-func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
 	for i := range candidates {
 		candidate := &candidates[i]
 		baseScore := 1.0
@@ -250,7 +279,7 @@ func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *typ
 		}
 
 		// Health score
-		metrics := r.healthService.GetHealthMetrics(candidate.Provider.ID)
+		metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
 		healthScore := metrics.HealthScore
 		candidate.ScoreBreakdown["health_score"] = healthScore
 
@@ -258,14 +287,15 @@ func (r *Router) ScoreCandidates(candidates []types.RoutingCandidate, hints *typ
 		candidate.Score = baseScore*0.5 + healthScore*0.5 + candidate.Score
 	}
 
-	// Sort by score (bubble sort for simplicity)
-	for i := range candidates {
-		for j := i + 1; j < len(candidates); j++ {
-			if candidates[j].Score > candidates[i].Score {
-				candidates[i], candidates[j] = candidates[j], candidates[i]
-			}
+	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
+		if a.Score > b.Score {
+			return -1
 		}
-	}
+		if a.Score < b.Score {
+			return 1
+		}
+		return 0
+	})
 
 	return candidates
 }
@@ -361,6 +391,7 @@ func (r *Router) CompilePlan(
 
 // Stage 6: Execute
 func (r *Router) Execute(
+	ctx context.Context,
 	plan types.RoutingPlan,
 	req types.ChatCompletionRequest,
 	requestID string,
@@ -368,24 +399,31 @@ func (r *Router) Execute(
 	startTime := time.Now()
 
 	for i, attempt := range plan.Attempts {
-		// Check hard timeout
 		if plan.HardTimeoutMs != nil {
 			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
 				return nil, errors.NewTimeoutError("Hard timeout exceeded", "request")
 			}
 		}
 
-		// Create context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
+		logger.Info().
+			Str("type", "router").
+			Str("event", "attempt.start").
+			Str("request_id", requestID).
+			Int("attempt", i+1).
+			Str("provider", attempt.ProviderID).
+			Str("model", attempt.Model).
+			Float64("score", attempt.Score).
+			Msg("Trying provider")
 
-		// Make request
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+
 		resp, err := r.providerService.CallProvider(
 			attempt.BaseURL,
 			attempt.APIKey,
 			attempt.Model,
 			req,
 			attempt.TimeoutMs,
-			ctx,
+			attemptCtx,
 			attempt.ProviderType,
 			attempt.Auth,
 		)
@@ -395,17 +433,26 @@ func (r *Router) Execute(
 		latencyMs := time.Since(startTime).Milliseconds()
 
 		if err == nil {
-			// Success
-			r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
+			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
-			// Record token usage (estimate if not provided)
 			tokensUsed := 0
 			if resp.Usage != nil {
 				tokensUsed = resp.Usage.TotalTokens
 			} else {
 				tokensUsed = r.quotaService.EstimateTokens(req)
 			}
-			r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
+			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+
+			logger.Info().
+				Str("type", "router").
+				Str("event", "attempt.success").
+				Str("request_id", requestID).
+				Str("provider", attempt.ProviderID).
+				Str("model", attempt.Model).
+				Int64("latency_ms", latencyMs).
+				Int("tokens", tokensUsed).
+				Int("attempts", i+1).
+				Msg("Request completed")
 
 			return &types.ExecutionResult{
 				Response:   *resp,
@@ -416,17 +463,23 @@ func (r *Router) Execute(
 			}, nil
 		}
 
-		// Handle error
-		r.healthService.RecordFailure(attempt.ProviderID)
+		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
 
-		// Check if should retry
+		logger.Warn().
+			Str("type", "router").
+			Str("event", "attempt.failed").
+			Str("request_id", requestID).
+			Str("provider", attempt.ProviderID).
+			Str("model", attempt.Model).
+			Err(err).
+			Msg("Provider attempt failed")
+
 		if !r.ShouldRetry(err, plan, i) {
 			return nil, r.CreateGatewayError(err, i+1, requestID)
 		}
 
-		// Handle rate limit
 		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-			r.quotaService.HandleProviderRateLimit(attempt.ProviderID, attempt.Model, &http.Response{
+			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
 				StatusCode: 429,
 				Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", rateLimitErr.RetryAfter)}},
 			})
@@ -442,76 +495,85 @@ func (r *Router) Execute(
 
 // ExecuteStream executes a streaming request
 func (r *Router) ExecuteStream(
+	ctx context.Context,
 	plan types.RoutingPlan,
 	req types.ChatCompletionRequest,
 	requestID string,
-	onChunk func(*types.SSEChunk),
-	onComplete func(),
-	onError func(*types.GatewayError),
-) {
-	startTime := time.Now()
+) types.StreamResult {
+	chunks := make(chan *types.SSEChunk)
+	errChan := make(chan *types.GatewayError, 1)
 
-	for i, attempt := range plan.Attempts {
-		// Check hard timeout
-		if plan.HardTimeoutMs != nil {
-			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
-				onError(&types.GatewayError{
-					Type:    "gateway_error",
-					Code:    "HARD_TIMEOUT",
-					Message: "Hard timeout exceeded",
-				})
+	go func() {
+		defer close(chunks)
+		defer close(errChan)
+
+		startTime := time.Now()
+
+		for _, attempt := range plan.Attempts {
+			if plan.HardTimeoutMs != nil {
+				if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
+					errChan <- &types.GatewayError{
+						Type:    "gateway_error",
+						Code:    "HARD_TIMEOUT",
+						Message: "Hard timeout exceeded",
+					}
+					return
+				}
+			}
+
+			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+
+			result := r.providerService.StreamProviderChannel(
+				attempt.BaseURL,
+				attempt.APIKey,
+				attempt.Model,
+				req,
+				attempt.TimeoutMs,
+				attemptCtx,
+				attempt.ProviderType,
+				attempt.Auth,
+			)
+
+			for chunk := range result.Chunks {
+				select {
+				case chunks <- chunk:
+				default:
+				}
+			}
+
+			err := <-result.Err
+			cancel()
+
+			latencyMs := time.Since(startTime).Milliseconds()
+
+			if err == nil {
+				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+				tokensUsed := r.quotaService.EstimateTokens(req)
+				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 				return
+			}
+
+			r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+
+			if err.Code == "RATE_LIMITED" {
+				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
+					StatusCode: 429,
+					Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", 1)}},
+				})
 			}
 		}
 
-		// Create context
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(attempt.TimeoutMs)*time.Millisecond)
-
-		// Make streaming request
-		err := r.providerService.StreamProvider(
-			attempt.BaseURL,
-			attempt.APIKey,
-			attempt.Model,
-			req,
-			attempt.TimeoutMs,
-			func(chunk *types.SSEChunk) {
-				onChunk(chunk)
-			},
-			ctx,
-			attempt.ProviderType,
-			attempt.Auth,
-		)
-
-		cancel()
-
-		latencyMs := time.Since(startTime).Milliseconds()
-
-		if err == nil {
-			// Success
-			r.healthService.RecordSuccess(attempt.ProviderID, int(latencyMs))
-
-			tokensUsed := r.quotaService.EstimateTokens(req)
-			r.quotaService.RecordModelUsage(attempt.ProviderID, attempt.Model, tokensUsed)
-
-			onComplete()
-			return
+		errChan <- &types.GatewayError{
+			Type:    "gateway_error",
+			Code:    "ALL_ATTEMPTS_FAILED",
+			Message: "All provider attempts failed",
 		}
+	}()
 
-		// Handle error
-		r.healthService.RecordFailure(attempt.ProviderID)
-
-		// Check if should retry
-		if !r.ShouldRetry(err, plan, i) {
-			onError(r.CreateGatewayError(err, i+1, requestID))
-			return
-		}
+	return types.StreamResult{
+		Chunks: chunks,
+		Err:    errChan,
 	}
-
-	onError(&types.GatewayError{
-		Type:    "gateway_error",
-		Code:    "ALL_ATTEMPTS_FAILED",
-		Message: "All provider attempts failed",
-	})
 }
 
 // ShouldRetry determines if an error should trigger a retry
@@ -615,10 +677,4 @@ func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {
 		}
 	}
 	return false
-}
-
-var router = NewRouter()
-
-func GetRouter() *Router {
-	return router
 }
