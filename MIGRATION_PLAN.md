@@ -69,7 +69,7 @@ Test files should be **co-located** with source files:
 | 3    | `task-3/http-layer`    | ✅ Complete    | abdo-355    |
 | 4    | `task-4/testing`       | ✅ Complete    | abdo-355    |
 | 5    | `task-5/deployment`    | ✅ Complete    | abdo-355    |
-| 6    | `task-6/finalization`  | ⬜ Not Started |             |
+| 6    | `task-6/finalization`  | ✅ Complete    | abdo-355    |
 
 **Legend**: ⬜ Not Started | 🟡 In Progress | ✅ Complete
 
