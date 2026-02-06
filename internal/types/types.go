@@ -61,8 +61,9 @@ type JSONSchema struct {
 }
 
 type ChatCompletionRequest struct {
-	Messages            []OpenAIMessage   `json:"messages"`
 	Model               string            `json:"model"`
+	Messages            []OpenAIMessage   `json:"messages"`
+	Temperature         *float64          `json:"temperature,omitempty"`
 	FrequencyPenalty    *float64          `json:"frequency_penalty,omitempty"`
 	LogitBias           map[string]int    `json:"logit_bias,omitempty"`
 	Logprobs            *bool             `json:"logprobs,omitempty"`
@@ -76,7 +77,6 @@ type ChatCompletionRequest struct {
 	Stop                any               `json:"stop,omitempty"` // string or []string
 	Stream              *bool             `json:"stream,omitempty"`
 	StreamOptions       *StreamOptions    `json:"stream_options,omitempty"`
-	Temperature         *float64          `json:"temperature,omitempty"`
 	TopP                *float64          `json:"top_p,omitempty"`
 	Tools               []OpenAITool      `json:"tools,omitempty"`
 	ToolChoice          any               `json:"tool_choice,omitempty"` // none, auto, required, or object

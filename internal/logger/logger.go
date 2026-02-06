@@ -13,15 +13,18 @@ var log *zerolog.Logger
 func Init(serviceName, env string) {
 	isProduction := strings.EqualFold(env, "production")
 
-	l := zerolog.New(os.Stdout).With().
-		Str("service", serviceName).
-		Str("env", strings.ToLower(env)).
-		Logger()
+	var l zerolog.Logger
 
 	if isProduction {
 		zerolog.TimeFieldFormat = time.RFC3339Nano
+		l = zerolog.New(os.Stdout).With().
+			Timestamp().
+			Str("service", serviceName).
+			Str("env", strings.ToLower(env)).
+			Logger()
 	} else {
 		l = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().
+			Timestamp().
 			Str("service", serviceName).
 			Str("env", strings.ToLower(env)).
 			Logger()

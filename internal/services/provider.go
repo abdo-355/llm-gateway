@@ -75,25 +75,6 @@ func (s *ProviderService) CallProvider(
 	return s.handleResponse(resp, providerType, request, model)
 }
 
-// StreamProvider makes a streaming request to a provider using callbacks
-func (s *ProviderService) StreamProvider(
-	baseURL, apiKey, model string,
-	request types.ChatCompletionRequest,
-	timeoutMs int,
-	onChunk func(*types.SSEChunk),
-	ctx context.Context,
-	providerType string,
-	auth types.ProviderAuth,
-) error {
-	result := s.StreamProviderChannel(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
-
-	for chunk := range result.Chunks {
-		onChunk(chunk)
-	}
-
-	return <-result.Err
-}
-
 // StreamProviderChannel makes a streaming request to a provider using channels
 func (s *ProviderService) StreamProviderChannel(
 	baseURL, apiKey, model string,
@@ -152,7 +133,7 @@ func (s *ProviderService) StreamProviderChannel(
 			return
 		}
 
-		if err := s.parseSSEStreamChannel(resp.Body, chunks); err != nil {
+		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
 		}
 	}()
@@ -429,98 +410,84 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response) error {
 	}
 }
 
-func (s *ProviderService) parseSSEStream(reader io.Reader, onChunk func(*types.SSEChunk), _ string) error {
-	scanner := bufio.NewScanner(reader)
-	inactivityTimeout := 60 * time.Second
-	lastActivity := time.Now()
+func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk) error {
+	scanner := bufio.NewScanner(body)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		lastActivity = time.Now()
+	lineCh := make(chan string)
+	scanErrCh := make(chan error, 1)
 
-		// Check for inactivity timeout
-		if time.Since(lastActivity) > inactivityTimeout {
-			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
+	go func() {
+		defer close(lineCh)
+		for scanner.Scan() {
+			lineCh <- scanner.Text()
 		}
+		scanErrCh <- scanner.Err()
+	}()
 
-		// Skip empty lines
-		if line == "" {
-			continue
+	inactivity := 60 * time.Second
+	timer := time.NewTimer(inactivity)
+	defer timer.Stop()
+
+	resetTimer := func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
 		}
-
-		// Parse SSE data
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		data := strings.TrimPrefix(line, "data: ")
-
-		// Check for stream end
-		if data == "[DONE]" {
-			return nil
-		}
-
-		// Parse chunk
-		var chunk types.SSEChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			logger.Error().
-				Str("type", "http").
-				Str("event", "sse.parse_failed").
-				Err(err).
-				Str("data", data).
-				Msg("Failed to parse SSE chunk")
-			continue
-		}
-
-		onChunk(&chunk)
+		timer.Reset(inactivity)
 	}
 
-	return scanner.Err()
-}
-
-func (s *ProviderService) parseSSEStreamChannel(reader io.Reader, chunks chan<- *types.SSEChunk) error {
-	scanner := bufio.NewScanner(reader)
-	inactivityTimeout := 60 * time.Second
-	lastActivity := time.Now()
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		lastActivity = time.Now()
-
-		if time.Since(lastActivity) > inactivityTimeout {
-			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
-		}
-
-		if line == "" {
-			continue
-		}
-
-		if !strings.HasPrefix(line, "data: ") {
-			continue
-		}
-
-		data := strings.TrimPrefix(line, "data: ")
-
-		if data == "[DONE]" {
-			return nil
-		}
-
-		var chunk types.SSEChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			logger.Error().
-				Str("type", "http").
-				Str("event", "sse.parse_failed").
-				Err(err).
-				Str("data", data).
-				Msg("Failed to parse SSE chunk")
-			continue
-		}
-
+	for {
 		select {
-		case chunks <- &chunk:
-		default:
+		case <-ctx.Done():
+			body.Close()
+			return ctx.Err()
+
+		case <-timer.C:
+			body.Close()
+			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
+
+		case line, ok := <-lineCh:
+			if !ok {
+				return <-scanErrCh
+			}
+
+			resetTimer()
+
+			if line == "" {
+				continue
+			}
+
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+
+			if data == "[DONE]" {
+				return nil
+			}
+
+			var chunk types.SSEChunk
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				logger.Error().
+					Str("type", "http").
+					Str("event", "sse.parse_failed").
+					Err(err).
+					Str("data", data).
+					Msg("Failed to parse SSE chunk")
+				continue
+			}
+
+			select {
+			case chunks <- &chunk:
+			case <-ctx.Done():
+				body.Close()
+				return ctx.Err()
+			}
 		}
 	}
-
-	return scanner.Err()
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
@@ -99,7 +100,7 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 	pipe.Get(ctx, keys.TPMU)
 
 	results, err := pipe.Exec(ctx)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		logger.Error().
 			Str("type", "db").
 			Str("event", "quota.check_failed").
@@ -109,53 +110,31 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 	}
 
 	status := s.parseResults(results)
-	if limits.Rpm != nil && status.Rpm+1 > *limits.Rpm {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPM limit exceeded: %d/%d", status.Rpm, *limits.Rpm),
-			providerID, model, "rpm",
-		)
+
+	type quotaCheck struct {
+		name    string
+		current int
+		limit   *int
+		adding  int
 	}
 
-	if limits.Rph != nil && status.Rph+1 > *limits.Rph {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPH limit exceeded: %d/%d", status.Rph, *limits.Rph),
-			providerID, model, "rph",
-		)
+	checks := []quotaCheck{
+		{"rpm", status.Rpm, limits.Rpm, 1},
+		{"rph", status.Rph, limits.Rph, 1},
+		{"rpd", status.Rpd, limits.Rpd, 1},
+		{"tpm", status.Tpm, limits.Tpm, estimatedTokens},
+		{"tph", status.Tph, limits.Tph, estimatedTokens},
+		{"tpd", status.Tpd, limits.Tpd, estimatedTokens},
+		{"tpmu", status.Tpmu, limits.Tpmu, estimatedTokens},
 	}
 
-	if limits.Rpd != nil && status.Rpd+1 > *limits.Rpd {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("RPD limit exceeded: %d/%d", status.Rpd, *limits.Rpd),
-			providerID, model, "rpd",
-		)
-	}
-
-	if limits.Tpm != nil && status.Tpm+estimatedTokens > *limits.Tpm {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPM limit exceeded: %d/%d (est: %d)", status.Tpm, *limits.Tpm, estimatedTokens),
-			providerID, model, "tpm",
-		)
-	}
-
-	if limits.Tph != nil && status.Tph+estimatedTokens > *limits.Tph {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPH limit exceeded: %d/%d (est: %d)", status.Tph, *limits.Tph, estimatedTokens),
-			providerID, model, "tph",
-		)
-	}
-
-	if limits.Tpd != nil && status.Tpd+estimatedTokens > *limits.Tpd {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPD limit exceeded: %d/%d (est: %d)", status.Tpd, *limits.Tpd, estimatedTokens),
-			providerID, model, "tpd",
-		)
-	}
-
-	if limits.Tpmu != nil && status.Tpmu+estimatedTokens > *limits.Tpmu {
-		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("TPMU limit exceeded: %d/%d (est: %d)", status.Tpmu, *limits.Tpmu, estimatedTokens),
-			providerID, model, "tpmu",
-		)
+	for _, check := range checks {
+		if check.limit != nil && check.current+check.adding > *check.limit {
+			return errors.NewModelQuotaExceededError(
+				fmt.Sprintf("%s limit exceeded: %d/%d", strings.ToUpper(check.name), check.current, *check.limit),
+				providerID, model, check.name,
+			)
+		}
 	}
 
 	return nil
@@ -266,7 +245,7 @@ func (s *QuotaService) GetModelQuotaStatus(ctx context.Context, providerID, mode
 	pipe.Get(ctx, keys.TPMU)
 
 	results, err := pipe.Exec(ctx)
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		logger.Error().
 			Str("type", "db").
 			Str("event", "quota.status_failed").

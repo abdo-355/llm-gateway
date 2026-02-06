@@ -13,24 +13,26 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/handlers"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/middleware"
+	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
+
+type Services struct {
+	Router *services.Router
+	Health *services.HealthService
+	Redis  *redis.Client
+}
 
 type Server struct {
 	*http.Server
 }
 
-func New(
-	healthHandler *handlers.HealthHandler,
-	completionsHandler *handlers.CompletionsHandler,
-	metricsHandler *handlers.MetricsHandler,
-	authMiddleware gin.HandlerFunc,
-	rateLimitMiddleware gin.HandlerFunc,
-) *Server {
+func New(svc Services) *Server {
 	env := config.GetEnv()
 
-	// Set Gin mode BEFORE creating router
 	if strings.EqualFold(env.Environment, "production") {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
@@ -40,17 +42,20 @@ func New(
 	r := gin.New()
 
 	r.Use(requestid.New())
+	r.Use(middleware.CORS())
+	r.Use(middleware.Helmet())
 	r.Use(accessLogMiddleware())
+	r.Use(middleware.ErrorHandler())
 	r.Use(gin.Recovery())
 
-	r.GET("/health", healthHandler.Health)
+	r.GET("/health", handlers.Health(svc.Health))
 
-	r.Use(rateLimitMiddleware)
+	rateLimiter := middleware.NewRateLimiter(svc.Redis)
+	r.Use(rateLimiter.RateLimit())
 
 	authorized := r.Group("/")
-	authorized.Use(authMiddleware)
-	authorized.POST("/v1/chat/completions", completionsHandler.Completions)
-	authorized.GET("/v1/metrics", metricsHandler.Metrics)
+	authorized.Use(middleware.Auth())
+	authorized.POST("/v1/chat/completions", handlers.Completions(svc.Router))
 
 	return &Server{
 		Server: &http.Server{
@@ -117,7 +122,7 @@ func accessLogMiddleware() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 		clientIP := c.ClientIP()
-		requestID := requestid.Get(c)
+		reqID := requestid.Get(c)
 
 		if path == "/health" {
 			return
@@ -131,7 +136,7 @@ func accessLogMiddleware() gin.HandlerFunc {
 			Int("status", status).
 			Str("client_ip", clientIP).
 			Str("latency", latency.String()).
-			Str("request_id", requestID).
+			Str("request_id", reqID).
 			Msg("HTTP request completed")
 	}
 }
