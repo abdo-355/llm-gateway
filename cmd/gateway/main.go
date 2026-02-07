@@ -20,9 +20,7 @@ func main() {
 	env := config.GetEnv()
 	logger.Init("llm-gateway", env.Environment)
 
-	if err := services.InitVertexAuth(context.Background()); err != nil {
-		log.Printf("Warning: Vertex ADC not available: %v", err)
-	}
+	services.InitVertexAuth(context.Background())
 
 	redisClient := db.NewRedisClient()
 
