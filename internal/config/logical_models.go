@@ -71,8 +71,8 @@ func getChatMaxConfig() types.LogicalModelConfig {
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: weightHigh},
 			{Provider: "mistral", Model: "open-mixtral-8x22b", Weight: weightHigh},
 			{Provider: "mistral", Model: "open-mixtral-8x22b-2404", Weight: weightHigh},
-			{Provider: "vertex", Model: "gemini-3-pro-preview", Weight: weightMedium},
-			{Provider: "vertex", Model: "gemini-3-flash-preview", Weight: weightMedium},
+			{Provider: "vertex", Model: "google/gemini-3-pro-preview", Weight: weightMedium},
+			{Provider: "vertex", Model: "google/gemini-3-flash-preview", Weight: weightMedium},
 		},
 	}
 }
@@ -88,7 +88,7 @@ func getAnalysisProConfig() types.LogicalModelConfig {
 			{Provider: "groq", Model: "gpt-oss-120b", Weight: weightHigh},
 			{Provider: "groq", Model: "llama-4-maverick-17b-128e-instruct", Weight: weightHigh},
 			{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", Weight: weightHigh},
-			{Provider: "vertex", Model: "gemini-3-pro-preview", Weight: weightMedium},
+			{Provider: "vertex", Model: "google/gemini-3-pro-preview", Weight: weightMedium},
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: weightMedium},
 		},
 	}
@@ -121,8 +121,8 @@ func getJsonSafeConfig() types.LogicalModelConfig {
 		TaskType: "json_extraction",
 		Candidates: []types.LogicalModelCandidate{
 			{Provider: "mistral", Model: "mistral-large-latest", Weight: weightHigh},
-			{Provider: "vertex", Model: "gemini-3-pro-preview", Weight: weightHigh},
-			{Provider: "vertex", Model: "gemini-3-flash-preview", Weight: weightHigh},
+			{Provider: "vertex", Model: "google/gemini-3-pro-preview", Weight: weightHigh},
+			{Provider: "vertex", Model: "google/gemini-3-flash-preview", Weight: weightHigh},
 			{Provider: "mistral", Model: "ministral-8b-latest", Weight: weightMedium},
 			{Provider: "mistral", Model: "ministral-3b-latest", Weight: weightMedium},
 		},
@@ -159,7 +159,7 @@ func getCodeProConfig() types.LogicalModelConfig {
 			{Provider: "mistral", Model: "mistral-large-latest", Weight: weightHigh},
 			{Provider: "groq", Model: "gpt-oss-120b", Weight: weightHigh},
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: weightMedium},
-			{Provider: "vertex", Model: "gemini-3-pro-preview", Weight: weightMedium},
+			{Provider: "vertex", Model: "google/gemini-3-pro-preview", Weight: weightMedium},
 		},
 	}
 }
@@ -173,7 +173,7 @@ func getToolsProConfig() types.LogicalModelConfig {
 		TaskType: "tool_orchestration",
 		Candidates: []types.LogicalModelCandidate{
 			{Provider: "mistral", Model: "mistral-large-latest", Weight: weightHigh},
-			{Provider: "vertex", Model: "gemini-3-pro-preview", Weight: weightHigh},
+			{Provider: "vertex", Model: "google/gemini-3-pro-preview", Weight: weightHigh},
 			{Provider: "mistral", Model: "mistral-medium-latest", Weight: weightMedium},
 			{Provider: "groq", Model: "llama-4-maverick-17b-128e-instruct", Weight: weightMedium},
 			{Provider: "cerebras", Model: "llama-3.3-70b", Weight: weightMedium},

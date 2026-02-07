@@ -9,6 +9,7 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -246,6 +247,7 @@ func (s *HealthService) setCircuitState(ctx context.Context, providerID, model s
 	prefix := s.keyPrefix(providerID, model)
 	stateKey := fmt.Sprintf("circuit:%s:state", prefix)
 	s.redis.Set(ctx, stateKey, string(state), 24*time.Hour)
+	metrics.CircuitBreakerState.WithLabelValues(providerID).Set(metrics.CircuitStateToFloat64(string(state)))
 }
 
 func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string) {

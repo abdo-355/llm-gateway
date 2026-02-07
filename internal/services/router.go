@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/rs/zerolog/log"
 )
@@ -350,10 +352,16 @@ func (r *Router) CompilePlan(
 			apiKey = config.GetEnv().GoogleVertexAPIKey
 		}
 
+		// Build the base URL, replacing placeholders for Vertex
+		baseURL := candidate.Provider.BaseURL
+		if candidate.Provider.ID == "vertex" {
+			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", config.GetEnv().GoogleVertexProjectID)
+		}
+
 		attempts = append(attempts, types.RoutingAttempt{
 			ProviderID:   candidate.Provider.ID,
 			Model:        candidate.Model,
-			BaseURL:      candidate.Provider.BaseURL,
+			BaseURL:      baseURL,
 			APIKey:       apiKey,
 			Score:        candidate.Score,
 			TimeoutMs:    timeoutMs,
@@ -443,6 +451,14 @@ func (r *Router) Execute(
 			}
 			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
+			metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "success").Inc()
+			metrics.ProviderLatencySeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
+			if resp.Usage != nil {
+				metrics.ProviderTokensTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "prompt").Add(float64(resp.Usage.PromptTokens))
+				metrics.ProviderTokensTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "completion").Add(float64(resp.Usage.CompletionTokens))
+			}
+			metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(i + 1))
+
 			logger.Info().
 				Str("type", "router").
 				Str("event", "attempt.success").
@@ -465,6 +481,17 @@ func (r *Router) Execute(
 
 		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
 
+		var status string
+		switch err.(type) {
+		case *errors.RateLimitError:
+			status = "rate_limited"
+		case *errors.TimeoutError:
+			status = "timeout"
+		default:
+			status = "error"
+		}
+		metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, status).Inc()
+
 		logger.Warn().
 			Str("type", "router").
 			Str("event", "attempt.failed").
@@ -485,6 +512,8 @@ func (r *Router) Execute(
 			})
 		}
 	}
+
+	metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(len(plan.Attempts)))
 
 	return nil, &types.GatewayError{
 		Type:    "gateway_error",
@@ -508,8 +537,11 @@ func (r *Router) ExecuteStream(
 		defer close(errChan)
 
 		startTime := time.Now()
+		var ttfbRecorded bool
+		var streamProvider, streamModel string
+		_, _ = streamProvider, streamModel
 
-		for _, attempt := range plan.Attempts {
+		for i, attempt := range plan.Attempts {
 			if plan.HardTimeoutMs != nil {
 				if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
 					errChan <- &types.GatewayError{
@@ -535,6 +567,12 @@ func (r *Router) ExecuteStream(
 			)
 
 			for chunk := range result.Chunks {
+				if !ttfbRecorded {
+					metrics.StreamTTFBSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(time.Since(startTime).Seconds())
+					ttfbRecorded = true
+					streamProvider = attempt.ProviderID
+					streamModel = attempt.Model
+				}
 				select {
 				case chunks <- chunk:
 				default:
@@ -550,10 +588,26 @@ func (r *Router) ExecuteStream(
 				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 				tokensUsed := r.quotaService.EstimateTokens(req)
 				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+				metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "success").Inc()
+				metrics.ProviderLatencySeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
+				metrics.StreamDurationSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
+				metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(i + 1))
 				return
 			}
 
 			r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+
+			var status string
+			switch err.Code {
+			case "RATE_LIMITED":
+				status = "rate_limited"
+			case "TIMEOUT", "HARD_TIMEOUT":
+				status = "timeout"
+			default:
+				status = "error"
+			}
+			metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, status).Inc()
+			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
 				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{

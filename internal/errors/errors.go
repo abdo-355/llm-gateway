@@ -137,3 +137,25 @@ func NewValidationError(message string, details []ValidationDetail) *ValidationE
 		Details: details,
 	}
 }
+
+type SchemaValidationError struct {
+	ProviderError
+	Field   string
+	Details string
+}
+
+func NewSchemaValidationError(field, message string) *SchemaValidationError {
+	return &SchemaValidationError{
+		ProviderError: ProviderError{
+			Message:     fmt.Sprintf("JSON schema validation failed for field '%s': %s", field, message),
+			StatusCode:  400,
+			IsRetryable: false,
+		},
+		Field:   field,
+		Details: message,
+	}
+}
+
+func (e *SchemaValidationError) Error() string {
+	return e.Message
+}
