@@ -8,6 +8,7 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/db"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
@@ -63,6 +64,7 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 		currentCount := results[1].(*redis.IntCmd).Val()
 
 		if currentCount >= int64(rl.maxRequests) {
+			metrics.RateLimitRejectionsTotal.Inc()
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": gin.H{
 					"type":    "rate_limit_error",

@@ -223,23 +223,22 @@ func getVertexConfig() types.ProviderConfig {
 
 	return types.ProviderConfig{
 		ID:      "vertex",
-		BaseURL: "https://aiplatform.googleapis.com/v1",
+		BaseURL: "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/endpoints/openapi",
 		Auth: types.ProviderAuth{
-			Type:       "header",
-			Env:        "GOOGLE_VERTEX_API_KEY",
-			HeaderName: "x-goog-api-key",
+			Type: "bearer",
+			Env:  "GOOGLE_VERTEX_API_KEY",
 		},
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"gemini-3-pro-preview",
-				"gemini-3-flash-preview",
+				"google/gemini-3-pro-preview",
+				"google/gemini-3-flash-preview",
 			},
 			Limits: map[string]types.ModelLimits{
-				"gemini-3-pro-preview": {
+				"google/gemini-3-pro-preview": {
 					Rpm: &rpm60,
 				},
-				"gemini-3-flash-preview": {
+				"google/gemini-3-flash-preview": {
 					Rpm: &rpm60,
 				},
 			},
@@ -247,10 +246,10 @@ func getVertexConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:         true,
 			Tools:             true,
-			StructuredOutputs: "json_schema_strict",
+			StructuredOutputs: "json_schema",
 		},
 		Limits:       types.ProviderLimits{},
-		ProviderType: "vertex",
+		ProviderType: "openai",
 	}
 }
 
@@ -266,8 +265,8 @@ func GetCertifications() []types.Certification {
 		{Provider: "mistral", Model: "open-mistral-nemo", StrictSchema: true},
 		{Provider: "mistral", Model: "open-mistral-nemo-2407", StrictSchema: true},
 		// Vertex models with strict JSON certification
-		{Provider: "vertex", Model: "gemini-3-pro-preview", StrictSchema: true},
-		{Provider: "vertex", Model: "gemini-3-flash-preview", StrictSchema: true},
+		{Provider: "vertex", Model: "google/gemini-3-pro-preview", StrictSchema: true},
+		{Provider: "vertex", Model: "google/gemini-3-flash-preview", StrictSchema: true},
 	}
 }
 

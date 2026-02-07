@@ -16,6 +16,9 @@ type EnvConfig struct {
 	MistralAPIKey      string
 	GoogleVertexAPIKey string
 
+	// Vertex OpenAI-compatible endpoint config (uses global location)
+	GoogleVertexProjectID string
+
 	RedisURL       string
 	RedisKeyPrefix string
 
@@ -71,19 +74,20 @@ func LoadEnv() (*EnvConfig, error) {
 	rateLimitGlobal := getEnvBool("RATE_LIMIT_GLOBAL", false)
 
 	return &EnvConfig{
-		Environment:        environment,
-		Port:               port,
-		GatewayAPIKey:      gatewayKey,
-		GroqAPIKey:         os.Getenv("GROQ_API_KEY"),
-		CerebrasAPIKey:     os.Getenv("CEREBRAS_API_KEY"),
-		MistralAPIKey:      os.Getenv("MISTRAL_API_KEY"),
-		GoogleVertexAPIKey: os.Getenv("GOOGLE_VERTEX_API_KEY"),
-		RedisURL:           getEnvString("REDIS_URL", "redis://localhost:6379"),
-		RedisKeyPrefix:     getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
-		RateLimitGlobal:    rateLimitGlobal,
-		RateLimitPerIP:     rateLimitPerIP,
-		RateLimitWindowMs:  rateLimitWindowMs,
-		CORSOrigins:        os.Getenv("CORS_ORIGINS"),
+		Environment:           environment,
+		Port:                  port,
+		GatewayAPIKey:         gatewayKey,
+		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
+		CerebrasAPIKey:        os.Getenv("CEREBRAS_API_KEY"),
+		MistralAPIKey:         os.Getenv("MISTRAL_API_KEY"),
+		GoogleVertexAPIKey:    os.Getenv("GOOGLE_VERTEX_API_KEY"),
+		GoogleVertexProjectID: os.Getenv("GOOGLE_VERTEX_PROJECT_ID"),
+		RedisURL:              getEnvString("REDIS_URL", "redis://localhost:6379"),
+		RedisKeyPrefix:        getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
+		RateLimitGlobal:       rateLimitGlobal,
+		RateLimitPerIP:        rateLimitPerIP,
+		RateLimitWindowMs:     rateLimitWindowMs,
+		CORSOrigins:           os.Getenv("CORS_ORIGINS"),
 	}, nil
 }
 
