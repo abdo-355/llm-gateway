@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
@@ -18,6 +19,10 @@ func main() {
 
 	env := config.GetEnv()
 	logger.Init("llm-gateway", env.Environment)
+
+	if err := services.InitVertexAuth(context.Background()); err != nil {
+		log.Printf("Warning: Vertex ADC not available: %v", err)
+	}
 
 	redisClient := db.NewRedisClient()
 

@@ -52,10 +52,8 @@ func (s *ProviderService) CallProvider(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	if auth.Type == "bearer" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-	} else if auth.Type == "header" && auth.HeaderName != "" {
-		req.Header.Set(auth.HeaderName, apiKey)
+	if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
+		return nil, err
 	}
 
 	// Make request with timeout
@@ -104,10 +102,9 @@ func (s *ProviderService) StreamProviderChannel(
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
 
-		if auth.Type == "bearer" {
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-		} else if auth.Type == "header" && auth.HeaderName != "" {
-			req.Header.Set(auth.HeaderName, apiKey)
+		if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
+			errChan <- &types.GatewayError{Type: "provider_error", Code: "AUTH_FAILED", Message: err.Error()}
+			return
 		}
 
 		client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
@@ -136,6 +133,24 @@ func (s *ProviderService) StreamProviderChannel(
 		Chunks: chunks,
 		Err:    errChan,
 	}
+}
+
+func (s *ProviderService) setAuth(ctx context.Context, req *http.Request, apiKey string, auth types.ProviderAuth) error {
+	switch auth.Type {
+	case "bearer":
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+	case "header":
+		if auth.HeaderName != "" {
+			req.Header.Set(auth.HeaderName, apiKey)
+		}
+	case "adc":
+		token, err := GetVertexToken(ctx)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	}
+	return nil
 }
 
 func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {

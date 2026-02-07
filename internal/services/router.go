@@ -348,8 +348,6 @@ func (r *Router) CompilePlan(
 			apiKey = config.GetEnv().CerebrasAPIKey
 		case "MISTRAL_API_KEY":
 			apiKey = config.GetEnv().MistralAPIKey
-		case "GOOGLE_VERTEX_API_KEY":
-			apiKey = config.GetEnv().GoogleVertexAPIKey
 		}
 
 		// Build the base URL, replacing placeholders for Vertex

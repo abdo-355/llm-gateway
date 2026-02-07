@@ -10,13 +10,11 @@ type EnvConfig struct {
 	Environment string
 	Port        int
 
-	GatewayAPIKey      string
-	GroqAPIKey         string
-	CerebrasAPIKey     string
-	MistralAPIKey      string
-	GoogleVertexAPIKey string
+	GatewayAPIKey  string
+	GroqAPIKey     string
+	CerebrasAPIKey string
+	MistralAPIKey  string
 
-	// Vertex OpenAI-compatible endpoint config (uses global location)
 	GoogleVertexProjectID string
 
 	RedisURL       string
@@ -35,7 +33,6 @@ func LoadEnv() (*EnvConfig, error) {
 		"GROQ_API_KEY",
 		"CEREBRAS_API_KEY",
 		"MISTRAL_API_KEY",
-		"GOOGLE_VERTEX_API_KEY",
 	}
 
 	var missing []string
@@ -80,7 +77,6 @@ func LoadEnv() (*EnvConfig, error) {
 		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
 		CerebrasAPIKey:        os.Getenv("CEREBRAS_API_KEY"),
 		MistralAPIKey:         os.Getenv("MISTRAL_API_KEY"),
-		GoogleVertexAPIKey:    os.Getenv("GOOGLE_VERTEX_API_KEY"),
 		GoogleVertexProjectID: os.Getenv("GOOGLE_VERTEX_PROJECT_ID"),
 		RedisURL:              getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:        getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
