@@ -321,7 +321,7 @@ func (r *Router) CompilePlan(
 	}
 
 	// Determine timeout
-	timeoutMs := 30000
+	timeoutMs := 60000
 	if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
 		timeoutMs = *hints.SLO.MaxLatencyMs
 	} else if logicalModelSLO != nil && logicalModelSLO.MaxLatencyMs != nil {
