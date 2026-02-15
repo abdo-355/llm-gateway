@@ -34,24 +34,30 @@ type HealthMetrics struct {
 
 type HealthService struct {
 	redis            *redis.Client
+	prefix           string
 	failureThreshold int
 	recoveryTimeout  time.Duration
 }
 
-func NewHealthService(redis *redis.Client) *HealthService {
+func NewHealthService(redisClient *redis.Client, keyPrefix string) *HealthService {
+	prefix := keyPrefix
+	if prefix == "" {
+		prefix = "health"
+	}
 	return &HealthService{
-		redis:            redis,
+		redis:            redisClient,
+		prefix:           prefix,
 		failureThreshold: 5,
 		recoveryTimeout:  30 * time.Second,
 	}
 }
 
-func (s *HealthService) keyPrefix(providerID, model string) string {
-	return fmt.Sprintf("%s:%s", providerID, model)
+func (s *HealthService) buildKeyPrefix(providerID, model string) string {
+	return fmt.Sprintf("%s:%s:%s", s.prefix, providerID, model)
 }
 
 func (s *HealthService) GetCircuitState(ctx context.Context, providerID, model string) CircuitState {
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 	stateKey := fmt.Sprintf("circuit:%s:state", prefix)
 
 	state, err := s.redis.Get(ctx, stateKey).Result()
@@ -72,7 +78,7 @@ func (s *HealthService) GetCircuitState(ctx context.Context, providerID, model s
 
 func (s *HealthService) CanExecute(ctx context.Context, providerID, model string) bool {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 
 	switch state {
 	case StateClosed:
@@ -116,7 +122,7 @@ func (s *HealthService) CheckCircuitBreaker(ctx context.Context, providerID, mod
 
 func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model string, latencyMs int) {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 
 	if state == StateHalfOpen {
 		successesKey := fmt.Sprintf("circuit:%s:successes", prefix)
@@ -144,7 +150,7 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 
 func (s *HealthService) RecordFailure(ctx context.Context, providerID, model string) {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 
 	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
 	lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", prefix)
@@ -164,7 +170,7 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 
 func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model string) HealthMetrics {
 	circuitState := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 
 	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
 	successesKey := fmt.Sprintf("circuit:%s:successes", prefix)
@@ -244,14 +250,14 @@ func (s *HealthService) GetAllHealthMetrics(ctx context.Context) []HealthMetrics
 }
 
 func (s *HealthService) setCircuitState(ctx context.Context, providerID, model string, state CircuitState) {
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 	stateKey := fmt.Sprintf("circuit:%s:state", prefix)
 	s.redis.Set(ctx, stateKey, string(state), 24*time.Hour)
 	metrics.CircuitBreakerState.WithLabelValues(providerID).Set(metrics.CircuitStateToFloat64(string(state)))
 }
 
 func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string) {
-	prefix := s.keyPrefix(providerID, model)
+	prefix := s.buildKeyPrefix(providerID, model)
 	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
 	failures, _ := s.redis.Get(ctx, failuresKey).Int()
 	state := s.GetCircuitState(ctx, providerID, model)

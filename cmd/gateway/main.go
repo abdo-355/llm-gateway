@@ -24,8 +24,8 @@ func main() {
 
 	redisClient := db.NewRedisClient()
 
-	quotaSvc := services.NewQuotaService(redisClient)
-	healthSvc := services.NewHealthService(redisClient)
+	quotaSvc := services.NewQuotaService(redisClient, db.GetRedisKey("quota"))
+	healthSvc := services.NewHealthService(redisClient, db.GetRedisKey("health"))
 	providerSvc := services.NewProviderService()
 	routerSvc := services.NewRouter(quotaSvc, healthSvc, providerSvc)
 

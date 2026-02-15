@@ -19,10 +19,14 @@ type QuotaService struct {
 	prefix string
 }
 
-func NewQuotaService(redis *redis.Client) *QuotaService {
+func NewQuotaService(redisClient *redis.Client, keyPrefix string) *QuotaService {
+	prefix := keyPrefix
+	if prefix == "" {
+		prefix = "quota"
+	}
 	return &QuotaService{
-		redis:  redis,
-		prefix: "quota",
+		redis:  redisClient,
+		prefix: prefix,
 	}
 }
 

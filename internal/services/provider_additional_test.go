@@ -21,7 +21,7 @@ import (
 
 func TestQuotaEstimateTokens_EdgeCases(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 
 	tests := []struct {
 		name     string

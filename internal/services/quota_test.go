@@ -15,7 +15,7 @@ func intPtr(v int) *int { return &v }
 
 func TestQuotaEstimateTokens(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 
 	tests := []struct {
 		name string
@@ -107,7 +107,7 @@ func TestQuotaEstimateTokens(t *testing.T) {
 
 func TestQuotaEstimateTokens_MaxTokensUsed(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 
 	withDefault := svc.EstimateTokens(types.ChatCompletionRequest{
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
@@ -186,7 +186,7 @@ func TestQuotaCheckModelQuota(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client, _ := newTestRedis(t)
-			svc := NewQuotaService(client)
+			svc := NewQuotaService(client, "")
 			ctx := testContext()
 
 			for i := 0; i < tt.preRecord; i++ {
@@ -216,7 +216,7 @@ func TestQuotaCheckModelQuota(t *testing.T) {
 
 func TestQuotaRecordModelUsage(t *testing.T) {
 	client, mr := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	err := svc.RecordModelUsage(ctx, "prov1", "gpt-4", 150)
@@ -248,7 +248,7 @@ func TestQuotaRecordModelUsage(t *testing.T) {
 
 func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	require.NoError(t, svc.RecordModelUsage(ctx, "prov1", "gpt-4", 100))
@@ -304,7 +304,7 @@ func TestQuotaHandleProviderRateLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client, _ := newTestRedis(t)
-			svc := NewQuotaService(client)
+			svc := NewQuotaService(client, "")
 			ctx := testContext()
 
 			resp := &http.Response{
@@ -326,7 +326,7 @@ func TestQuotaHandleProviderRateLimit(t *testing.T) {
 
 func TestQuotaHandleProviderRateLimit_UpdatesRedis(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	resp := &http.Response{
@@ -342,7 +342,7 @@ func TestQuotaHandleProviderRateLimit_UpdatesRedis(t *testing.T) {
 
 func TestQuotaGetModelQuotaStatus(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	status := svc.GetModelQuotaStatus(ctx, "prov1", "gpt-4", nil)
@@ -368,7 +368,7 @@ func TestQuotaGetModelQuotaStatus(t *testing.T) {
 
 func TestQuotaGetModelQuotaStatus_IsolatesModels(t *testing.T) {
 	client, _ := newTestRedis(t)
-	svc := NewQuotaService(client)
+	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	require.NoError(t, svc.RecordModelUsage(ctx, "prov1", "gpt-4", 100))

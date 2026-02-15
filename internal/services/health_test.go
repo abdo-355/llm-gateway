@@ -18,7 +18,7 @@ const (
 func TestHealthGetCircuitState(t *testing.T) {
 	t.Run("default state is CLOSED when no key exists", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		state := svc.GetCircuitState(ctx, testProvider, testModel)
@@ -27,7 +27,7 @@ func TestHealthGetCircuitState(t *testing.T) {
 
 	t.Run("returns OPEN after setting state to OPEN", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateOpen)
@@ -40,7 +40,7 @@ func TestHealthGetCircuitState(t *testing.T) {
 func TestHealthCanExecute(t *testing.T) {
 	t.Run("CLOSED state returns true", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		assert.True(t, svc.CanExecute(ctx, testProvider, testModel))
@@ -48,11 +48,11 @@ func TestHealthCanExecute(t *testing.T) {
 
 	t.Run("OPEN state not recovered returns false", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateOpen)
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:last_failure", prefix), time.Now().UnixMilli(), 0)
 
 		assert.False(t, svc.CanExecute(ctx, testProvider, testModel))
@@ -60,11 +60,11 @@ func TestHealthCanExecute(t *testing.T) {
 
 	t.Run("OPEN state with recovery timeout passed transitions to HALF_OPEN and returns true", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateOpen)
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		pastTime := time.Now().Add(-31 * time.Second).UnixMilli()
 		client.Set(ctx, fmt.Sprintf("circuit:%s:last_failure", prefix), pastTime, 0)
 
@@ -74,11 +74,11 @@ func TestHealthCanExecute(t *testing.T) {
 
 	t.Run("HALF_OPEN state with no attempts returns true", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:successes", prefix), 0, 0)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 0, 0)
 
@@ -87,11 +87,11 @@ func TestHealthCanExecute(t *testing.T) {
 
 	t.Run("HALF_OPEN state with already attempted returns false", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:successes", prefix), 1, 0)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 0, 0)
 
@@ -102,7 +102,7 @@ func TestHealthCanExecute(t *testing.T) {
 func TestHealthRecordSuccess(t *testing.T) {
 	t.Run("in HALF_OPEN closes circuit", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
@@ -114,10 +114,10 @@ func TestHealthRecordSuccess(t *testing.T) {
 
 	t.Run("in CLOSED clears failure count", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 3, 0)
 
 		svc.RecordSuccess(ctx, testProvider, testModel, 50)
@@ -129,12 +129,12 @@ func TestHealthRecordSuccess(t *testing.T) {
 
 	t.Run("records latency", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.RecordSuccess(ctx, testProvider, testModel, 150)
 
-		prefix := svc.keyPrefix(testProvider, testModel)
+		prefix := svc.buildKeyPrefix(testProvider, testModel)
 		latencyKey := fmt.Sprintf("health:%s:latencies", prefix)
 		members, err := client.ZRange(ctx, latencyKey, 0, -1).Result()
 		require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestHealthRecordSuccess(t *testing.T) {
 func TestHealthRecordFailure(t *testing.T) {
 	t.Run("in CLOSED below threshold stays CLOSED", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		for i := 0; i < 4; i++ {
@@ -158,7 +158,7 @@ func TestHealthRecordFailure(t *testing.T) {
 
 	t.Run("in CLOSED reaches threshold opens circuit", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		for i := 0; i < 5; i++ {
@@ -170,7 +170,7 @@ func TestHealthRecordFailure(t *testing.T) {
 
 	t.Run("in HALF_OPEN opens circuit", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
@@ -184,7 +184,7 @@ func TestHealthRecordFailure(t *testing.T) {
 func TestHealthGetHealthMetrics(t *testing.T) {
 	t.Run("returns correct metrics after recording successes and failures", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		svc.RecordFailure(ctx, testProvider, testModel)
@@ -206,7 +206,7 @@ func TestHealthGetHealthMetrics(t *testing.T) {
 func TestHealthCheckCircuitBreaker(t *testing.T) {
 	t.Run("closed circuit returns nil error", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		err := svc.CheckCircuitBreaker(ctx, testProvider, testModel)
@@ -215,7 +215,7 @@ func TestHealthCheckCircuitBreaker(t *testing.T) {
 
 	t.Run("open circuit returns CircuitBreakerError", func(t *testing.T) {
 		client, _ := newTestRedis(t)
-		svc := NewHealthService(client)
+		svc := NewHealthService(client, "")
 		ctx := testContext()
 
 		for i := 0; i < 5; i++ {
