@@ -14,18 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ResponsesRouter interface {
-	DeriveRequirements(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
-	GenerateCandidates() []types.RoutingCandidate
-	GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate
-	FilterCandidates(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
-	ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
-	CompilePlan(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan
-	Execute(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
-	ExecuteStream(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
-}
-
-func Responses(router ResponsesRouter) gin.HandlerFunc {
+func Responses(router services.RouterHandler) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 		reqID := requestid.Get(c)
@@ -160,7 +149,7 @@ func Responses(router ResponsesRouter) gin.HandlerFunc {
 func handleResponsesStream(
 	c *gin.Context,
 	ctx context.Context,
-	router ResponsesRouter,
+	router services.RouterHandler,
 	plan types.RoutingPlan,
 	chatReq types.ChatCompletionRequest,
 	reqID string,

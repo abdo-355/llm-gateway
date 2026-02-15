@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
@@ -101,7 +102,7 @@ func (m *mockResponsesRouter) ExecuteStream(ctx context.Context, plan types.Rout
 	return types.StreamResult{Chunks: chunks, Err: errs}
 }
 
-func setupResponsesRouter(router ResponsesRouter) *gin.Engine {
+func setupResponsesRouter(router services.RouterHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(requestid.New())

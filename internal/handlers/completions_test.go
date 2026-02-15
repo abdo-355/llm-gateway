@@ -10,6 +10,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
@@ -26,14 +27,14 @@ func TestMain(m *testing.M) {
 }
 
 type mockRouter struct {
-	deriveRequirementsFn                  func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
-	generateCandidatesFn                  func() []types.RoutingCandidate
-	generateCandidatesFromLogicalModelFn  func(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate
-	filterCandidatesFn                    func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
-	scoreCandidatesFn                     func(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
-	compilePlanFn                         func(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan
-	executeFn                             func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
-	executeStreamFn                       func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
+	deriveRequirementsFn                 func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
+	generateCandidatesFn                 func() []types.RoutingCandidate
+	generateCandidatesFromLogicalModelFn func(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate
+	filterCandidatesFn                   func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
+	scoreCandidatesFn                    func(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
+	compilePlanFn                        func(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan
+	executeFn                            func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
+	executeStreamFn                      func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
 }
 
 func (m *mockRouter) DeriveRequirements(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
@@ -110,7 +111,7 @@ func (m *mockRouter) ExecuteStream(ctx context.Context, plan types.RoutingPlan, 
 	return types.StreamResult{Chunks: chunks, Err: errs}
 }
 
-func setupCompletionsRouter(router Router) *gin.Engine {
+func setupCompletionsRouter(router services.RouterHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(requestid.New())
