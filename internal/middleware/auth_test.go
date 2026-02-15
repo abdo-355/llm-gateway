@@ -20,21 +20,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestAuth_HealthBypass(t *testing.T) {
-	r := gin.New()
-	r.Use(Auth())
-	called := false
-	r.GET("/health", func(c *gin.Context) {
-		called = true
-		c.Status(http.StatusOK)
-	})
-
-	w := performRequest(r, "GET", "/health", nil)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.True(t, called)
-}
-
 func TestAuth_MissingAuthHeader(t *testing.T) {
 	r := gin.New()
 	r.Use(Auth())

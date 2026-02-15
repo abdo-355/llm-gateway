@@ -43,12 +43,12 @@ func New(svc Services) *Server {
 	r := gin.New()
 
 	r.Use(requestid.New())
+	r.Use(gin.Recovery())
 	r.Use(middleware.Metrics())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Helmet())
 	r.Use(accessLogMiddleware())
 	r.Use(middleware.ErrorHandler())
-	r.Use(gin.Recovery())
 
 	r.GET("/health", handlers.Health(svc.Health))
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
