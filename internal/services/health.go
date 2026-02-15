@@ -52,13 +52,17 @@ func NewHealthService(redisClient *redis.Client, keyPrefix string) *HealthServic
 	}
 }
 
-func (s *HealthService) buildKeyPrefix(providerID, model string) string {
-	return fmt.Sprintf("%s:%s:%s", s.prefix, providerID, model)
+func (s *HealthService) buildCircuitKeyPrefix(providerID, model string) string {
+	return fmt.Sprintf("circuit:%s:%s:%s", s.prefix, providerID, model)
+}
+
+func (s *HealthService) buildHealthKeyPrefix(providerID, model string) string {
+	return fmt.Sprintf("health:%s:%s:%s", s.prefix, providerID, model)
 }
 
 func (s *HealthService) GetCircuitState(ctx context.Context, providerID, model string) CircuitState {
-	prefix := s.buildKeyPrefix(providerID, model)
-	stateKey := fmt.Sprintf("circuit:%s:state", prefix)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+	stateKey := fmt.Sprintf("%s:state", circuitPrefix)
 
 	state, err := s.redis.Get(ctx, stateKey).Result()
 	if err == redis.Nil {
@@ -78,14 +82,14 @@ func (s *HealthService) GetCircuitState(ctx context.Context, providerID, model s
 
 func (s *HealthService) CanExecute(ctx context.Context, providerID, model string) bool {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.buildKeyPrefix(providerID, model)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
 
 	switch state {
 	case StateClosed:
 		return true
 
 	case StateOpen:
-		lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", prefix)
+		lastFailureKey := fmt.Sprintf("%s:last_failure", circuitPrefix)
 
 		lastFailure, err := s.redis.Get(ctx, lastFailureKey).Int64()
 		if err != nil {
@@ -94,15 +98,15 @@ func (s *HealthService) CanExecute(ctx context.Context, providerID, model string
 
 		if time.Since(time.UnixMilli(lastFailure)) >= s.recoveryTimeout {
 			s.setCircuitState(ctx, providerID, model, StateHalfOpen)
-			s.redis.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 0, 0)
-			s.redis.Set(ctx, fmt.Sprintf("circuit:%s:successes", prefix), 0, 0)
+			s.redis.Set(ctx, fmt.Sprintf("%s:failures", circuitPrefix), 0, 0)
+			s.redis.Set(ctx, fmt.Sprintf("%s:successes", circuitPrefix), 0, 0)
 			return true
 		}
 		return false
 
 	case StateHalfOpen:
-		successes, _ := s.redis.Get(ctx, fmt.Sprintf("circuit:%s:successes", prefix)).Int()
-		failures, _ := s.redis.Get(ctx, fmt.Sprintf("circuit:%s:failures", prefix)).Int()
+		successes, _ := s.redis.Get(ctx, fmt.Sprintf("%s:successes", circuitPrefix)).Int()
+		failures, _ := s.redis.Get(ctx, fmt.Sprintf("%s:failures", circuitPrefix)).Int()
 		return successes+failures < 1
 	}
 
@@ -122,27 +126,34 @@ func (s *HealthService) CheckCircuitBreaker(ctx context.Context, providerID, mod
 
 func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model string, latencyMs int) {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.buildKeyPrefix(providerID, model)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
 
 	if state == StateHalfOpen {
-		successesKey := fmt.Sprintf("circuit:%s:successes", prefix)
+		successesKey := fmt.Sprintf("%s:successes", circuitPrefix)
 		successes, _ := s.redis.Incr(ctx, successesKey).Result()
 		s.redis.Expire(ctx, successesKey, 24*time.Hour)
 
 		if successes >= 1 {
 			s.setCircuitState(ctx, providerID, model, StateClosed)
-			s.redis.Del(ctx, fmt.Sprintf("circuit:%s:failures", prefix))
+			s.redis.Del(ctx, fmt.Sprintf("%s:failures", circuitPrefix))
 			s.redis.Del(ctx, successesKey)
 		}
 	} else if state == StateClosed {
-		s.redis.Del(ctx, fmt.Sprintf("circuit:%s:failures", prefix))
+		// Gradually decrement failure count instead of clearing entirely
+		failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
+		failures, _ := s.redis.Get(ctx, failuresKey).Int()
+		if failures > 0 {
+			s.redis.Decr(ctx, failuresKey)
+		}
 	}
 
-	latencyKey := fmt.Sprintf("health:%s:latencies", prefix)
-	timestamp := float64(time.Now().UnixMilli())
-	s.redis.ZAdd(ctx, latencyKey, redis.Z{Score: timestamp, Member: latencyMs})
-	cutoff := float64(time.Now().Add(-time.Hour).UnixMilli())
-	s.redis.ZRemRangeByScore(ctx, latencyKey, "0", fmt.Sprintf("%f", cutoff))
+	// Issue #8: Use unique member ID with latency as score to prevent deduplication
+	latencyKey := fmt.Sprintf("%s:latencies", healthPrefix)
+	now := time.Now()
+	member := fmt.Sprintf("%d-%d", now.UnixMilli(), now.Nanosecond())
+	s.redis.ZAdd(ctx, latencyKey, redis.Z{Score: float64(latencyMs), Member: member})
+	// Use Redis key expiration instead of ZRemRangeByScore since we store latency as score
 	s.redis.Expire(ctx, latencyKey, time.Hour)
 
 	s.updateHealthScore(ctx, providerID, model)
@@ -150,10 +161,10 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 
 func (s *HealthService) RecordFailure(ctx context.Context, providerID, model string) {
 	state := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.buildKeyPrefix(providerID, model)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
 
-	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
-	lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", prefix)
+	failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
+	lastFailureKey := fmt.Sprintf("%s:last_failure", circuitPrefix)
 
 	failures, _ := s.redis.Incr(ctx, failuresKey).Result()
 	s.redis.Expire(ctx, failuresKey, 24*time.Hour)
@@ -170,20 +181,22 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 
 func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model string) HealthMetrics {
 	circuitState := s.GetCircuitState(ctx, providerID, model)
-	prefix := s.buildKeyPrefix(providerID, model)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
 
-	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
-	successesKey := fmt.Sprintf("circuit:%s:successes", prefix)
-	lastFailureKey := fmt.Sprintf("circuit:%s:last_failure", prefix)
-	latencyKey := fmt.Sprintf("health:%s:latencies", prefix)
-	scoreKey := fmt.Sprintf("health:%s:score", prefix)
+	failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
+	successesKey := fmt.Sprintf("%s:successes", circuitPrefix)
+	lastFailureKey := fmt.Sprintf("%s:last_failure", circuitPrefix)
+	latencyKey := fmt.Sprintf("%s:latencies", healthPrefix)
+	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
 
 	pipe := s.redis.Pipeline()
 	failuresCmd := pipe.Get(ctx, failuresKey)
 	successesCmd := pipe.Get(ctx, successesKey)
 	lastFailureCmd := pipe.Get(ctx, lastFailureKey)
 	scoreCmd := pipe.Get(ctx, scoreKey)
-	latencyCmd := pipe.ZRange(ctx, latencyKey, 0, -1)
+	// Issue #8: Use ZRangeWithScores to get latency values from scores
+	latencyCmd := pipe.ZRangeWithScores(ctx, latencyKey, 0, -1)
 
 	_, err := pipe.Exec(ctx)
 	if err != nil && err != redis.Nil {
@@ -205,15 +218,13 @@ func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model 
 	}
 
 	var avgLatency *int
-	latencies := latencyCmd.Val()
-	if len(latencies) > 0 {
+	latencyScores := latencyCmd.Val()
+	if len(latencyScores) > 0 {
 		sum := 0
-		for _, latStr := range latencies {
-			if lat, err := strconv.Atoi(latStr); err == nil {
-				sum += lat
-			}
+		for _, z := range latencyScores {
+			sum += int(z.Score)
 		}
-		avg := sum / len(latencies)
+		avg := sum / len(latencyScores)
 		avgLatency = &avg
 	}
 
@@ -250,15 +261,16 @@ func (s *HealthService) GetAllHealthMetrics(ctx context.Context) []HealthMetrics
 }
 
 func (s *HealthService) setCircuitState(ctx context.Context, providerID, model string, state CircuitState) {
-	prefix := s.buildKeyPrefix(providerID, model)
-	stateKey := fmt.Sprintf("circuit:%s:state", prefix)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+	stateKey := fmt.Sprintf("%s:state", circuitPrefix)
 	s.redis.Set(ctx, stateKey, string(state), 24*time.Hour)
 	metrics.CircuitBreakerState.WithLabelValues(providerID).Set(metrics.CircuitStateToFloat64(string(state)))
 }
 
 func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string) {
-	prefix := s.buildKeyPrefix(providerID, model)
-	failuresKey := fmt.Sprintf("circuit:%s:failures", prefix)
+	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
+	failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
 	failures, _ := s.redis.Get(ctx, failuresKey).Int()
 	state := s.GetCircuitState(ctx, providerID, model)
 
@@ -277,6 +289,6 @@ func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model
 		}
 	}
 
-	scoreKey := fmt.Sprintf("health:%s:score", prefix)
+	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
 	s.redis.Set(ctx, scoreKey, score, time.Hour)
 }

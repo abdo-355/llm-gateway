@@ -52,8 +52,8 @@ func TestHealthCanExecute(t *testing.T) {
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateOpen)
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:last_failure", prefix), time.Now().UnixMilli(), 0)
+		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
+		client.Set(ctx, fmt.Sprintf("%s:last_failure", prefix), time.Now().UnixMilli(), 0)
 
 		assert.False(t, svc.CanExecute(ctx, testProvider, testModel))
 	})
@@ -64,9 +64,9 @@ func TestHealthCanExecute(t *testing.T) {
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateOpen)
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
+		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
 		pastTime := time.Now().Add(-31 * time.Second).UnixMilli()
-		client.Set(ctx, fmt.Sprintf("circuit:%s:last_failure", prefix), pastTime, 0)
+		client.Set(ctx, fmt.Sprintf("%s:last_failure", prefix), pastTime, 0)
 
 		assert.True(t, svc.CanExecute(ctx, testProvider, testModel))
 		assert.Equal(t, StateHalfOpen, svc.GetCircuitState(ctx, testProvider, testModel))
@@ -78,9 +78,9 @@ func TestHealthCanExecute(t *testing.T) {
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:successes", prefix), 0, 0)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 0, 0)
+		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
+		client.Set(ctx, fmt.Sprintf("%s:successes", prefix), 0, 0)
+		client.Set(ctx, fmt.Sprintf("%s:failures", prefix), 0, 0)
 
 		assert.True(t, svc.CanExecute(ctx, testProvider, testModel))
 	})
@@ -91,9 +91,9 @@ func TestHealthCanExecute(t *testing.T) {
 		ctx := testContext()
 
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:successes", prefix), 1, 0)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 0, 0)
+		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
+		client.Set(ctx, fmt.Sprintf("%s:successes", prefix), 1, 0)
+		client.Set(ctx, fmt.Sprintf("%s:failures", prefix), 0, 0)
 
 		assert.False(t, svc.CanExecute(ctx, testProvider, testModel))
 	})
@@ -112,19 +112,19 @@ func TestHealthRecordSuccess(t *testing.T) {
 		assert.Equal(t, StateClosed, svc.GetCircuitState(ctx, testProvider, testModel))
 	})
 
-	t.Run("in CLOSED clears failure count", func(t *testing.T) {
+	t.Run("in CLOSED decrements failure count", func(t *testing.T) {
 		client, _ := newTestRedis(t)
 		svc := NewHealthService(client, "")
 		ctx := testContext()
 
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
-		client.Set(ctx, fmt.Sprintf("circuit:%s:failures", prefix), 3, 0)
+		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
+		client.Set(ctx, fmt.Sprintf("%s:failures", prefix), 3, 0)
 
 		svc.RecordSuccess(ctx, testProvider, testModel, 50)
 
-		val, err := client.Get(ctx, fmt.Sprintf("circuit:%s:failures", prefix)).Result()
-		assert.Error(t, err)
-		assert.Empty(t, val)
+		val, err := client.Get(ctx, fmt.Sprintf("%s:failures", prefix)).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "2", val) // Decremented from 3 to 2, not cleared entirely
 	})
 
 	t.Run("records latency", func(t *testing.T) {
@@ -134,12 +134,13 @@ func TestHealthRecordSuccess(t *testing.T) {
 
 		svc.RecordSuccess(ctx, testProvider, testModel, 150)
 
-		prefix := svc.buildKeyPrefix(testProvider, testModel)
-		latencyKey := fmt.Sprintf("health:%s:latencies", prefix)
-		members, err := client.ZRange(ctx, latencyKey, 0, -1).Result()
+		prefix := svc.buildHealthKeyPrefix(testProvider, testModel)
+		latencyKey := fmt.Sprintf("%s:latencies", prefix)
+		// Issue #8: Latency is now stored as score, not member
+		scores, err := client.ZRangeWithScores(ctx, latencyKey, 0, -1).Result()
 		require.NoError(t, err)
-		assert.Len(t, members, 1)
-		assert.Equal(t, "150", members[0])
+		assert.Len(t, scores, 1)
+		assert.Equal(t, float64(150), scores[0].Score)
 	})
 }
 
