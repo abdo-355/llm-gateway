@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"sync"
 )
 
 type EnvConfig struct {
@@ -117,15 +118,18 @@ func getEnvBool(key string, defaultValue bool) bool {
 }
 
 // Singleton instance
-var envInstance *EnvConfig
+var (
+	envInstance *EnvConfig
+	envOnce    sync.Once
+)
 
 func GetEnv() *EnvConfig {
-	if envInstance == nil {
+	envOnce.Do(func() {
 		var err error
 		envInstance, err = LoadEnv()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to load environment: %v", err))
 		}
-	}
+	})
 	return envInstance
 }

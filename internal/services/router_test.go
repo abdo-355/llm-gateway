@@ -325,7 +325,7 @@ func TestCompilePlan(t *testing.T) {
 		plan := r.CompilePlan(candidates, nil, nil)
 		assert.Len(t, plan.Attempts, 3)
 		assert.Equal(t, 3, plan.MaxAttempts)
-		assert.Equal(t, 30000, plan.Attempts[0].TimeoutMs)
+		assert.Equal(t, 60000, plan.Attempts[0].TimeoutMs)
 		assert.True(t, plan.RetryOn429)
 		assert.True(t, plan.RetryOnTimeout)
 		assert.True(t, plan.RetryOn5xx)

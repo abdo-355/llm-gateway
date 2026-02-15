@@ -212,8 +212,11 @@ func TestProviderStreamProvider_Success(t *testing.T) {
 
 	select {
 	case gErr := <-result.Err:
-		t.Fatalf("unexpected error: %v", gErr)
-	default:
+		if gErr != nil {
+			t.Fatalf("unexpected error: %v", gErr)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for completion signal")
 	}
 
 	require.Len(t, chunks, 2)
@@ -259,8 +262,11 @@ func TestProviderStreamProvider_MultipleChunks(t *testing.T) {
 
 	select {
 	case gErr := <-result.Err:
-		t.Fatalf("unexpected error: %v", gErr)
-	default:
+		if gErr != nil {
+			t.Fatalf("unexpected error: %v", gErr)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for completion signal")
 	}
 
 	assert.Equal(t, 5, receivedChunks)

@@ -44,13 +44,12 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 		now := float64(time.Now().UnixMilli())
 		cutoff := float64(time.Now().Add(-window).UnixMilli())
 
-		pipe := rl.redis.Pipeline()
-		pipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatFloat(cutoff, 'f', 0, 64))
-		pipe.ZCard(ctx, key)
-		pipe.ZAdd(ctx, key, redis.Z{Score: now, Member: now})
-		pipe.Expire(ctx, key, window)
+		// Step 1: Clean old entries and check count (without adding)
+		checkPipe := rl.redis.Pipeline()
+		checkPipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatFloat(cutoff, 'f', 0, 64))
+		checkPipe.ZCard(ctx, key)
 
-		results, err := pipe.Exec(ctx)
+		results, err := checkPipe.Exec(ctx)
 		if err != nil {
 			logger.Error().
 				Str("type", "middleware").
@@ -73,6 +72,18 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 				},
 			})
 			return
+		}
+
+		// Step 2: Only add the request if allowed
+		addPipe := rl.redis.Pipeline()
+		addPipe.ZAdd(ctx, key, redis.Z{Score: now, Member: now})
+		addPipe.Expire(ctx, key, window)
+		if _, err := addPipe.Exec(ctx); err != nil {
+			logger.Error().
+				Str("type", "middleware").
+				Str("event", "ratelimit.record_failed").
+				Err(err).
+				Msg("Rate limit record failed")
 		}
 
 		c.Next()

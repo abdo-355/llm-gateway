@@ -243,7 +243,7 @@ func TestCompilePlan_EdgeCases(t *testing.T) {
 		assert.NotEmpty(t, attempt.BaseURL)
 		assert.NotEmpty(t, attempt.APIKey)
 		assert.Equal(t, 1.5, attempt.Score)
-		assert.Equal(t, 30000, attempt.TimeoutMs)
+		assert.Equal(t, 60000, attempt.TimeoutMs)
 	})
 }
 

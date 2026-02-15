@@ -22,9 +22,7 @@ type ProviderService struct {
 
 func NewProviderService() *ProviderService {
 	return &ProviderService{
-		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
-		},
+		httpClient: &http.Client{},
 	}
 }
 
@@ -57,8 +55,7 @@ func (s *ProviderService) CallProvider(
 	}
 
 	// Make request with timeout
-	client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
-	resp, err := client.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, errors.NewTimeoutError("Request timeout", "request")
@@ -107,8 +104,7 @@ func (s *ProviderService) StreamProviderChannel(
 			return
 		}
 
-		client := &http.Client{Timeout: time.Duration(timeoutMs) * time.Millisecond}
-		resp, err := client.Do(req)
+		resp, err := s.httpClient.Do(req)
 		if err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
@@ -126,6 +122,8 @@ func (s *ProviderService) StreamProviderChannel(
 
 		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
+		} else {
+			errChan <- nil
 		}
 	}()
 
@@ -161,12 +159,51 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 }
 
 func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, model, providerType string) ([]byte, error) {
-	// Remove internal router field
 	request.Router = nil
 
 	request.Model = model
 
+	if request.ResponseFormat != nil && request.ResponseFormat.Type == "json_object" {
+		request.Messages = ensureJSONKeyword(request.Messages)
+	}
+
 	return json.Marshal(request)
+}
+
+func ensureJSONKeyword(messages []types.OpenAIMessage) []types.OpenAIMessage {
+	for _, msg := range messages {
+		if msg.Role == "system" || msg.Role == "user" || msg.Role == "assistant" {
+			content := extractStringContent(msg.Content)
+			if strings.Contains(strings.ToLower(content), "json") {
+				return messages
+			}
+		}
+	}
+
+	jsonHint := types.OpenAIMessage{
+		Role:    "system",
+		Content: "Respond in valid JSON format.",
+	}
+	return append([]types.OpenAIMessage{jsonHint}, messages...)
+}
+
+func extractStringContent(content any) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []any:
+		var result string
+		for _, part := range v {
+			if m, ok := part.(map[string]any); ok {
+				if text, ok := m["text"].(string); ok {
+					result += text + " "
+				}
+			}
+		}
+		return result
+	default:
+		return fmt.Sprintf("%v", content)
+	}
 }
 
 func (s *ProviderService) handleResponse(resp *http.Response, providerType string, _ types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {

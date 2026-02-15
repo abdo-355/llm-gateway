@@ -38,3 +38,4 @@ tmp/
 dist/
 bin/
 gateway
+dump.rdb

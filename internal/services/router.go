@@ -206,11 +206,9 @@ func (r *Router) FilterCandidates(
 				}
 			}
 
-			for _, p := range hints.Providers.Deny {
-				if p == provider.ID {
-					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_in_denylist"
-					continue
-				}
+			if slices.Contains(hints.Providers.Deny, provider.ID) {
+				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_in_denylist"
+				continue
 			}
 		}
 
@@ -573,7 +571,8 @@ func (r *Router) ExecuteStream(
 				}
 				select {
 				case chunks <- chunk:
-				default:
+				case <-ctx.Done():
+					return
 				}
 			}
 
@@ -590,6 +589,7 @@ func (r *Router) ExecuteStream(
 				metrics.ProviderLatencySeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
 				metrics.StreamDurationSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
 				metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(i + 1))
+				errChan <- nil
 				return
 			}
 

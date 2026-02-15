@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -84,17 +86,26 @@ func Completions(router Router) gin.HandlerFunc {
 			c.Header("Content-Type", "text/event-stream")
 			c.Header("Cache-Control", "no-cache")
 			c.Header("Connection", "keep-alive")
+			c.Writer.Flush()
 
 			streamResult := router.ExecuteStream(ctx, plan, req, reqID)
 
 			for chunk := range streamResult.Chunks {
-				c.SSEvent("message", chunk)
+				chunkJSON, err := json.Marshal(chunk)
+				if err != nil {
+					continue
+				}
+				fmt.Fprintf(c.Writer, "data: %s\n\n", chunkJSON)
+				c.Writer.Flush()
 			}
 
 			if err := <-streamResult.Err; err != nil {
-				c.SSEvent("error", err)
+				errJSON, _ := json.Marshal(err)
+				fmt.Fprintf(c.Writer, "data: %s\n\n", errJSON)
+				c.Writer.Flush()
 			} else {
-				c.SSEvent("message", "[DONE]")
+				fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
+				c.Writer.Flush()
 			}
 			return
 		}
