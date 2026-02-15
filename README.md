@@ -1,385 +1,441 @@
 # LLM Gateway
 
-A secure, production-ready LLM Gateway that exposes an OpenAI-compatible API and routes requests to multiple upstream providers (Groq, Cerebras, Mistral, Vertex) with automatic failover, quota management, and health monitoring.
+A production-ready API gateway for routing LLM requests across multiple providers with intelligent failover, rate limiting, and observability.
 
-## Features
+---
 
-- **OpenAI-Compatible API** - Drop-in replacement for OpenAI's `/v1/chat/completions`
-- **Multi-Provider Support** - Groq, Cerebras, Mistral, Google Vertex AI
-- **Smart Routing** - Automatic provider selection based on requirements
-- **Automatic Failover** - Retries on errors, circuit breakers for unhealthy providers
-- **Quota Management** - Redis-backed RPM/TPM/daily limits with persistence
-- **Rate Limiting** - Per-IP rate limiting (configurable)
-- **Mandatory Authentication** - Bearer token required for all requests
-- **Streaming Support** - Full Server-Sent Events (SSE) support
-- **Structured Outputs** - Strict JSON Schema validation
-- **Docker Deployment** - Production-ready Docker Compose setup
-- **Observability** - Prometheus metrics, structured logging
+## What Is This?
 
-## Quick Start (Docker)
+LLM Gateway is a unified API interface that sits between your application and LLM providers. Instead of calling providers directly, you call the gateway and it:
 
-### 1. Clone and Configure
+- **Routes requests intelligently** based on model requirements, provider health, and your preferences
+- **Handles failures automatically** - if one provider has issues, it falls back to another
+- **Tracks usage and limits** per-model, per-provider with Redis-backed quota management
+- **Provides a single API** that works like OpenAI's API, so you don't need to change your code when switching providers
 
-```bash
-git clone <your-repo>
-cd llm-gateway
+### Why Use It?
 
-# Copy and edit environment variables
-cp .env.example .env
-# Edit .env with your API keys
-```
+| Problem | Solution |
+|---------|----------|
+| Provider goes down | Automatic failover to backup providers |
+| Rate limits hit | Routes to providers with remaining quota |
+| Different APIs | Unified OpenAI-compatible API |
+| Cost management | Per-model quotas and token tracking |
+| Debugging | Structured logging, health endpoints |
 
-### 2. Configure Providers
+### Supported Providers
 
-Edit `src/config/providers.ts` to add/remove providers:
+- **Groq** - Fast inference for Llama models
+- **Cerebras** - High-throughput Llama and Qwen models
+- **Mistral** - Mistral models including Codestral
+- **Google Vertex AI** - Gemini models
 
-```json
-{
-  "providers": [
-    {
-      "id": "groq",
-      "baseUrl": "https://api.groq.com/openai/v1",
-      "auth": { "type": "bearer", "env": "GROQ_API_KEY" },
-      "models": {
-        "mode": "allowlist",
-        "list": ["llama-3.3-70b-versatile"]
-      },
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "structuredOutputs": "model_dependent"
-      },
-      "limits": { "rpm": 30, "dailyRequests": 1000 }
-    },
-    {
-      "id": "cerebras",
-      "baseUrl": "https://api.cerebras.ai/v1",
-      "auth": { "type": "bearer", "env": "CEREBRAS_API_KEY" },
-      "models": {
-        "mode": "allowlist",
-        "list": [
-          "llama-4-scout-17b-16e-instruct",
-          "llama-3.3-70b",
-          "llama3.1-8b"
-        ]
-      },
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "structuredOutputs": "model_dependent"
-      },
-      "limits": { "rpm": 60, "dailyRequests": 10000 }
-    },
-    {
-      "id": "mistral",
-      "baseUrl": "https://api.mistral.ai/v1",
-      "auth": { "type": "bearer", "env": "MISTRAL_API_KEY" },
-      "models": {
-        "mode": "allowlist",
-        "list": [
-          "mistral-large-latest",
-          "mistral-medium-latest",
-          "codestral-latest"
-        ]
-      },
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "structuredOutputs": "model_dependent"
-      },
-      "limits": { "rpm": 50, "dailyRequests": 5000 }
-    },
-    {
-      "id": "vertex",
-      "baseUrl": "https://aiplatform.googleapis.com/v1",
-      "auth": {
-        "type": "header",
-        "env": "GOOGLE_VERTEX_API_KEY",
-        "headerName": "x-goog-api-key"
-      },
-      "models": {
-        "mode": "allowlist",
-        "list": ["gemini-3-pro-preview", "gemini-3-flash-preview"]
-      },
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "structuredOutputs": "model_dependent"
-      },
-      "limits": { "rpm": 100, "dailyRequests": 20000 }
-    }
-  ],
-  "certifications": [
-    {
-      "provider": "groq",
-      "model": "llama-3.3-70b-versatile",
-      "strictSchema": true
-    },
-    {
-      "provider": "groq",
-      "model": "llama-3.1-8b-instant",
-      "strictSchema": true
-    },
-    {
-      "provider": "groq",
-      "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-      "strictSchema": true
-    },
-    {
-      "provider": "groq",
-      "model": "meta-llama/llama-4-maverick-17b-128e-instruct",
-      "strictSchema": true
-    },
-    { "provider": "cerebras", "model": "llama-3.3-70b", "strictSchema": true },
-    {
-      "provider": "mistral",
-      "model": "mistral-large-latest",
-      "strictSchema": true
-    },
-    {
-      "provider": "mistral",
-      "model": "codestral-2405",
-      "strictSchema": true
-    },
-    {
-      "provider": "mistral",
-      "model": "codestral-2501",
-      "strictSchema": true
-    },
-    {
-      "provider": "vertex",
-      "model": "gemini-3-pro-preview",
-      "strictSchema": true
-    },
-    {
-      "provider": "vertex",
-      "model": "gemini-3-flash-preview",
-      "strictSchema": true
-    }
-  ]
-}
-```
+---
 
-### 3. Start Services
+## Key Features
 
-```bash
-# Build and start
-docker-compose up -d
+### Intelligent Routing
+The gateway examines each request to determine what it needs (streaming, JSON output, tools, etc.) and routes to providers that can handle those requirements. It considers:
+- Model capabilities (which providers support the requested model)
+- Provider health (success rates, latency)
+- Your preferences (preferred providers, deny lists)
+- Weights from logical model configuration
 
-# View logs
-docker-compose logs -f app
+### Automatic Failover
+If a provider fails (timeout, error, rate limit), the gateway automatically tries the next available provider. This happens transparently - your code sees a successful response or a final error.
 
-# Check health
-curl http://localhost:8080/health
-```
+### Circuit Breaker
+When a provider experiences repeated failures, the circuit breaker opens and temporarily stops sending requests. After a cooldown period, it allows尝试 requests again. This prevents hammering a struggling provider.
 
-### 4. Test
+### Quota Management
+Per-model, per-provider limits are tracked in Redis:
+- Requests per minute/hour/day
+- Tokens per minute/hour/day/month
 
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "chat-lite",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
+When a limit is reached, that model/provider is filtered out and other options are tried.
 
-## Environment Variables
+### Unified API
+The gateway implements OpenAI's chat completions API. Your existing code calling OpenAI can switch to the gateway by changing the base URL.
 
-| Variable                | Required | Default            | Description                                        |
-| ----------------------- | -------- | ------------------ | -------------------------------------------------- |
-| `GATEWAY_API_KEY`       | Yes      | -                  | API key for authenticating requests (min 32 chars) |
-| `GROQ_API_KEY`          | Yes      | -                  | Groq API key                                       |
-| `CEREBRAS_API_KEY`      | Yes      | -                  | Cerebras API key                                   |
-| `MISTRAL_API_KEY`       | Yes      | -                  | Mistral API key                                    |
-| `GOOGLE_VERTEX_API_KEY` | Yes      | -                  | Google Vertex AI API key                           |
-| `PORT`                  | No       | 8080               | Server port                                        |
-| `RATE_LIMIT_PER_IP`     | No       | 100                | Max requests per IP per window                     |
-| `RATE_LIMIT_WINDOW_MS`  | No       | 60000              | Rate limit window in ms                            |
-| `CORS_ORIGINS`          | No       | -                  | Comma-separated allowed origins                    |
-| `REDIS_URL`             | No       | redis://redis:6379 | Redis connection URL                               |
-| `LOG_LEVEL`             | No       | info               | Log level (debug, info, warn, error)               |
+### Logical Models
+Abstract provider-specific models into semantic categories:
+- `chat-pro` - General purpose conversation
+- `json-safe` - Guaranteed JSON output
+- `code-pro` - Code generation
+- `tools-pro` - Function calling
 
-## Logical Models
-
-Instead of managing individual provider models, use **logical models** that automatically route to the best available provider based on your requirements:
-
-| Logical Model  | Task     | Description                        | Default Providers                         |
-| -------------- | -------- | ---------------------------------- | ----------------------------------------- |
-| `chat-lite`    | Chat     | Fast, cost-effective responses     | Groq (llama-3.1-8b) → Mistral (small)     |
-| `chat-pro`     | Chat     | Balanced quality and speed         | Groq (llama-3.3-70b) → Cerebras → Mistral |
-| `chat-max`     | Chat     | Maximum reasoning capability       | Large MoE models with failover            |
-| `json-fast`    | JSON     | Quick structured output extraction | Optimized for speed over strictness       |
-| `json-safe`    | JSON     | Guaranteed schema compliance       | Only strict-schema-certified models       |
-| `code-fast`    | Code     | Quick code generation              | Codestral and fast code models            |
-| `code-pro`     | Code     | Production code generation         | Best code models with large context       |
-| `tools-pro`    | Tools    | Function calling & orchestration   | Models with excellent tool support        |
-| `analysis-pro` | Analysis | Deep reasoning and research        | Largest available reasoning models        |
-
-The gateway automatically:
-
-- Routes to the best available provider based on health and quota
-- Fails over to backup providers if the primary fails
-- Adds response headers showing the actual provider used
-
-## API Usage
-
-### Authentication
-
-All requests require Bearer token authentication:
-
-```bash
-curl -H "Authorization: Bearer $GATEWAY_API_KEY" ...
-```
-
-### Basic Request
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "chat-lite",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-### With Router Hints
-
-Control routing behavior:
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "chat-lite",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "router": {
-      "providers": {
-        "allow": ["groq"],
-        "prefer": ["groq"]
-      },
-      "slo": {
-        "max_latency_ms": 5000
-      },
-      "fallback": {
-        "max_attempts": 3
-      }
-    }
-  }'
-```
-
-### Strict JSON Schema
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "chat-lite",
-    "messages": [{"role": "user", "content": "Extract name"}],
-    "response_format": {
-      "type": "json_schema",
-      "json_schema": {
-        "name": "person",
-        "strict": true,
-        "schema": {
-          "type": "object",
-          "properties": { "name": {"type": "string"} },
-          "required": ["name"]
-        }
-      }
-    }
-  }'
-```
-
-### Streaming
-
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "chat-lite",
-    "messages": [{"role": "user", "content": "Count to 5"}],
-    "stream": true
-  }'
-```
-
-## Endpoints
-
-| Endpoint               | Method | Description                       |
-| ---------------------- | ------ | --------------------------------- |
-| `/v1/chat/completions` | POST   | Main chat completions endpoint    |
-| `/health`              | GET    | Health check with provider status |
-| `/metrics`             | GET    | Prometheus metrics                |
-
-## Router Hints Reference
-
-| Field                    | Type     | Description                                                      |
-| ------------------------ | -------- | ---------------------------------------------------------------- |
-| `profile`                | string   | Routing profile: `cheap_fast`, `reliable_structured`, `balanced` |
-| `requirements.output`    | string   | `text`, `json_schema_strict`                                     |
-| `requirements.streaming` | string   | `required`, `preferred`, `forbidden`                             |
-| `requirements.tools`     | string   | `required`, `allowed`, `forbidden`                               |
-| `slo.max_latency_ms`     | number   | Per-attempt timeout                                              |
-| `slo.hard_timeout_ms`    | number   | Total timeout across attempts                                    |
-| `providers.allow`        | string[] | Whitelist provider IDs                                           |
-| `providers.deny`         | string[] | Blacklist provider IDs                                           |
-| `providers.prefer`       | string[] | Preferred provider order                                         |
-| `fallback.max_attempts`  | number   | Max retry attempts (1-5)                                         |
-| `fallback.on_429`        | boolean  | Retry on rate limit                                              |
-| `fallback.on_timeout`    | boolean  | Retry on timeout                                                 |
-| `fallback.on_5xx`        | boolean  | Retry on server error                                            |
+---
 
 ## Architecture
 
 ```
-Request
-  ↓
-[Auth Middleware] - Bearer token validation
-  ↓
-[Rate Limit] - Per-IP Redis sliding window
-  ↓
-[Router] - Derive requirements, filter, score
-  ↓
-[Provider Selection] - Health checks, quota checks
-  ↓
-[Execution] - Retry logic, circuit breakers
-  ↓
-[Provider] - OpenAI-compatible HTTP client
-  ↓
-Response
+┌─────────────────────────────────────────────────────────────┐
+│                      HTTP Layer                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │   Handlers   │  │  Middleware  │  │   Rate Limiting  │   │
+│  │  (Gin)       │  │  (Auth/CORS) │  │   (Redis)        │   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Routing Service                           │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  Stage 1: Derive Requirements                          │ │
+│  │  Stage 2: Generate Candidates                          │ │
+│  │  Stage 3: Filter (Capabilities/Quota/Circuit Breaker)  │ │
+│  │  Stage 4: Score & Sort (Preference + Health)           │ │
+│  │  Stage 5: Compile Execution Plan                       │ │
+│  │  Stage 6: Execute with Fallback                        │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Core Services                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │    Quota     │  │    Health    │  │    Provider      │   │
+│  │   (Redis)    │  │  (Circuit)   │  │   (HTTP)         │   │
+│  └──────────────┘  └──────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+              ┌─────────────────────────┐
+              │   LLM Providers         │
+              │   (Groq/Cerebras/       │
+              │    Mistral/Vertex)      │
+              └─────────────────────────┘
 ```
 
-## Development
+### How Requests Flow
+
+1. **Request arrives** - You call `/v1/chat/completions` with your API key
+2. **Authentication** - Gateway validates your API key
+3. **Rate limiting** - Checks per-IP limits to prevent abuse
+4. **Routing** - 6-stage pipeline picks the best provider based on model, health, and your preferences
+5. **Execution** - Calls the provider with automatic fallback on failure
+6. **Response** - Returns the LLM response in OpenAI format
+7. **Metrics** - Records success/failure for health tracking and quota updates
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Go 1.25 or later
+- Redis 7.x
+- At least one LLM provider API key
+
+### Run Locally
 
 ```bash
-# Install dependencies
-npm install
+git clone https://github.com/abdo-355/llm-gateway.git
+cd llm-gateway
 
-# Run in development mode (requires local Redis)
-npm run dev
+go mod download
 
-# Type check
-npm run typecheck
+cp .env.example .env
+# Add your API keys to .env
 
-# Build
-npm run build
+go run ./cmd/gateway
 ```
 
-## Security
+### Run with Docker
 
-- **Mandatory Bearer Authentication** - All requests require valid API key
-- **Non-root Container** - Runs as UID 1001
-- **Rate Limiting** - Per-IP limits with Redis
-- **Helmet Headers** - Security headers (CSP, HSTS, etc.)
-- **CORS** - Configurable origin whitelist
-- **Internal Network** - Redis isolated in backend network
-- **No Secrets in Code** - All credentials via environment variables
+```bash
+docker-compose up -d
 
-## License
+curl http://localhost:8080/health
+```
 
-MIT
+### Your First Request
+
+```bash
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer ${GATEWAY_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "chat-pro",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GATEWAY_API_KEY` | Yes | Your API key (min 32 characters) |
+| `GROQ_API_KEY` | No | Groq API key |
+| `CEREBRAS_API_KEY` | No | Cerebras API key |
+| `MISTRAL_API_KEY` | No | Mistral API key |
+| `GOOGLE_VERTEX_API_KEY` | No | Google Vertex AI key |
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 8080 | Server port |
+| `ENV` | production | development or production |
+| `LOG_LEVEL` | info | debug, info, warn, error |
+| `REDIS_URL` | redis://localhost:6379 | Redis connection |
+| `RATE_LIMIT_PER_IP` | 100 | Max requests per IP per minute |
+| `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
+| `CORS_ORIGINS` | * | Allowed CORS origins |
+
+### Logical Models
+
+Logical models abstract provider-specific models into semantic categories:
+
+| Model | Use Case |
+|-------|----------|
+| `chat-lite` | Fast, simple responses |
+| `chat-pro` | General purpose conversation |
+| `chat-max` | Complex, long tasks |
+| `analysis-pro` | Reasoning and analysis |
+| `json-fast` | Quick JSON output |
+| `json-safe` | Strict JSON schema output |
+| `code-fast` | Quick code generation |
+| `code-pro` | Production code |
+| `tools-pro` | Function calling |
+
+Models are configured in `internal/config/logical_models.go`.
+
+### Provider Configuration
+
+Providers are configured in `internal/config/providers.go` with:
+- Base URLs
+- Authentication (bearer, header)
+- Available models
+- Rate limits per model
+- Capabilities (streaming, tools, structured outputs)
+
+---
+
+## API Reference
+
+### Health Check
+
+```http
+GET /health
+```
+
+Returns system health and provider status:
+
+```json
+{
+  "status": "healthy",
+  "providers": {
+    "groq": { "circuit_state": "CLOSED", "health_score": 1.0 }
+  }
+}
+```
+
+### Chat Completions
+
+```http
+POST /v1/chat/completions
+```
+
+**Headers:**
+- `Authorization: Bearer {GATEWAY_API_KEY}`
+- `Content-Type: application/json`
+
+**Request:**
+
+```json
+{
+  "model": "chat-pro",
+  "messages": [{"role": "user", "content": "Hello!"}],
+  "temperature": 0.7
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "chatcmpl-123",
+  "model": "llama-3.3-70b-versatile",
+  "choices": [{
+    "message": {
+      "content": "Hello! How can I help?"
+    }
+  }],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 8,
+    "total_tokens": 18
+  }
+}
+```
+
+**Response Headers:**
+- `X-Gateway-Provider` - Provider used (e.g., groq)
+- `X-Gateway-Model` - Model used (e.g., llama-3.3-70b-versatile)
+
+### Streaming
+
+Set `stream: true` in your request:
+
+```json
+{
+  "model": "chat-pro",
+  "messages": [{"role": "user", "content": "Tell me a story"}],
+  "stream": true
+}
+```
+
+Response is sent as Server-Sent Events:
+
+```
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":"Once"}}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","choices":[{"delta":{"content":" upon"}}]}
+
+data: [DONE]
+```
+
+### Errors
+
+**Rate Limited (429):**
+
+```json
+{
+  "error": {
+    "type": "rate_limit_error",
+    "message": "Rate limit exceeded. Try again in 60s."
+  }
+}
+```
+
+**Provider Unavailable (503):**
+
+```json
+{
+  "error": {
+    "type": "circuit_breaker_error",
+    "message": "Provider temporarily unavailable"
+  }
+}
+```
+
+**All Providers Failed:**
+
+```json
+{
+  "error": {
+    "type": "gateway_error",
+    "code": "ALL_ATTEMPTS_FAILED",
+    "message": "All provider attempts failed"
+  }
+}
+```
+
+---
+
+## Routing Logic
+
+The gateway uses a 6-stage pipeline to select the optimal provider:
+
+1. **Derive Requirements** - Figure out what the request needs (streaming, JSON, tools)
+2. **Generate Candidates** - Find available provider/model combinations
+3. **Filter** - Remove candidates that can't handle the request
+4. **Score & Sort** - Rank by preference and health
+5. **Compile Plan** - Create execution plan with fallback order
+6. **Execute** - Call provider, retry on failure
+
+See [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for detailed documentation.
+
+---
+
+## Monitoring
+
+### Health Endpoint
+
+```bash
+curl http://localhost:8080/health
+```
+
+Returns circuit breaker state and health scores per provider.
+
+### Logging
+
+All logs are JSON with request context:
+
+```json
+{
+  "timestamp": "2026-02-06T22:45:00Z",
+  "level": "info",
+  "request_id": "req-123",
+  "provider": "groq",
+  "latency_ms": 1250,
+  "tokens": 65
+}
+```
+
+Key log fields:
+- `request_id` - Unique request identifier
+- `provider` - Provider used
+- `model` - Model used
+- `latency_ms` - Request latency
+- `attempts` - Number of providers tried
+
+---
+
+## Troubleshooting
+
+### Gateway Won't Start
+
+**Symptom:** Container exits immediately
+
+**Check:**
+1. All required API keys are set
+2. `GATEWAY_API_KEY` is at least 32 characters
+3. Redis is accessible
+
+```bash
+docker-compose config
+```
+
+### Slow Responses
+
+**Symptom:** Requests take more than 5 seconds
+
+**Check:**
+1. Provider health at `GET /health`
+2. Circuit breaker state (should be CLOSED)
+3. Quota limits not exceeded
+
+```bash
+curl http://localhost:8080/health | jq '.providers'
+```
+
+### Rate Limiting
+
+**Symptom:** 429 errors
+
+**Fix:**
+- Increase `RATE_LIMIT_PER_IP` in .env
+- Check provider quotas
+
+### Provider Unavailable
+
+**Symptom:** 503 errors
+
+**Fix:**
+- Wait 30 seconds for automatic recovery
+- Check provider status
+
+### Enable Debug Logs
+
+```bash
+LOG_LEVEL=debug go run ./cmd/gateway
+```
+
+### Get Help
+
+- Check [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for routing details
+- View logs with `docker-compose logs -f`

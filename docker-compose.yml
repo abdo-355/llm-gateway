@@ -4,11 +4,11 @@ services:
   app:
     build:
       context: .
-      target: production
     ports:
       - "${EXTERNAL_PORT:-8080}:8080"
     environment:
       - PORT=8080
+      - ENV=production
       - GATEWAY_API_KEY=${GATEWAY_API_KEY}
       - RATE_LIMIT_PER_IP=${RATE_LIMIT_PER_IP:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
@@ -18,9 +18,8 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-      - GOOGLE_VERTEX_API_KEY=${GOOGLE_VERTEX_API_KEY}
+      - GOOGLE_VERTEX_PROJECT_ID=${GOOGLE_VERTEX_PROJECT_ID}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - NODE_ENV=production
     depends_on:
       redis:
         condition: service_healthy
