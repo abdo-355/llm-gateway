@@ -82,11 +82,20 @@ func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *type
 
 	// Detect tools
 	if len(req.Tools) > 0 {
-		switch req.ToolChoice {
-		case "required":
+		switch tc := req.ToolChoice.(type) {
+		case string:
+			switch tc {
+			case "required":
+				requirements.Tools = "required"
+			case "none":
+				requirements.Tools = "forbidden"
+			default: // "auto" or any other string
+				requirements.Tools = "allowed"
+			}
+		case map[string]any:
+			// Object form like {"type": "function", "function": {"name": "..."}}
+			// implies a specific tool is required
 			requirements.Tools = "required"
-		case "none":
-			requirements.Tools = "forbidden"
 		default:
 			requirements.Tools = "allowed"
 		}
