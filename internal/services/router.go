@@ -534,8 +534,6 @@ func (r *Router) ExecuteStream(
 
 		startTime := time.Now()
 		var ttfbRecorded bool
-		var streamProvider, streamModel string
-		_, _ = streamProvider, streamModel
 
 		for i, attempt := range plan.Attempts {
 			if plan.HardTimeoutMs != nil {
@@ -566,8 +564,6 @@ func (r *Router) ExecuteStream(
 				if !ttfbRecorded {
 					metrics.StreamTTFBSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(time.Since(startTime).Seconds())
 					ttfbRecorded = true
-					streamProvider = attempt.ProviderID
-					streamModel = attempt.Model
 				}
 				select {
 				case chunks <- chunk:
@@ -613,6 +609,13 @@ func (r *Router) ExecuteStream(
 					Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", 1)}},
 				})
 			}
+
+			// Check if we should retry based on error type and plan configuration
+			typedErr := r.gatewayErrorToTypedError(err)
+			if !r.ShouldRetry(typedErr, plan, i) {
+				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
+				return
+			}
 		}
 
 		errChan <- &types.GatewayError{
@@ -625,6 +628,60 @@ func (r *Router) ExecuteStream(
 	return types.StreamResult{
 		Chunks: chunks,
 		Err:    errChan,
+	}
+}
+
+// gatewayErrorToTypedError converts a GatewayError to the appropriate typed error for ShouldRetry
+func (r *Router) gatewayErrorToTypedError(ge *types.GatewayError) error {
+	if ge == nil {
+		return nil
+	}
+
+	switch ge.Code {
+	case "RATE_LIMITED":
+		retryAfter := 60
+		if details, ok := ge.Details["retry_after"].(int); ok {
+			retryAfter = details
+		}
+		return errors.NewRateLimitError(ge.Message, retryAfter, "rpm")
+	case "TIMEOUT", "HARD_TIMEOUT":
+		timeoutType := "request"
+		if ge.Code == "HARD_TIMEOUT" {
+			timeoutType = "hard"
+		}
+		return errors.NewTimeoutError(ge.Message, timeoutType)
+	case "PAYMENT_REQUIRED":
+		return errors.NewPaymentRequiredError(ge.Message)
+	case "VALIDATION_FAILED", "VALIDATION_ERROR":
+		return errors.NewValidationError(ge.Message, nil)
+	case "CIRCUIT_BREAKER_OPEN":
+		providerID := ""
+		if details, ok := ge.Details["provider_id"].(string); ok {
+			providerID = details
+		}
+		return errors.NewCircuitBreakerError(ge.Message, providerID, "OPEN")
+	case "QUOTA_EXCEEDED":
+		providerID := ""
+		model := ""
+		limitType := ""
+		if details, ok := ge.Details["provider_id"].(string); ok {
+			providerID = details
+		}
+		if details, ok := ge.Details["model"].(string); ok {
+			model = details
+		}
+		if details, ok := ge.Details["limit_type"].(string); ok {
+			limitType = details
+		}
+		return errors.NewModelQuotaExceededError(ge.Message, providerID, model, limitType)
+	default:
+		// Provider errors - check if retryable based on code
+		isRetryable := ge.Code == "REQUEST_FAILED" || ge.Code == "STREAM_PARSE_FAILED"
+		return &errors.ProviderError{
+			Message:     ge.Message,
+			StatusCode:  500,
+			IsRetryable: isRetryable,
+		}
 	}
 }
 
