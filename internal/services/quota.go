@@ -90,11 +90,23 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 
 	keys := s.buildKeys(providerID, model, now)
 
+	// Calculate cutoff times for sliding windows
+	rpmCutoff := now.Add(-60 * time.Second).UnixMilli()
+	tpmCutoff := now.Add(-60 * time.Second).UnixMilli()
+
 	pipe := s.redis.Pipeline()
+
+	// RPM: Clean expired entries and count remaining
+	pipe.ZRemRangeByScore(ctx, keys.RPM, "0", fmt.Sprintf("%d", rpmCutoff))
 	pipe.ZCard(ctx, keys.RPM)
+
 	pipe.Get(ctx, keys.RPH)
 	pipe.Get(ctx, keys.RPD)
-	pipe.ZCard(ctx, keys.TPM)
+
+	// TPM: Get entries in window and sum token counts (stored as scores)
+	pipe.ZRemRangeByScore(ctx, keys.TPM, "0", fmt.Sprintf("%d", tpmCutoff))
+	pipe.ZRangeWithScores(ctx, keys.TPM, 0, -1)
+
 	pipe.Get(ctx, keys.TPH)
 	pipe.Get(ctx, keys.TPD)
 	pipe.Get(ctx, keys.TPMU)
@@ -109,7 +121,7 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 		return err
 	}
 
-	status := s.parseResults(results)
+	status := s.parseResults(results, now)
 
 	type quotaCheck struct {
 		name    string
@@ -161,9 +173,9 @@ func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model s
 	pipe.Incr(ctx, keys.RPD)
 	pipe.Expire(ctx, keys.RPD, 25*time.Hour)
 
-	// TPM: sliding window with token counts
-	tpmMember := fmt.Sprintf("%d-%d", tokensUsed, now.Nanosecond())
-	pipe.ZAdd(ctx, keys.TPM, redis.Z{Score: float64(timestamp), Member: tpmMember})
+	// TPM: sliding window with token counts (store tokens as score for summing)
+	tpmMember := fmt.Sprintf("%d-%d", timestamp, now.Nanosecond())
+	pipe.ZAdd(ctx, keys.TPM, redis.Z{Score: float64(tokensUsed), Member: tpmMember})
 	pipe.Expire(ctx, keys.TPM, 60*time.Second)
 
 	// TPH: hourly token counter
@@ -235,11 +247,23 @@ func (s *QuotaService) GetModelQuotaStatus(ctx context.Context, providerID, mode
 	now := time.Now().UTC()
 	keys := s.buildKeys(providerID, model, now)
 
+	// Calculate cutoff times for sliding windows
+	rpmCutoff := now.Add(-60 * time.Second).UnixMilli()
+	tpmCutoff := now.Add(-60 * time.Second).UnixMilli()
+
 	pipe := s.redis.Pipeline()
+
+	// RPM: Clean expired entries and count remaining
+	pipe.ZRemRangeByScore(ctx, keys.RPM, "0", fmt.Sprintf("%d", rpmCutoff))
 	pipe.ZCard(ctx, keys.RPM)
+
 	pipe.Get(ctx, keys.RPH)
 	pipe.Get(ctx, keys.RPD)
-	pipe.ZCard(ctx, keys.TPM)
+
+	// TPM: Clean expired and sum token counts
+	pipe.ZRemRangeByScore(ctx, keys.TPM, "0", fmt.Sprintf("%d", tpmCutoff))
+	pipe.ZRangeWithScores(ctx, keys.TPM, 0, -1)
+
 	pipe.Get(ctx, keys.TPH)
 	pipe.Get(ctx, keys.TPD)
 	pipe.Get(ctx, keys.TPMU)
@@ -254,7 +278,7 @@ func (s *QuotaService) GetModelQuotaStatus(ctx context.Context, providerID, mode
 		return QuotaStatus{}
 	}
 
-	return s.parseResults(results)
+	return s.parseResults(results, now)
 }
 
 type quotaKeys struct {
@@ -280,7 +304,7 @@ func (s *QuotaService) buildKeys(providerID, model string, now time.Time) quotaK
 	}
 }
 
-func (s *QuotaService) parseResults(results []redis.Cmder) QuotaStatus {
+func (s *QuotaService) parseResults(results []redis.Cmder, now time.Time) QuotaStatus {
 	status := QuotaStatus{}
 
 	atoi := func(cmd *redis.StringCmd) int {
@@ -292,26 +316,43 @@ func (s *QuotaService) parseResults(results []redis.Cmder) QuotaStatus {
 		return 0
 	}
 
-	if len(results) > 0 {
-		status.Rpm = int(results[0].(*redis.IntCmd).Val())
-	}
+	// Pipeline results (after adding ZRemRangeByScore commands):
+	// 0: ZRemRangeByScore RPM (ignored)
+	// 1: ZCard RPM
+	// 2: Get RPH
+	// 3: Get RPD
+	// 4: ZRemRangeByScore TPM (ignored)
+	// 5: ZRangeWithScores TPM
+	// 6: Get TPH
+	// 7: Get TPD
+	// 8: Get TPMU
+
 	if len(results) > 1 {
-		status.Rph = atoi(results[1].(*redis.StringCmd))
+		status.Rpm = int(results[1].(*redis.IntCmd).Val())
 	}
 	if len(results) > 2 {
-		status.Rpd = atoi(results[2].(*redis.StringCmd))
+		status.Rph = atoi(results[2].(*redis.StringCmd))
 	}
 	if len(results) > 3 {
-		status.Tpm = int(results[3].(*redis.IntCmd).Val())
-	}
-	if len(results) > 4 {
-		status.Tph = atoi(results[4].(*redis.StringCmd))
+		status.Rpd = atoi(results[3].(*redis.StringCmd))
 	}
 	if len(results) > 5 {
-		status.Tpd = atoi(results[5].(*redis.StringCmd))
+		// Sum token counts from ZRangeWithScores (scores are token counts)
+		scores := results[5].(*redis.ZSliceCmd).Val()
+		totalTokens := 0
+		for _, z := range scores {
+			totalTokens += int(z.Score)
+		}
+		status.Tpm = totalTokens
 	}
 	if len(results) > 6 {
-		status.Tpmu = atoi(results[6].(*redis.StringCmd))
+		status.Tph = atoi(results[6].(*redis.StringCmd))
+	}
+	if len(results) > 7 {
+		status.Tpd = atoi(results[7].(*redis.StringCmd))
+	}
+	if len(results) > 8 {
+		status.Tpmu = atoi(results[8].(*redis.StringCmd))
 	}
 
 	return status
