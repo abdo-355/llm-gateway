@@ -17,7 +17,7 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -51,7 +51,7 @@ func New(svc Services) *Server {
 	r.Use(middleware.ErrorHandler())
 
 	r.GET("/health", handlers.Health(svc.Health))
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	// r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	rateLimiter := middleware.NewRateLimiter(svc.Redis)
 	r.Use(rateLimiter.RateLimit())
