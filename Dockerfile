@@ -41,8 +41,11 @@ RUN chown -R appuser:appgroup /app
 # Switch to non-root user
 USER appuser
 
-# Expose port
+# Expose ports
+# 8080 - Main application port (public)
+# 9090 - Metrics port (should be bound to localhost only)
 EXPOSE 8080
+EXPOSE 9090
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

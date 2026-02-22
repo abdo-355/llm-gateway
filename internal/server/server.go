@@ -17,6 +17,7 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -28,7 +29,8 @@ type Services struct {
 }
 
 type Server struct {
-	*http.Server
+	httpServer    *http.Server
+	metricsServer *http.Server
 }
 
 func New(svc Services) *Server {
@@ -51,7 +53,6 @@ func New(svc Services) *Server {
 	r.Use(middleware.ErrorHandler())
 
 	r.GET("/health", handlers.Health(svc.Health))
-	// r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	rateLimiter := middleware.NewRateLimiter(svc.Redis)
 	r.Use(rateLimiter.RateLimit())
@@ -61,13 +62,23 @@ func New(svc Services) *Server {
 	authorized.POST("/v1/chat/completions", handlers.Completions(svc.Router))
 	authorized.POST("/v1/responses", handlers.Responses(svc.Router))
 
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+
 	return &Server{
-		Server: &http.Server{
+		httpServer: &http.Server{
 			Addr:         fmt.Sprintf(":%d", env.Port),
 			Handler:      r,
 			ReadTimeout:  15 * time.Second,
 			WriteTimeout: 0,
 			IdleTimeout:  120 * time.Second,
+		},
+		metricsServer: &http.Server{
+			Addr:         fmt.Sprintf(":%d", env.MetricsPort),
+			Handler:      mux,
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  30 * time.Second,
 		},
 	}
 }
@@ -77,14 +88,30 @@ func (s *Server) Start() {
 		logger.Info().
 			Str("type", "app").
 			Str("event", "server.starting").
-			Str("port", s.Addr).
-			Msg("Starting server")
-		if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			Str("port", s.httpServer.Addr).
+			Msg("Starting HTTP server")
+		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error().
 				Str("type", "app").
 				Str("event", "server.start_failed").
 				Err(err).
-				Msg("Server failed to start")
+				Msg("HTTP server failed to start")
+			os.Exit(1)
+		}
+	}()
+
+	go func() {
+		logger.Info().
+			Str("type", "app").
+			Str("event", "metrics_server.starting").
+			Str("port", s.metricsServer.Addr).
+			Msg("Starting metrics server")
+		if err := s.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error().
+				Str("type", "app").
+				Str("event", "metrics_server.start_failed").
+				Err(err).
+				Msg("Metrics server failed to start")
 			os.Exit(1)
 		}
 	}()
@@ -96,17 +123,39 @@ func (s *Server) Start() {
 	logger.Info().
 		Str("type", "app").
 		Str("event", "server.shutdown").
-		Msg("Shutting down server")
+		Msg("Shutting down servers")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := s.Shutdown(ctx); err != nil {
+	var httpErr, metricsErr error
+
+	done := make(chan struct{})
+	go func() {
+		httpErr = s.httpServer.Shutdown(ctx)
+		metricsErr = s.metricsServer.Shutdown(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+
+	if httpErr != nil {
 		logger.Error().
 			Str("type", "app").
 			Str("event", "server.shutdown_failed").
-			Err(err).
-			Msg("Server forced to shutdown")
+			Err(httpErr).
+			Msg("HTTP server forced to shutdown")
+	}
+
+	if metricsErr != nil {
+		logger.Error().
+			Str("type", "app").
+			Str("event", "metrics_server.shutdown_failed").
+			Err(metricsErr).
+			Msg("Metrics server forced to shutdown")
 	}
 
 	logger.Info().

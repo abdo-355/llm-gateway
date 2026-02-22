@@ -10,6 +10,7 @@ import (
 type EnvConfig struct {
 	Environment string
 	Port        int
+	MetricsPort int
 
 	GatewayAPIKey  string
 	GroqAPIKey     string
@@ -71,9 +72,15 @@ func LoadEnv() (*EnvConfig, error) {
 
 	rateLimitGlobal := getEnvBool("RATE_LIMIT_GLOBAL", false)
 
+	metricsPort := getEnvInt("METRICS_PORT", 9090)
+	if metricsPort < 1 || metricsPort > 65535 {
+		return nil, fmt.Errorf("METRICS_PORT must be between 1 and 65535")
+	}
+
 	return &EnvConfig{
 		Environment:           environment,
 		Port:                  port,
+		MetricsPort:           metricsPort,
 		GatewayAPIKey:         gatewayKey,
 		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
 		CerebrasAPIKey:        os.Getenv("CEREBRAS_API_KEY"),
@@ -120,7 +127,7 @@ func getEnvBool(key string, defaultValue bool) bool {
 // Singleton instance
 var (
 	envInstance *EnvConfig
-	envOnce    sync.Once
+	envOnce     sync.Once
 )
 
 func GetEnv() *EnvConfig {
