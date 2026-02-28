@@ -45,7 +45,7 @@ The gateway examines each request to determine what it needs (streaming, JSON ou
 If a provider fails (timeout, error, rate limit), the gateway automatically tries the next available provider. This happens transparently - your code sees a successful response or a final error.
 
 ### Circuit Breaker
-When a provider experiences repeated failures, the circuit breaker opens and temporarily stops sending requests. After a cooldown period, it allows尝试 requests again. This prevents hammering a struggling provider.
+When a provider experiences repeated failures, the circuit breaker opens and temporarily stops sending requests. After a cooldown period, it allows probe requests again. This prevents hammering a struggling provider.
 
 ### Quota Management
 Per-model, per-provider limits are tracked in Redis:
@@ -173,7 +173,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 | `GROQ_API_KEY` | No | Groq API key |
 | `CEREBRAS_API_KEY` | No | Cerebras API key |
 | `MISTRAL_API_KEY` | No | Mistral API key |
-| `GOOGLE_VERTEX_API_KEY` | No | Google Vertex AI key |
+| `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI (uses ADC for auth) |
 
 | Variable | Default | Description |
 |----------|---------|-------------|
