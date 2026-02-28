@@ -69,7 +69,7 @@ func New(svc Services) *Server {
 		httpServer: &http.Server{
 			Addr:         fmt.Sprintf(":%d", env.Port),
 			Handler:      r,
-			ReadTimeout:  15 * time.Second,
+			ReadTimeout:  60 * time.Second,
 			WriteTimeout: 0,
 			IdleTimeout:  120 * time.Second,
 		},

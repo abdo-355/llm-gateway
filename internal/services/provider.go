@@ -22,7 +22,9 @@ type ProviderService struct {
 
 func NewProviderService() *ProviderService {
 	return &ProviderService{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Timeout: 120 * time.Second,
+		},
 	}
 }
 
