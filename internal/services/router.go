@@ -13,7 +13,6 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/types"
-	"github.com/rs/zerolog/log"
 )
 
 type Router struct {
@@ -152,7 +151,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		}
 
 		if provider == nil {
-			log.Warn().
+			logger.Warn().
 				Str("type", "router").
 				Str("event", "logical_model.provider_not_found").
 				Str("provider", candidate.Provider).
@@ -165,7 +164,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalM
 		found := slices.Contains(provider.Models.List, candidate.Model)
 
 		if !found {
-			log.Warn().
+			logger.Warn().
 				Str("type", "router").
 				Str("event", "logical_model.model_not_found").
 				Str("provider", candidate.Provider).
@@ -411,6 +410,12 @@ func (r *Router) Execute(
 ) (*types.ExecutionResult, error) {
 	startTime := time.Now()
 
+	logicalModel := metrics.GetLogicalModel(ctx)
+	routerProfile := metrics.GetRouterProfile(ctx)
+
+	var previousProvider string
+	var hadFailure bool
+
 	for i, attempt := range plan.Attempts {
 		if plan.HardTimeoutMs != nil {
 			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
@@ -456,13 +461,32 @@ func (r *Router) Execute(
 			}
 			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
-			metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "success").Inc()
-			metrics.ProviderLatencySeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
-			if resp.Usage != nil {
-				metrics.ProviderTokensTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "prompt").Add(float64(resp.Usage.PromptTokens))
-				metrics.ProviderTokensTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "completion").Add(float64(resp.Usage.CompletionTokens))
+			if hadFailure {
+				metrics.RetrySuccessTotal.WithLabelValues(logicalModel).Inc()
 			}
-			metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(i + 1))
+
+			metrics.ProviderRequestsTotal.WithLabelValues(
+				attempt.ProviderID, attempt.Model, "success",
+				logicalModel, routerProfile, "",
+			).Inc()
+			metrics.ProviderLatencySeconds.WithLabelValues(
+				attempt.ProviderID, attempt.Model,
+				logicalModel, routerProfile,
+			).Observe(float64(latencyMs) / 1000.0)
+			if resp.Usage != nil {
+				metrics.ProviderTokensTotal.WithLabelValues(
+					attempt.ProviderID, attempt.Model, "prompt", logicalModel,
+				).Add(float64(resp.Usage.PromptTokens))
+				metrics.ProviderTokensTotal.WithLabelValues(
+					attempt.ProviderID, attempt.Model, "completion", logicalModel,
+				).Add(float64(resp.Usage.CompletionTokens))
+				metrics.ProviderTokensTotal.WithLabelValues(
+					attempt.ProviderID, attempt.Model, "total", logicalModel,
+				).Add(float64(resp.Usage.TotalTokens))
+			}
+			metrics.RoutingAttemptsTotal.WithLabelValues(
+				logicalModel, routerProfile,
+			).Observe(float64(i + 1))
 
 			logger.Info().
 				Str("type", "router").
@@ -486,16 +510,43 @@ func (r *Router) Execute(
 
 		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
 
+		if previousProvider != "" {
+			metrics.FailoverEventsTotal.WithLabelValues(
+				previousProvider, attempt.ProviderID, logicalModel,
+			).Inc()
+		}
+		previousProvider = attempt.ProviderID
+		hadFailure = true
+
 		var status string
+		var errorType string
 		switch err.(type) {
 		case *errors.RateLimitError:
 			status = "rate_limited"
+			errorType = "rate_limit"
 		case *errors.TimeoutError:
 			status = "timeout"
+			errorType = "timeout"
+		case *errors.CircuitBreakerError:
+			status = "circuit_breaker"
+			errorType = "circuit_breaker"
+		case *errors.ModelQuotaExceededError:
+			status = "quota_exceeded"
+			errorType = "quota_exceeded"
+		case *errors.PaymentRequiredError:
+			status = "payment_required"
+			errorType = "payment_required"
+		case *errors.ValidationError:
+			status = "validation"
+			errorType = "validation"
 		default:
 			status = "error"
+			errorType = "unknown"
 		}
-		metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, status).Inc()
+		metrics.ProviderRequestsTotal.WithLabelValues(
+			attempt.ProviderID, attempt.Model, status,
+			logicalModel, routerProfile, errorType,
+		).Inc()
 
 		logger.Warn().
 			Str("type", "router").
@@ -518,7 +569,9 @@ func (r *Router) Execute(
 		}
 	}
 
-	metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(len(plan.Attempts)))
+	metrics.RoutingAttemptsTotal.WithLabelValues(
+		logicalModel, routerProfile,
+	).Observe(float64(len(plan.Attempts)))
 
 	return nil, &types.GatewayError{
 		Type:    "gateway_error",
@@ -543,6 +596,14 @@ func (r *Router) ExecuteStream(
 
 		startTime := time.Now()
 		var ttfbRecorded bool
+
+		logicalModel := metrics.GetLogicalModel(ctx)
+		routerProfile := metrics.GetRouterProfile(ctx)
+
+		var previousProvider string
+		var hadFailure bool
+		var chunksSent bool
+		var outputTokenCount int
 
 		for i, attempt := range plan.Attempts {
 			if plan.HardTimeoutMs != nil {
@@ -569,14 +630,22 @@ func (r *Router) ExecuteStream(
 				attempt.Auth,
 			)
 
+			outputTokenCount = 0
 			for chunk := range result.Chunks {
 				if !ttfbRecorded {
-					metrics.StreamTTFBSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(time.Since(startTime).Seconds())
+					metrics.StreamTTFBSeconds.WithLabelValues(
+						attempt.ProviderID, attempt.Model, logicalModel,
+					).Observe(time.Since(startTime).Seconds())
 					ttfbRecorded = true
 				}
+				if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != nil {
+					outputTokenCount++
+				}
+				chunksSent = true
 				select {
 				case chunks <- chunk:
 				case <-ctx.Done():
+					cancel()
 					return
 				}
 			}
@@ -590,26 +659,59 @@ func (r *Router) ExecuteStream(
 				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 				tokensUsed := r.quotaService.EstimateTokens(req)
 				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
-				metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, "success").Inc()
-				metrics.ProviderLatencySeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
-				metrics.StreamDurationSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(float64(latencyMs) / 1000.0)
-				metrics.RoutingAttemptsTotal.WithLabelValues(req.Model).Observe(float64(i + 1))
+
+				if hadFailure {
+					metrics.RetrySuccessTotal.WithLabelValues(logicalModel).Inc()
+				}
+
+				metrics.ProviderRequestsTotal.WithLabelValues(
+					attempt.ProviderID, attempt.Model, "success",
+					logicalModel, routerProfile, "",
+				).Inc()
+				metrics.ProviderLatencySeconds.WithLabelValues(
+					attempt.ProviderID, attempt.Model,
+					logicalModel, routerProfile,
+				).Observe(float64(latencyMs) / 1000.0)
+				metrics.StreamDurationSeconds.WithLabelValues(
+					attempt.ProviderID, attempt.Model, logicalModel,
+				).Observe(float64(latencyMs) / 1000.0)
+				metrics.StreamOutputTokensTotal.WithLabelValues(
+					attempt.ProviderID, attempt.Model, logicalModel,
+				).Add(float64(outputTokenCount))
+				metrics.RoutingAttemptsTotal.WithLabelValues(
+					logicalModel, routerProfile,
+				).Observe(float64(i + 1))
 				errChan <- nil
 				return
 			}
 
 			r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
 
+			if previousProvider != "" {
+				metrics.FailoverEventsTotal.WithLabelValues(
+					previousProvider, attempt.ProviderID, logicalModel,
+				).Inc()
+			}
+			previousProvider = attempt.ProviderID
+			hadFailure = true
+
 			var status string
+			var errorType string
 			switch err.Code {
 			case "RATE_LIMITED":
 				status = "rate_limited"
+				errorType = "rate_limit"
 			case "TIMEOUT", "HARD_TIMEOUT":
 				status = "timeout"
+				errorType = "timeout"
 			default:
 				status = "error"
+				errorType = "unknown"
 			}
-			metrics.ProviderRequestsTotal.WithLabelValues(attempt.ProviderID, attempt.Model, status).Inc()
+			metrics.ProviderRequestsTotal.WithLabelValues(
+				attempt.ProviderID, attempt.Model, status,
+				logicalModel, routerProfile, errorType,
+			).Inc()
 			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
@@ -619,7 +721,12 @@ func (r *Router) ExecuteStream(
 				})
 			}
 
-			// Check if we should retry based on error type and plan configuration
+			// Don't retry if we already sent chunks to the client
+			if chunksSent {
+				errChan <- r.CreateGatewayError(r.gatewayErrorToTypedError(err), i+1, requestID)
+				return
+			}
+
 			typedErr := r.gatewayErrorToTypedError(err)
 			if !r.ShouldRetry(typedErr, plan, i) {
 				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
