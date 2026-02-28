@@ -22,14 +22,14 @@ const (
 )
 
 type HealthMetrics struct {
-	ProviderID      string
-	Model           string
-	CircuitState    CircuitState
-	FailureCount    int
-	SuccessCount    int
-	LastFailureTime *int64
-	AverageLatency  *int
-	HealthScore     float64
+	ProviderID      string       `json:"provider_id"`
+	Model           string       `json:"model"`
+	CircuitState    CircuitState `json:"circuit_state"`
+	FailureCount    int          `json:"failure_count"`
+	SuccessCount    int          `json:"success_count"`
+	LastFailureTime *int64       `json:"last_failure_time,omitempty"`
+	AverageLatency  *int         `json:"average_latency_ms,omitempty"`
+	HealthScore     float64      `json:"health_score"`
 }
 
 type HealthService struct {
@@ -105,9 +105,10 @@ func (s *HealthService) CanExecute(ctx context.Context, providerID, model string
 		return false
 
 	case StateHalfOpen:
+		// Allow up to 2 probe requests in HALF_OPEN before requiring a decision
 		successes, _ := s.redis.Get(ctx, fmt.Sprintf("%s:successes", circuitPrefix)).Int()
 		failures, _ := s.redis.Get(ctx, fmt.Sprintf("%s:failures", circuitPrefix)).Int()
-		return successes+failures < 1
+		return successes+failures < 2
 	}
 
 	return false
@@ -134,7 +135,7 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 		successes, _ := s.redis.Incr(ctx, successesKey).Result()
 		s.redis.Expire(ctx, successesKey, 24*time.Hour)
 
-		if successes >= 1 {
+		if successes >= 2 {
 			s.setCircuitState(ctx, providerID, model, StateClosed)
 			s.redis.Del(ctx, fmt.Sprintf("%s:failures", circuitPrefix))
 			s.redis.Del(ctx, successesKey)

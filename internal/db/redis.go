@@ -21,7 +21,7 @@ func NewRedisClient() *redis.Client {
 			Err(err).
 			Str("url", env.RedisURL).
 			Msg("Failed to parse Redis URL")
-		return nil
+		panic(fmt.Sprintf("Failed to parse Redis URL: %v", err))
 	}
 
 	client := redis.NewClient(opt)
@@ -30,11 +30,11 @@ func NewRedisClient() *redis.Client {
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		logger.Error().
+		logger.Warn().
 			Str("type", "db").
 			Str("event", "redis.connect_failed").
 			Err(err).
-			Msg("Failed to connect to Redis")
+			Msg("Failed to connect to Redis — will retry on first use")
 	} else {
 		logger.Info().
 			Str("type", "db").

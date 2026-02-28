@@ -93,14 +93,14 @@ func TestHealthCanExecute(t *testing.T) {
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
 		prefix := svc.buildCircuitKeyPrefix(testProvider, testModel)
 		client.Set(ctx, fmt.Sprintf("%s:successes", prefix), 1, 0)
-		client.Set(ctx, fmt.Sprintf("%s:failures", prefix), 0, 0)
+		client.Set(ctx, fmt.Sprintf("%s:failures", prefix), 1, 0)
 
 		assert.False(t, svc.CanExecute(ctx, testProvider, testModel))
 	})
 }
 
 func TestHealthRecordSuccess(t *testing.T) {
-	t.Run("in HALF_OPEN closes circuit", func(t *testing.T) {
+	t.Run("in HALF_OPEN closes circuit after 2 successes", func(t *testing.T) {
 		client, _ := newTestRedis(t)
 		svc := NewHealthService(client, "")
 		ctx := testContext()
@@ -108,7 +108,9 @@ func TestHealthRecordSuccess(t *testing.T) {
 		svc.setCircuitState(ctx, testProvider, testModel, StateHalfOpen)
 
 		svc.RecordSuccess(ctx, testProvider, testModel, 100)
+		assert.Equal(t, StateHalfOpen, svc.GetCircuitState(ctx, testProvider, testModel))
 
+		svc.RecordSuccess(ctx, testProvider, testModel, 100)
 		assert.Equal(t, StateClosed, svc.GetCircuitState(ctx, testProvider, testModel))
 	})
 

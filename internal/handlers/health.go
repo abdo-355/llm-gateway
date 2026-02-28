@@ -20,7 +20,7 @@ func Health(healthSvc HealthMonitor) gin.HandlerFunc {
 
 		status := "healthy"
 		for _, m := range metrics {
-			if m.CircuitState == "OPEN" {
+			if m.CircuitState == services.StateOpen {
 				status = "degraded"
 				break
 			}
