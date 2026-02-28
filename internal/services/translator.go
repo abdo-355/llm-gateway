@@ -52,7 +52,6 @@ func ResponseRequestToChatCompletion(req *types.ResponseRequest) (*types.ChatCom
 func InputItemsToMessages(items []types.ResponseInputItem) ([]types.OpenAIMessage, error) {
 	var messages []types.OpenAIMessage
 	var pendingToolCalls []types.ToolCall
-	var pendingRole string
 
 	for _, item := range items {
 		switch {
@@ -76,10 +75,6 @@ func InputItemsToMessages(items []types.ResponseInputItem) ([]types.OpenAIMessag
 			})
 
 		case item.IsFunctionCall():
-			if pendingRole == "" {
-				pendingRole = "assistant"
-			}
-
 			callID := item.CallID
 			if callID == "" {
 				callID = fmt.Sprintf("call_%s", uuid.New().String()[:24])
@@ -220,10 +215,6 @@ func ValidateStatelessRequest(req *types.ResponseRequest) error {
 	}
 
 	return nil
-}
-
-func ExtractProviderFromResponseID(responseID string) (string, error) {
-	return "", nil
 }
 
 func MessagesToInputItems(messages []types.OpenAIMessage) []types.ResponseInputItem {

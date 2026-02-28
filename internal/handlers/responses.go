@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/metrics"
@@ -257,20 +258,9 @@ func convertStreamChunkToResponse(chunk *types.SSEChunk) *types.Response {
 		CreatedAt:  chunk.Created,
 		Model:      chunk.Model,
 		Output:     output,
-		OutputText: concatStrings(outputTexts),
+		OutputText: strings.Join(outputTexts, "\n"),
 		Status:     "completed",
 	}
-}
-
-func concatStrings(strs []string) string {
-	result := ""
-	for i, s := range strs {
-		if i > 0 {
-			result += "\n"
-		}
-		result += s
-	}
-	return result
 }
 
 func filterCandidatesByModel(candidates []types.RoutingCandidate, model string) []types.RoutingCandidate {
