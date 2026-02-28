@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
@@ -64,12 +62,7 @@ func Responses(router services.RouterHandler) gin.HandlerFunc {
 		var logicalModel *types.LogicalModelConfig
 		var logicalModelID string
 		if req.Model != "" {
-			logicalModel = config.GetLogicalModel(req.Model)
-			if logicalModel != nil {
-				logicalModelID = logicalModel.ID
-			} else {
-				logicalModelID = req.Model
-			}
+			logicalModel, logicalModelID = resolveLogicalModel(req.Model)
 		}
 
 		ctx = metrics.SetLogicalModel(ctx, logicalModelID)
@@ -125,39 +118,13 @@ func Responses(router services.RouterHandler) gin.HandlerFunc {
 
 		result, err := router.Execute(ctx, plan, *chatReq, reqID)
 		if err != nil {
-			gatewayErr, ok := err.(*types.GatewayError)
-			if !ok {
-				gatewayErr = &types.GatewayError{
-					Type:    "gateway_error",
-					Code:    "EXECUTION_ERROR",
-					Message: err.Error(),
-				}
-			}
-
-			status := http.StatusInternalServerError
-			if gatewayErr.Code == "RATE_LIMITED" {
-				status = http.StatusTooManyRequests
-			}
-
-			c.JSON(status, gin.H{"error": gatewayErr})
+			writeExecutionError(c, err)
 			return
 		}
 
 		response := services.ChatCompletionToResponse(&result.Response)
 
-		c.Header("X-Gateway-Provider", result.ProviderID)
-		c.Header("X-Gateway-Model", result.Model)
-		if logicalModel != nil {
-			c.Header("X-Gateway-Logical-Model", logicalModel.ID)
-		}
-		c.Header("X-Gateway-Attempts", strconv.Itoa(result.Attempts))
-
-		tokensUsed := 0
-		if result.Response.Usage != nil {
-			tokensUsed = result.Response.Usage.TotalTokens
-		}
-		c.Header("X-Gateway-Tokens-Used", strconv.Itoa(tokensUsed))
-
+		writeResultHeaders(c, result, logicalModel)
 		c.JSON(http.StatusOK, response)
 	}
 }
