@@ -260,11 +260,23 @@ func (s *HealthService) GetAllHealthMetrics(ctx context.Context) []HealthMetrics
 	return metrics
 }
 
-func (s *HealthService) setCircuitState(ctx context.Context, providerID, model string, state CircuitState) {
+func (s *HealthService) setCircuitState(ctx context.Context, providerID, model string, newState CircuitState) {
 	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
 	stateKey := fmt.Sprintf("%s:state", circuitPrefix)
-	s.redis.Set(ctx, stateKey, string(state), 24*time.Hour)
-	metrics.CircuitBreakerState.WithLabelValues(providerID).Set(metrics.CircuitStateToFloat64(string(state)))
+
+	oldState := s.GetCircuitState(ctx, providerID, model)
+
+	s.redis.Set(ctx, stateKey, string(newState), 24*time.Hour)
+
+	metrics.CircuitBreakerState.WithLabelValues(providerID, model).Set(
+		metrics.CircuitStateToFloat64(string(newState)),
+	)
+
+	if oldState != newState {
+		metrics.CircuitBreakerTransitionsTotal.WithLabelValues(
+			providerID, model, string(oldState), string(newState),
+		).Inc()
+	}
 }
 
 func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string) {

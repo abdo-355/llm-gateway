@@ -63,7 +63,7 @@ func (rl *RateLimiter) RateLimit() gin.HandlerFunc {
 		currentCount := results[1].(*redis.IntCmd).Val()
 
 		if currentCount >= int64(rl.maxRequests) {
-			metrics.RateLimitRejectionsTotal.Inc()
+			metrics.RateLimitRejectionsTotal.WithLabelValues("ip_rate_limit").Inc()
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": gin.H{
 					"type":    "rate_limit_error",

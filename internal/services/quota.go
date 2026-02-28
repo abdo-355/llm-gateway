@@ -10,6 +10,7 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/redis/go-redis/v9"
 )
@@ -127,6 +128,19 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 
 	status := s.parseResults(results, now)
 
+	if limits.Rpm != nil && *limits.Rpm > 0 {
+		ratio := float64(status.Rpm) / float64(*limits.Rpm)
+		metrics.QuotaUsageRatio.WithLabelValues(providerID, model, "rpm").Set(ratio)
+	}
+	if limits.Tpm != nil && *limits.Tpm > 0 {
+		ratio := float64(status.Tpm) / float64(*limits.Tpm)
+		metrics.QuotaUsageRatio.WithLabelValues(providerID, model, "tpm").Set(ratio)
+	}
+	if limits.Tpmu != nil && *limits.Tpmu > 0 {
+		ratio := float64(status.Tpmu) / float64(*limits.Tpmu)
+		metrics.QuotaUsageRatio.WithLabelValues(providerID, model, "tpmu").Set(ratio)
+	}
+
 	type quotaCheck struct {
 		name    string
 		current int
@@ -146,6 +160,7 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 
 	for _, check := range checks {
 		if check.limit != nil && check.current+check.adding > *check.limit {
+			metrics.QuotaRejectionsTotal.WithLabelValues(providerID, model, check.name).Inc()
 			return errors.NewModelQuotaExceededError(
 				fmt.Sprintf("%s limit exceeded: %d/%d", strings.ToUpper(check.name), check.current, *check.limit),
 				providerID, model, check.name,

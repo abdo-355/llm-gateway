@@ -5,18 +5,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// HTTP layer metrics.
 var (
 	HTTPRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "gateway_http_requests_total",
 		Help: "Total number of HTTP requests.",
-	}, []string{"method", "path", "status"})
+	}, []string{"method", "path", "status", "logical_model", "router_profile"})
 
 	HTTPRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_http_request_duration_seconds",
 		Help:    "Duration of HTTP requests in seconds.",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"method", "path", "status"})
+	}, []string{"method", "path", "logical_model", "router_profile"})
 
 	HTTPRequestsInFlight = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "gateway_http_requests_in_flight",
@@ -24,57 +23,90 @@ var (
 	})
 )
 
-// Provider layer metrics.
 var (
 	ProviderRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "gateway_provider_requests_total",
 		Help: "Total number of requests to LLM providers.",
-	}, []string{"provider", "model", "status"})
+	}, []string{"provider", "model", "status", "logical_model", "router_profile", "error_type"})
 
 	ProviderLatencySeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_provider_latency_seconds",
 		Help:    "Latency of LLM provider requests in seconds.",
 		Buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
-	}, []string{"provider", "model"})
+	}, []string{"provider", "model", "logical_model", "router_profile"})
 
 	ProviderTokensTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "gateway_provider_tokens_total",
 		Help: "Total number of tokens processed by LLM providers.",
-	}, []string{"provider", "model", "direction"})
+	}, []string{"provider", "model", "direction", "logical_model"})
 
 	RoutingAttemptsTotal = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_routing_attempts_total",
 		Help:    "Number of routing attempts per request.",
 		Buckets: []float64{1, 2, 3, 4, 5},
+	}, []string{"logical_model", "router_profile"})
+)
+
+var (
+	FailoverEventsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_failover_events_total",
+		Help: "Total number of provider failover events.",
+	}, []string{"from_provider", "to_provider", "logical_model"})
+
+	RetrySuccessTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_retry_success_total",
+		Help: "Total number of successful requests after retry.",
 	}, []string{"logical_model"})
 )
 
-// Circuit breaker & quota metrics.
 var (
 	CircuitBreakerState = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "gateway_circuit_breaker_state",
 		Help: "Current state of the circuit breaker (0=closed, 1=half-open, 2=open).",
-	}, []string{"provider"})
+	}, []string{"provider", "model"})
 
-	RateLimitRejectionsTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "gateway_rate_limit_rejections_total",
-		Help: "Total number of requests rejected due to rate limiting.",
-	})
+	CircuitBreakerTransitionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_circuit_breaker_transitions_total",
+		Help: "Total number of circuit breaker state transitions.",
+	}, []string{"provider", "model", "from_state", "to_state"})
 )
 
-// Streaming metrics.
+var (
+	QuotaUsageRatio = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gateway_quota_usage_ratio",
+		Help: "Current quota usage as a ratio (0.0-1.0).",
+	}, []string{"provider", "model", "quota_type"})
+
+	QuotaRejectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_quota_rejections_total",
+		Help: "Total number of requests rejected due to quota limits.",
+	}, []string{"provider", "model", "quota_type"})
+)
+
+var (
+	RateLimitRejectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_rate_limit_rejections_total",
+		Help: "Total number of requests rejected due to rate limiting.",
+	}, []string{"reason"})
+)
+
 var (
 	StreamDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_stream_duration_seconds",
 		Help:    "Duration of streaming responses in seconds.",
 		Buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
-	}, []string{"provider", "model"})
+	}, []string{"provider", "model", "logical_model"})
 
 	StreamTTFBSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_stream_ttfb_seconds",
 		Help:    "Time to first byte for streaming responses in seconds.",
 		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-	}, []string{"provider", "model"})
+	}, []string{"provider", "model", "logical_model"})
+
+	StreamOutputTokensTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_stream_output_tokens_total",
+		Help: "Total number of output tokens from streaming responses.",
+	}, []string{"provider", "model", "logical_model"})
 )
 
 func CircuitStateToFloat64(state string) float64 {

@@ -18,7 +18,7 @@ func main() {
 	}
 
 	env := config.GetEnv()
-	logger.Init("llm-gateway", env.Environment)
+	logger.Init("llm-gateway", env.Environment, env.LogLevel)
 
 	services.InitVertexAuth(context.Background())
 

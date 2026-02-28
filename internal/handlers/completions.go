@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-contrib/requestid"
@@ -32,9 +33,23 @@ func Completions(router services.RouterHandler) gin.HandlerFunc {
 		}
 
 		var logicalModel *types.LogicalModelConfig
+		var logicalModelID string
 		if req.Model != "" {
 			logicalModel = config.GetLogicalModel(req.Model)
+			if logicalModel != nil {
+				logicalModelID = logicalModel.ID
+			} else {
+				logicalModelID = req.Model
+			}
 		}
+
+		ctx = metrics.SetLogicalModel(ctx, logicalModelID)
+		if req.Router != nil && req.Router.Profile != nil {
+			ctx = metrics.SetRouterProfile(ctx, *req.Router.Profile)
+		} else {
+			ctx = metrics.SetRouterProfile(ctx, "default")
+		}
+		c.Request = c.Request.WithContext(ctx)
 
 		requirements := router.DeriveRequirements(req, req.Router)
 

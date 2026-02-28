@@ -25,7 +25,16 @@ func Metrics() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 
-		metrics.HTTPRequestsTotal.WithLabelValues(method, path, statusStr).Inc()
-		metrics.HTTPRequestDurationSeconds.WithLabelValues(method, path, statusStr).Observe(elapsed.Seconds())
+		ctx := c.Request.Context()
+		logicalModel := metrics.GetLogicalModel(ctx)
+		routerProfile := metrics.GetRouterProfile(ctx)
+
+		metrics.HTTPRequestsTotal.WithLabelValues(
+			method, path, statusStr, logicalModel, routerProfile,
+		).Inc()
+
+		metrics.HTTPRequestDurationSeconds.WithLabelValues(
+			method, path, logicalModel, routerProfile,
+		).Observe(elapsed.Seconds())
 	}
 }

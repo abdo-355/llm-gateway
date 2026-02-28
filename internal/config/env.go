@@ -11,6 +11,7 @@ type EnvConfig struct {
 	Environment string
 	Port        int
 	MetricsPort int
+	LogLevel    string
 
 	GatewayAPIKey  string
 	GroqAPIKey     string
@@ -32,9 +33,6 @@ type EnvConfig struct {
 func LoadEnv() (*EnvConfig, error) {
 	required := []string{
 		"GATEWAY_API_KEY",
-		"GROQ_API_KEY",
-		"CEREBRAS_API_KEY",
-		"MISTRAL_API_KEY",
 	}
 
 	var missing []string
@@ -48,7 +46,7 @@ func LoadEnv() (*EnvConfig, error) {
 		return nil, fmt.Errorf("missing required environment variables: %v", missing)
 	}
 
-	environment := getEnvString("ENVIRONMENT", "development")
+	environment := getEnvString("ENV", "development")
 
 	gatewayKey := os.Getenv("GATEWAY_API_KEY")
 	if len(gatewayKey) < 32 {
@@ -81,6 +79,7 @@ func LoadEnv() (*EnvConfig, error) {
 		Environment:           environment,
 		Port:                  port,
 		MetricsPort:           metricsPort,
+		LogLevel:              getEnvString("LOG_LEVEL", "info"),
 		GatewayAPIKey:         gatewayKey,
 		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
 		CerebrasAPIKey:        os.Getenv("CEREBRAS_API_KEY"),
