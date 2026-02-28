@@ -91,6 +91,13 @@ var (
 )
 
 var (
+	AuthRejectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_auth_rejections_total",
+		Help: "Total number of requests rejected due to authentication failures.",
+	}, []string{"reason"})
+)
+
+var (
 	StreamDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_stream_duration_seconds",
 		Help:    "Duration of streaming responses in seconds.",

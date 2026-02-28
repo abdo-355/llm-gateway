@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -13,7 +14,7 @@ func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			metrics.RateLimitRejectionsTotal.WithLabelValues("auth").Inc()
+			metrics.AuthRejectionsTotal.WithLabelValues("missing_auth").Inc()
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{
 					"type":    "authentication_error",
@@ -26,7 +27,7 @@ func Auth() gin.HandlerFunc {
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			metrics.RateLimitRejectionsTotal.WithLabelValues("auth").Inc()
+			metrics.AuthRejectionsTotal.WithLabelValues("invalid_format").Inc()
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{
 					"type":    "authentication_error",
@@ -38,8 +39,9 @@ func Auth() gin.HandlerFunc {
 		}
 
 		token := parts[1]
-		if token != config.GetEnv().GatewayAPIKey {
-			metrics.RateLimitRejectionsTotal.WithLabelValues("auth").Inc()
+		expected := config.GetEnv().GatewayAPIKey
+		if subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+			metrics.AuthRejectionsTotal.WithLabelValues("invalid_token").Inc()
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": gin.H{
 					"type":    "authentication_error",
