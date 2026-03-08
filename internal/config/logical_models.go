@@ -12,7 +12,8 @@ var LogicalModelRegistry = map[string]types.LogicalModelConfig{
 	"json-safe":    getJsonSafeConfig(),
 	"code-fast":    getCodeFastConfig(),
 	"code-pro":     getCodeProConfig(),
-	"tools-pro":    getToolsProConfig(),
+	"tools-pro":      getToolsProConfig(),
+	"reasoning-max":  getReasoningMaxConfig(),
 }
 
 // GetLogicalModel returns a logical model configuration by ID
@@ -179,6 +180,21 @@ func getToolsProConfig() types.LogicalModelConfig {
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: weightMedium},
 		},
 		RequireTools: boolPtr(true),
+	}
+}
+
+func getReasoningMaxConfig() types.LogicalModelConfig {
+	weightHigh := 1.0
+	weightLow := 0.7
+
+	return types.LogicalModelConfig{
+		ID:       "reasoning-max",
+		TaskType: "reasoning",
+		Candidates: []types.LogicalModelCandidate{
+			{Provider: "vertex", Model: "google/gemini-3.1-pro-preview", Weight: weightHigh},
+			{Provider: "groq", Model: "moonshotai/kimi-k2-instruct", Weight: weightHigh},
+			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: weightLow},
+		},
 	}
 }
 
