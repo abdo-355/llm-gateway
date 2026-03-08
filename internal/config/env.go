@@ -17,6 +17,7 @@ type EnvConfig struct {
 	GroqAPIKey     string
 	CerebrasAPIKey string
 	MistralAPIKey  string
+	GeminiAPIKey   string
 
 	GoogleVertexProjectID string
 
@@ -84,6 +85,7 @@ func LoadEnv() (*EnvConfig, error) {
 		GroqAPIKey:            os.Getenv("GROQ_API_KEY"),
 		CerebrasAPIKey:        os.Getenv("CEREBRAS_API_KEY"),
 		MistralAPIKey:         os.Getenv("MISTRAL_API_KEY"),
+		GeminiAPIKey:          os.Getenv("GEMINI_API_KEY"),
 		GoogleVertexProjectID: os.Getenv("GOOGLE_VERTEX_PROJECT_ID"),
 		RedisURL:              getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:        getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),

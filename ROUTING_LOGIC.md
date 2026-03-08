@@ -390,6 +390,7 @@ for i := 0; i < maxAttempts && i < len(candidates); i++ {
     case "GROQ_API_KEY":         apiKey = config.GetEnv().GroqAPIKey
     case "CEREBRAS_API_KEY":     apiKey = config.GetEnv().CerebrasAPIKey
     case "MISTRAL_API_KEY":      apiKey = config.GetEnv().MistralAPIKey
+    case "GEMINI_API_KEY":       apiKey = config.GetEnv().GeminiAPIKey
     case "GOOGLE_VERTEX_API_KEY": apiKey = config.GetEnv().GoogleVertexAPIKey
     }
 

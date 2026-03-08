@@ -28,7 +28,8 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **Groq** - Fast inference for Llama models
 - **Cerebras** - High-throughput Llama and Qwen models
 - **Mistral** - Mistral models including Codestral
-- **Google Vertex AI** - Gemini models
+- **Google Vertex AI** - Gemini models (via Vertex AI)
+- **Google Gemini** - Gemini models (via Gemini API)
 
 ---
 
@@ -103,7 +104,8 @@ Abstract provider-specific models into semantic categories:
               ┌─────────────────────────┐
               │   LLM Providers         │
               │   (Groq/Cerebras/       │
-              │    Mistral/Vertex)      │
+              │    Mistral/Vertex/      │
+              │    Gemini)              │
               └─────────────────────────┘
 ```
 
@@ -173,6 +175,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 | `GROQ_API_KEY` | No | Groq API key |
 | `CEREBRAS_API_KEY` | No | Cerebras API key |
 | `MISTRAL_API_KEY` | No | Mistral API key |
+| `GEMINI_API_KEY` | No | Google Gemini API key |
 | `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI (uses ADC for auth) |
 
 | Variable | Default | Description |
@@ -200,6 +203,7 @@ Logical models abstract provider-specific models into semantic categories:
 | `code-fast` | Quick code generation |
 | `code-pro` | Production code |
 | `tools-pro` | Function calling |
+| `reasoning-max` | Deep reasoning tasks |
 
 Models are configured in `internal/config/logical_models.go`.
 
