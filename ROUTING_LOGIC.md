@@ -14,6 +14,7 @@ Request → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5 → Stage 6 
 ## Data Structures
 
 ### DerivedRequirements
+
 What the request needs (detected from request fields, can be overridden by hints).
 
 ```go
@@ -25,6 +26,7 @@ type DerivedRequirements struct {
 ```
 
 ### RouterHints
+
 Optional overrides from the client.
 
 ```go
@@ -53,6 +55,7 @@ type FallbackConfig struct {
 ```
 
 ### RoutingCandidate
+
 A provider/model pair that could handle the request.
 
 ```go
@@ -66,6 +69,7 @@ type RoutingCandidate struct {
 ```
 
 ### RoutingPlan
+
 The execution plan with retry policy.
 
 ```go
@@ -99,6 +103,7 @@ type RoutingAttempt struct {
 ### Detection Logic
 
 **Output Format (JSON):**
+
 ```go
 if req.ResponseFormat != nil &&
    req.ResponseFormat.Type == "json_schema" &&
@@ -110,6 +115,7 @@ if req.ResponseFormat != nil &&
 ```
 
 **Streaming:**
+
 ```go
 if req.Stream != nil {
     if *req.Stream {
@@ -121,6 +127,7 @@ if req.Stream != nil {
 ```
 
 **Tools/Functions:**
+
 ```go
 if len(req.Tools) > 0 {
     switch req.ToolChoice {
@@ -134,6 +141,7 @@ if len(req.Tools) > 0 {
 ### RouterHints Override
 
 Hints can override any derived value:
+
 ```go
 if hints != nil && hints.Requirements != nil {
     if hints.Requirements.Output != nil {
@@ -144,6 +152,7 @@ if hints != nil && hints.Requirements != nil {
 ```
 
 ### Output
+
 `DerivedRequirements` struct with Output, Streaming, and Tools fields.
 
 ---
@@ -217,6 +226,7 @@ func (r *Router) GenerateCandidates() []RoutingCandidate {
 ```
 
 ### Output
+
 List of `RoutingCandidate` structs, one per provider/model combination.
 
 ---
@@ -228,6 +238,7 @@ List of `RoutingCandidate` structs, one per provider/model combination.
 ### Filters (in order)
 
 **1. Allow/Deny Lists:**
+
 ```go
 if hints != nil && hints.Providers != nil {
     if len(hints.Providers.Allow) > 0 {
@@ -244,6 +255,7 @@ if hints != nil && hints.Providers != nil {
 ```
 
 **2. Strict JSON Requirement:**
+
 ```go
 if requirements.Output == "json_schema_strict" {
     // First check: is this specific model certified for strict JSON?
@@ -258,6 +270,7 @@ if requirements.Output == "json_schema_strict" {
 ```
 
 **3. Streaming Support:**
+
 ```go
 if requirements.Streaming == "required" && !provider.Capabilities.Streaming {
     filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "streaming_not_supported"
@@ -266,6 +279,7 @@ if requirements.Streaming == "required" && !provider.Capabilities.Streaming {
 ```
 
 **4. Tools Support:**
+
 ```go
 if requirements.Tools == "required" && !provider.Capabilities.Tools {
     filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
@@ -274,6 +288,7 @@ if requirements.Tools == "required" && !provider.Capabilities.Tools {
 ```
 
 **5. Circuit Breaker:**
+
 ```go
 if !r.healthService.CanExecute(ctx, provider.ID, model) {
     filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
@@ -282,6 +297,7 @@ if !r.healthService.CanExecute(ctx, provider.ID, model) {
 ```
 
 **6. Quota Check:**
+
 ```go
 modelLimits := provider.Models.Limits[model]
 estimatedTokens := r.quotaService.EstimateTokens(req)
@@ -297,6 +313,7 @@ if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, e
 ```
 
 ### Output
+
 - `eligible`: List of candidates that can handle the request
 - `filtered`: Map of `provider/model` → `reason` for observability
 
@@ -313,6 +330,7 @@ score = (baseScore * 0.5) + (healthScore * 0.5) + logicalModelWeight
 ```
 
 **Preference Bonus:**
+
 ```go
 if hints != nil && hints.Providers != nil {
     for j, pref := range hints.Providers.Prefer {
@@ -328,6 +346,7 @@ if hints != nil && hints.Providers != nil {
 ```
 
 **Health Score:**
+
 ```go
 metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
 healthScore := metrics.HealthScore // 0.0 to 1.0
@@ -335,6 +354,7 @@ candidate.ScoreBreakdown["health_score"] = healthScore
 ```
 
 **Sorting:**
+
 ```go
 slices.SortFunc(candidates, func(a, b RoutingCandidate) int {
     if a.Score > b.Score {
@@ -348,6 +368,7 @@ slices.SortFunc(candidates, func(a, b RoutingCandidate) int {
 ```
 
 ### Output
+
 Candidates sorted by score (highest first).
 
 ---
@@ -359,6 +380,7 @@ Candidates sorted by score (highest first).
 ### Steps
 
 **1. Determine Max Attempts:**
+
 ```go
 maxAttempts := 3 // default
 if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
@@ -369,6 +391,7 @@ if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
 ```
 
 **2. Determine Timeout:**
+
 ```go
 timeoutMs := 30000 // 30 seconds default
 if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
@@ -379,6 +402,7 @@ if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
 ```
 
 **3. Build Attempts List:**
+
 ```go
 var attempts []RoutingAttempt
 for i := 0; i < maxAttempts && i < len(candidates); i++ {
@@ -408,6 +432,7 @@ for i := 0; i < maxAttempts && i < len(candidates); i++ {
 ```
 
 **4. Configure Retry Policy:**
+
 ```go
 retryOn429 := true
 retryOnTimeout := true
@@ -427,6 +452,7 @@ if hints != nil && hints.Fallback != nil {
 ```
 
 ### Output
+
 `RoutingPlan` with attempts list, timeouts, and retry policy.
 
 ---
@@ -555,15 +581,15 @@ func (r *Router) ShouldRetry(err error, plan RoutingPlan, attemptIndex int) bool
 
 ## Error Types
 
-| Error Type | Code | Retry? | Meaning |
-|------------|------|--------|---------|
-| `RateLimitError` | RATE_LIMITED | Configurable | Hit rate limit, retry after delay |
-| `TimeoutError` | TIMEOUT | Configurable | Request timed out |
-| `ProviderError` | PROVIDER_ERROR | Configurable | Provider returned error, depends on `IsRetryable` |
-| `CircuitBreakerError` | CIRCUIT_BREAKER_OPEN | Yes | Provider temporarily blocked |
-| `ModelQuotaExceededError` | QUOTA_EXCEEDED | Yes | Model-specific quota exceeded |
-| `PaymentRequiredError` | PAYMENT_REQUIRED | No | Subscription/account issue |
-| `ValidationError` | VALIDATION_ERROR | No | Invalid request format |
+| Error Type                | Code                 | Retry?       | Meaning                                           |
+| ------------------------- | -------------------- | ------------ | ------------------------------------------------- |
+| `RateLimitError`          | RATE_LIMITED         | Configurable | Hit rate limit, retry after delay                 |
+| `TimeoutError`            | TIMEOUT              | Configurable | Request timed out                                 |
+| `ProviderError`           | PROVIDER_ERROR       | Configurable | Provider returned error, depends on `IsRetryable` |
+| `CircuitBreakerError`     | CIRCUIT_BREAKER_OPEN | Yes          | Provider temporarily blocked                      |
+| `ModelQuotaExceededError` | QUOTA_EXCEEDED       | Yes          | Model-specific quota exceeded                     |
+| `PaymentRequiredError`    | PAYMENT_REQUIRED     | No           | Subscription/account issue                        |
+| `ValidationError`         | VALIDATION_ERROR     | No           | Invalid request format                            |
 
 ---
 
@@ -602,8 +628,8 @@ func (r *Router) ExecuteStream(ctx, plan, req, requestID) StreamResult {
 
 ## Response Headers
 
-| Header | Example | Meaning |
-|--------|---------|---------|
-| `X-Gateway-Provider` | `groq` | Provider used |
-| `X-Gateway-Model` | `llama-3.3-70b-versatile` | Model used |
-| `X-Gateway-Attempts` | `2` | Number of providers tried |
+| Header               | Example                   | Meaning                   |
+| -------------------- | ------------------------- | ------------------------- |
+| `X-Gateway-Provider` | `groq`                    | Provider used             |
+| `X-Gateway-Model`    | `llama-3.3-70b-versatile` | Model used                |
+| `X-Gateway-Attempts` | `2`                       | Number of providers tried |
