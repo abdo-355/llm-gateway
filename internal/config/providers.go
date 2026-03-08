@@ -14,9 +14,18 @@ func GetProviders() []types.ProviderConfig {
 func getGroqConfig() types.ProviderConfig {
 	rpm30 := 30
 	rpm60 := 60
+	rpd1000 := 1000
+	rpd7000 := 7000
+	rpd14400 := 14400
 	tpm6000 := 6000
-	tpm70000 := 70000
-	tpm140000 := 140000
+	tpm8000 := 8000
+	tpm10000 := 10000
+	tpm12000 := 12000
+	tpm30000 := 30000
+	tpd100000 := 100000
+	tpd200000 := 200000
+	tpd300000 := 300000
+	tpd500000 := 500000
 
 	return types.ProviderConfig{
 		ID:      "groq",
@@ -28,52 +37,77 @@ func getGroqConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"llama-3.3-70b-versatile",
+				"allam-2-7b",
 				"llama-3.1-8b-instant",
-				"llama-4-scout-17b-16e-instruct",
-				"llama-4-maverick-17b-128e-instruct",
-				"kimi-k2-0711-preview",
-				"kimi-k2-0711-instruct",
-				"gpt-oss-120b",
-				"gpt-oss-20b",
-				"qwen3-32b",
+				"llama-3.3-70b-versatile",
+				"meta-llama/llama-4-maverick-17b-128e-instruct",
+				"meta-llama/llama-4-scout-17b-16e-instruct",
+				"moonshotai/kimi-k2-instruct",
+				"moonshotai/kimi-k2-instruct-0905",
+				"openai/gpt-oss-120b",
+				"openai/gpt-oss-20b",
+				"qwen/qwen3-32b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"llama-3.3-70b-versatile": {
+				"allam-2-7b": {
 					Rpm: &rpm30,
-					Tpm: &tpm70000,
+					Rpd: &rpd7000,
+					Tpm: &tpm6000,
+					Tpd: &tpd500000,
 				},
 				"llama-3.1-8b-instant": {
-					Rpm: &rpm60,
-					Tpm: &tpm140000,
-				},
-				"llama-4-scout-17b-16e-instruct": {
 					Rpm: &rpm30,
-					Tpm: &tpm70000,
-				},
-				"llama-4-maverick-17b-128e-instruct": {
-					Rpm: &rpm30,
-					Tpm: &tpm70000,
-				},
-				"kimi-k2-0711-preview": {
-					Rpm: &rpm30,
-					Tpm: &tpm70000,
-				},
-				"kimi-k2-0711-instruct": {
-					Rpm: &rpm30,
-					Tpm: &tpm70000,
-				},
-				"gpt-oss-120b": {
-					Rpm: &rpm30,
+					Rpd: &rpd14400,
 					Tpm: &tpm6000,
+					Tpd: &tpd500000,
 				},
-				"gpt-oss-20b": {
+				"llama-3.3-70b-versatile": {
 					Rpm: &rpm30,
-					Tpm: &tpm140000,
+					Rpd: &rpd1000,
+					Tpm: &tpm12000,
+					Tpd: &tpd100000,
 				},
-				"qwen3-32b": {
+				"meta-llama/llama-4-maverick-17b-128e-instruct": {
 					Rpm: &rpm30,
-					Tpm: &tpm70000,
+					Rpd: &rpd1000,
+					Tpm: &tpm6000,
+					Tpd: &tpd500000,
+				},
+				"meta-llama/llama-4-scout-17b-16e-instruct": {
+					Rpm: &rpm30,
+					Rpd: &rpd1000,
+					Tpm: &tpm30000,
+					Tpd: &tpd500000,
+				},
+				"moonshotai/kimi-k2-instruct": {
+					Rpm: &rpm60,
+					Rpd: &rpd1000,
+					Tpm: &tpm10000,
+					Tpd: &tpd300000,
+				},
+				"moonshotai/kimi-k2-instruct-0905": {
+					Rpm: &rpm60,
+					Rpd: &rpd1000,
+					Tpm: &tpm10000,
+					Tpd: &tpd300000,
+				},
+				"openai/gpt-oss-120b": {
+					Rpm: &rpm30,
+					Rpd: &rpd1000,
+					Tpm: &tpm8000,
+					Tpd: &tpd200000,
+				},
+				"openai/gpt-oss-20b": {
+					Rpm: &rpm30,
+					Rpd: &rpd1000,
+					Tpm: &tpm8000,
+					Tpd: &tpd200000,
+				},
+				"qwen/qwen3-32b": {
+					Rpm: &rpm60,
+					Rpd: &rpd1000,
+					Tpm: &tpm6000,
+					Tpd: &tpd500000,
 				},
 			},
 		},
@@ -88,9 +122,12 @@ func getGroqConfig() types.ProviderConfig {
 
 func getCerebrasConfig() types.ProviderConfig {
 	rpm30 := 30
-	rph1000 := 1000
-	tpm10000 := 10000
-	tpm140000 := 140000
+	rph900 := 900
+	rpd14400 := 14400
+	tpm60000 := 60000
+	tpm64000 := 64000
+	tph1000000 := 1000000
+	tpd1000000 := 1000000
 
 	return types.ProviderConfig{
 		ID:      "cerebras",
@@ -103,42 +140,24 @@ func getCerebrasConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"gpt-oss-120b",
-				"llama-3.3-70b",
 				"llama3.1-8b",
-				"qwen-3-32b",
-				"qwen-3-235b-a22b-instruct-2507",
-				"zai-glm-4.7",
 			},
 			Limits: map[string]types.ModelLimits{
 				"gpt-oss-120b": {
 					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm10000,
-				},
-				"llama-3.3-70b": {
-					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm140000,
+					Rph: &rph900,
+					Rpd: &rpd14400,
+					Tpm: &tpm64000,
+					Tph: &tph1000000,
+					Tpd: &tpd1000000,
 				},
 				"llama3.1-8b": {
 					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm140000,
-				},
-				"qwen-3-32b": {
-					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm140000,
-				},
-				"qwen-3-235b-a22b-instruct-2507": {
-					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm10000,
-				},
-				"zai-glm-4.7": {
-					Rpm: &rpm30,
-					Rph: &rph1000,
-					Tpm: &tpm140000,
+					Rph: &rph900,
+					Rpd: &rpd14400,
+					Tpm: &tpm60000,
+					Tph: &tph1000000,
+					Tpd: &tpd1000000,
 				},
 			},
 		},
@@ -153,8 +172,7 @@ func getCerebrasConfig() types.ProviderConfig {
 
 func getMistralConfig() types.ProviderConfig {
 	rpm60 := 60
-	tpd200000 := 200000
-	tpd500000 := 500000
+	tpm500000 := 500000
 
 	return types.ProviderConfig{
 		ID:      "mistral",
@@ -166,45 +184,44 @@ func getMistralConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"mistral-large-latest",
-				"mistral-medium-latest",
-				"codestral-latest",
-				"codestral-mamba-latest",
-				"ministral-3b-latest",
-				"ministral-8b-latest",
-				"open-mistral-nemo",
-				"open-mistral-nemo-2407",
-				"open-codestral-mamba",
-				"open-mixtral-8x7b",
-				"open-mixtral-8x22b",
-				"open-mixtral-8x22b-2404",
-				"mistral-tiny",
-				"mistral-tiny-2312",
-				"mistral-small",
-				"mistral-small-2312",
+				"codestral-2405",
+				"codestral-2501",
+				"codestral-mamba-2407",
+				"ministral-3b-2410",
+				"ministral-8b-2410",
+				"mistral-large-2402",
+				"mistral-large-2407",
+				"mistral-large-2411",
+				"mistral-medium",
+				"mistral-saba-2502",
 				"mistral-small-2402",
 				"mistral-small-2409",
-				"mistral-embed",
+				"mistral-small-2501",
+				"mistral-small-2503",
+				"open-mistral-7b",
+				"open-mistral-nemo",
+				"open-mixtral-8x22b",
+				"open-mixtral-8x7b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"mistral-large-latest": {
-					Tpd: &tpd200000,
-				},
-				"codestral-latest": {
-					Tpd: &tpd500000,
-				},
-				"codestral-mamba-latest": {
-					Tpd: &tpd500000,
-				},
-				"ministral-3b-latest": {
-					Tpd: &tpd500000,
-				},
-				"ministral-8b-latest": {
-					Tpd: &tpd500000,
-				},
-				"open-mistral-nemo": {
-					Tpd: &tpd500000,
-				},
+				"codestral-2405":    {Tpm: &tpm500000},
+				"codestral-2501":    {Tpm: &tpm500000},
+				"codestral-mamba-2407": {Tpm: &tpm500000},
+				"ministral-3b-2410": {Tpm: &tpm500000},
+				"ministral-8b-2410": {Tpm: &tpm500000},
+				"mistral-large-2402": {Tpm: &tpm500000},
+				"mistral-large-2407": {Tpm: &tpm500000},
+				"mistral-large-2411": {Tpm: &tpm500000},
+				"mistral-medium":    {Tpm: &tpm500000},
+				"mistral-saba-2502": {Tpm: &tpm500000},
+				"mistral-small-2402": {Tpm: &tpm500000},
+				"mistral-small-2409": {Tpm: &tpm500000},
+				"mistral-small-2501": {Tpm: &tpm500000},
+				"mistral-small-2503": {Tpm: &tpm500000},
+				"open-mistral-7b":   {Tpm: &tpm500000},
+				"open-mistral-nemo": {Tpm: &tpm500000},
+				"open-mixtral-8x22b": {Tpm: &tpm500000},
+				"open-mixtral-8x7b": {Tpm: &tpm500000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -230,11 +247,11 @@ func getVertexConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"google/gemini-3-pro-preview",
+				"google/gemini-3.1-pro-preview",
 				"google/gemini-3-flash-preview",
 			},
 			Limits: map[string]types.ModelLimits{
-				"google/gemini-3-pro-preview": {
+				"google/gemini-3.1-pro-preview": {
 					Rpm: &rpm60,
 				},
 				"google/gemini-3-flash-preview": {
@@ -256,15 +273,14 @@ func getVertexConfig() types.ProviderConfig {
 func GetCertifications() []types.Certification {
 	return []types.Certification{
 		// Mistral models with strict JSON certification
-		{Provider: "mistral", Model: "mistral-large-latest", StrictSchema: true},
-		{Provider: "mistral", Model: "codestral-latest", StrictSchema: true},
-		{Provider: "mistral", Model: "codestral-mamba-latest", StrictSchema: true},
-		{Provider: "mistral", Model: "ministral-3b-latest", StrictSchema: true},
-		{Provider: "mistral", Model: "ministral-8b-latest", StrictSchema: true},
+		{Provider: "mistral", Model: "mistral-large-2411", StrictSchema: true},
+		{Provider: "mistral", Model: "codestral-2501", StrictSchema: true},
+		{Provider: "mistral", Model: "codestral-mamba-2407", StrictSchema: true},
+		{Provider: "mistral", Model: "ministral-3b-2410", StrictSchema: true},
+		{Provider: "mistral", Model: "ministral-8b-2410", StrictSchema: true},
 		{Provider: "mistral", Model: "open-mistral-nemo", StrictSchema: true},
-		{Provider: "mistral", Model: "open-mistral-nemo-2407", StrictSchema: true},
 		// Vertex models with strict JSON certification
-		{Provider: "vertex", Model: "google/gemini-3-pro-preview", StrictSchema: true},
+		{Provider: "vertex", Model: "google/gemini-3.1-pro-preview", StrictSchema: true},
 		{Provider: "vertex", Model: "google/gemini-3-flash-preview", StrictSchema: true},
 	}
 }
