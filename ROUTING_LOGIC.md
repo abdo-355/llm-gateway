@@ -457,7 +457,7 @@ if hints != nil && hints.Fallback != nil {
 
 ## Stage 6: Execute
 
-**Purpose**: Try providers in order until one succeeds or all fail.
+**Purpose**: Try providers in order until one succeeds or all fail
 
 ### Algorithm
 
