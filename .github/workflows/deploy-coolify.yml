@@ -1,0 +1,14 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Trigger Coolify deploy
+        run: |
+          curl --request GET "${{ secrets.COOLIFY_WEBHOOK }}" \
+            --header "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}"
