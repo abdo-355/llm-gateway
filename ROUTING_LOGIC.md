@@ -9,8 +9,6 @@ Request → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5 → Stage 6 
        Req's     Candidates           Candidates  Plan
 ```
 
----
-
 ## Data Structures
 
 ### DerivedRequirements
