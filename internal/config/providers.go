@@ -8,6 +8,7 @@ func GetProviders() []types.ProviderConfig {
 		getCerebrasConfig(),
 		getMistralConfig(),
 		getVertexConfig(),
+		getGeminiConfig(),
 	}
 }
 
@@ -256,6 +257,62 @@ func getVertexConfig() types.ProviderConfig {
 				},
 				"google/gemini-3-flash-preview": {
 					Rpm: &rpm60,
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:         true,
+			Tools:             true,
+			StructuredOutputs: "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getGeminiConfig() types.ProviderConfig {
+	rpm5 := 5
+	rpm10 := 10
+	rpm15 := 15
+	rpd20 := 20
+	rpd500 := 500
+	tpm250000 := 250000
+
+	return types.ProviderConfig{
+		ID:      "gemini",
+		BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "GEMINI_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"google/gemini-2.5-flash",
+				"google/gemini-2.5-flash-lite",
+				"google/gemini-3-flash-preview",
+				"google/gemini-3.1-flash-lite-preview",
+			},
+			Limits: map[string]types.ModelLimits{
+				"google/gemini-2.5-flash": {
+					Rpm: &rpm5,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"google/gemini-2.5-flash-lite": {
+					Rpm: &rpm10,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"google/gemini-3-flash-preview": {
+					Rpm: &rpm5,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"google/gemini-3.1-flash-lite-preview": {
+					Rpm: &rpm15,
+					Rpd: &rpd500,
+					Tpm: &tpm250000,
 				},
 			},
 		},
