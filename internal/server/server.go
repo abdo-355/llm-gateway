@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"os"
@@ -63,7 +64,7 @@ func New(svc Services) *Server {
 	authorized.POST("/v1/responses", handlers.Responses(svc.Router))
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", authMetricsHandler(promhttp.Handler()))
 
 	return &Server{
 		httpServer: &http.Server{
@@ -191,5 +192,30 @@ func accessLogMiddleware() gin.HandlerFunc {
 			Str("latency", latency.String()).
 			Str("request_id", reqID).
 			Msg("HTTP request completed")
+	}
+}
+
+func authMetricsHandler(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header is required", http.StatusUnauthorized)
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			http.Error(w, "Authorization header must be 'Bearer <token>'", http.StatusUnauthorized)
+			return
+		}
+
+		token := parts[1]
+		expected := config.GetEnv().GatewayAPIKey
+		if subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+			http.Error(w, "Invalid API key", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	}
 }
