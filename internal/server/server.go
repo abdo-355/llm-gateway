@@ -64,7 +64,7 @@ func New(svc Services) *Server {
 	authorized.POST("/v1/responses", handlers.Responses(svc.Router))
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", authMetricsHandler(promhttp.Handler()))
+	mux.Handle("/metrics", promhttp.Handler())
 
 	return &Server{
 		httpServer: &http.Server{
