@@ -23,7 +23,7 @@ type ProviderService struct {
 func NewProviderService() *ProviderService {
 	return &ProviderService{
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: defaultRequestTimeout,
 		},
 	}
 }
@@ -281,7 +281,7 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 		scanErrCh <- scanner.Err()
 	}()
 
-	inactivity := 60 * time.Second
+	inactivity := defaultStreamInactivityTimeout
 	timer := time.NewTimer(inactivity)
 	defer timer.Stop()
 

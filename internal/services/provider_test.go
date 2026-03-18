@@ -22,6 +22,12 @@ func newProviderService() *ProviderService {
 func ptrFloat64(v float64) *float64 { return &v }
 func ptrInt(v int) *int             { return &v }
 
+func TestNewProviderService_DefaultTimeout(t *testing.T) {
+	svc := newProviderService()
+
+	assert.Equal(t, defaultRequestTimeout, svc.httpClient.Timeout)
+}
+
 // ---------------------------------------------------------------------------
 // CallProvider (non-streaming)
 // ---------------------------------------------------------------------------

@@ -391,7 +391,7 @@ if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
 **2. Determine Timeout:**
 
 ```go
-timeoutMs := 30000 // 30 seconds default
+timeoutMs := 300000 // 5 minutes default
 if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
     timeoutMs = *hints.SLO.MaxLatencyMs
 } else if logicalModelSLO != nil && logicalModelSLO.MaxLatencyMs != nil {
