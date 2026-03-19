@@ -10,6 +10,12 @@ import (
 
 func Metrics() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/health" || path == "/metrics" {
+			c.Next()
+			return
+		}
+
 		metrics.HTTPRequestsInFlight.Inc()
 		defer metrics.HTTPRequestsInFlight.Dec()
 
@@ -20,7 +26,7 @@ func Metrics() gin.HandlerFunc {
 		elapsed := time.Since(start)
 		statusStr := strconv.Itoa(c.Writer.Status())
 		method := c.Request.Method
-		path := c.FullPath()
+		path = c.FullPath()
 		if path == "" {
 			path = c.Request.URL.Path
 		}
