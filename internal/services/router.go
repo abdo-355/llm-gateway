@@ -477,13 +477,13 @@ func (r *Router) Execute(
 			).Observe(float64(latencyMs) / 1000.0)
 			if resp.Usage != nil {
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "prompt", logicalModel,
+					attempt.ProviderID, attempt.Model, "prompt", logicalModel, routerProfile,
 				).Add(float64(resp.Usage.PromptTokens))
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "completion", logicalModel,
+					attempt.ProviderID, attempt.Model, "completion", logicalModel, routerProfile,
 				).Add(float64(resp.Usage.CompletionTokens))
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "total", logicalModel,
+					attempt.ProviderID, attempt.Model, "total", logicalModel, routerProfile,
 				).Add(float64(resp.Usage.TotalTokens))
 			}
 			metrics.RoutingAttemptsTotal.WithLabelValues(
@@ -636,7 +636,7 @@ func (r *Router) ExecuteStream(
 			for chunk := range result.Chunks {
 				if !ttfbRecorded {
 					metrics.StreamTTFBSeconds.WithLabelValues(
-						attempt.ProviderID, attempt.Model, logicalModel,
+						attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
 					).Observe(time.Since(startTime).Seconds())
 					ttfbRecorded = true
 				}
@@ -675,10 +675,10 @@ func (r *Router) ExecuteStream(
 					logicalModel, routerProfile,
 				).Observe(float64(latencyMs) / 1000.0)
 				metrics.StreamDurationSeconds.WithLabelValues(
-					attempt.ProviderID, attempt.Model, logicalModel,
+					attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
 				).Observe(float64(latencyMs) / 1000.0)
 				metrics.StreamOutputTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, logicalModel,
+					attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
 				).Add(float64(outputTokenCount))
 				metrics.RoutingAttemptsTotal.WithLabelValues(
 					logicalModel, routerProfile,

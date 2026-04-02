@@ -38,7 +38,7 @@ var (
 	ProviderTokensTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "gateway_provider_tokens_total",
 		Help: "Total number of tokens processed by LLM providers.",
-	}, []string{"provider", "model", "direction", "logical_model"})
+	}, []string{"provider", "model", "direction", "logical_model", "router_profile"})
 
 	RoutingAttemptsTotal = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_routing_attempts_total",
@@ -102,18 +102,18 @@ var (
 		Name:    "gateway_stream_duration_seconds",
 		Help:    "Duration of streaming responses in seconds.",
 		Buckets: []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
-	}, []string{"provider", "model", "logical_model"})
+	}, []string{"provider", "model", "logical_model", "router_profile"})
 
 	StreamTTFBSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_stream_ttfb_seconds",
 		Help:    "Time to first byte for streaming responses in seconds.",
 		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-	}, []string{"provider", "model", "logical_model"})
+	}, []string{"provider", "model", "logical_model", "router_profile"})
 
 	StreamOutputTokensTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "gateway_stream_output_tokens_total",
 		Help: "Total number of output tokens from streaming responses.",
-	}, []string{"provider", "model", "logical_model"})
+	}, []string{"provider", "model", "logical_model", "router_profile"})
 )
 
 func CircuitStateToFloat64(state string) float64 {
