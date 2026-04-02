@@ -25,7 +25,8 @@ func (m *mockHealthMonitor) GetAllHealthMetrics(_ context.Context) []services.He
 func setupHealthRouter(monitor HealthMonitor) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/health", Health(monitor))
+	handler := NewHealthHandler(monitor)
+	r.GET("/health", handler.Handle)
 	return r
 }
 

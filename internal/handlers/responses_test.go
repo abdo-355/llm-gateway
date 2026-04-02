@@ -106,7 +106,8 @@ func setupResponsesRouter(router services.RouterHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(requestid.New())
-	r.POST("/v1/responses", Responses(router))
+	handler := NewResponsesHandler(router)
+	r.POST("/v1/responses", handler.Handle)
 	return r
 }
 

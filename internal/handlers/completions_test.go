@@ -116,7 +116,8 @@ func setupCompletionsRouter(router services.RouterHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.Use(requestid.New())
-	r.POST("/v1/chat/completions", Completions(router))
+	handler := NewCompletionsHandler(router)
+	r.POST("/v1/chat/completions", handler.Handle)
 	return r
 }
 

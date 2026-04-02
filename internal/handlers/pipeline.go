@@ -104,8 +104,11 @@ func writeExecutionError(c *gin.Context, err error) {
 	}
 
 	status := http.StatusInternalServerError
-	if gatewayErr.Code == "RATE_LIMITED" {
+	switch gatewayErr.Code {
+	case "RATE_LIMITED":
 		status = http.StatusTooManyRequests
+	case "NO_ELIGIBLE_PROVIDER":
+		status = http.StatusUnprocessableEntity
 	}
 
 	c.JSON(status, gin.H{"error": gatewayErr})
