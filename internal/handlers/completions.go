@@ -50,7 +50,7 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	execResult, err := h.pipeline.router.Execute(ctx, result.Plan, req, reqID)
+	execResult, err := h.pipeline.router.Execute(result.Ctx, result.Plan, req, reqID)
 	if err != nil {
 		writeExecutionError(c, err)
 		return
@@ -63,7 +63,7 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, req types.ChatCompletionRequest, reqID string, routeResult *RouteResult) {
 	writeStreamHeaders(c)
 
-	streamResult := h.pipeline.router.ExecuteStream(ctx, routeResult.Plan, req, reqID)
+	streamResult := h.pipeline.router.ExecuteStream(routeResult.Ctx, routeResult.Plan, req, reqID)
 
 	for chunk := range streamResult.Chunks {
 		if err := writeSSEChunk(c, chunk); err != nil {

@@ -27,6 +27,7 @@ type RouteResult struct {
 	LogicalModelID string
 	Plan           types.RoutingPlan
 	Requirements   types.DerivedRequirements
+	Ctx            context.Context
 }
 
 func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterHints, req types.ChatCompletionRequest) (*RouteResult, error) {
@@ -79,6 +80,7 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		LogicalModelID: logicalModelID,
 		Plan:           plan,
 		Requirements:   requirements,
+		Ctx:            ctx,
 	}, nil
 }
 
