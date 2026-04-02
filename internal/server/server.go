@@ -52,15 +52,19 @@ func New(svc Services) *Server {
 	r.Use(accessLogMiddleware())
 	r.Use(middleware.ErrorHandler())
 
-	r.GET("/health", handlers.Health(svc.Health))
+	completionsHandler := handlers.NewCompletionsHandler(svc.Router)
+	responsesHandler := handlers.NewResponsesHandler(svc.Router)
+	healthHandler := handlers.NewHealthHandler(svc.Health)
+
+	r.GET("/health", healthHandler.Handle)
 
 	rateLimiter := middleware.NewRateLimiter(svc.Redis)
 	r.Use(rateLimiter.RateLimit())
 
 	authorized := r.Group("/")
 	authorized.Use(middleware.Auth())
-	authorized.POST("/v1/chat/completions", handlers.Completions(svc.Router))
-	authorized.POST("/v1/responses", handlers.Responses(svc.Router))
+	authorized.POST("/v1/chat/completions", completionsHandler.Handle)
+	authorized.POST("/v1/responses", responsesHandler.Handle)
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
