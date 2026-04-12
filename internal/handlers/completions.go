@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/abdo-355/llm-gateway/internal/services"
@@ -145,9 +146,9 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 
 	streamResult := h.pipeline.router.ExecuteStream(ctx, plan, chatReq, reqID)
 
-	var lastChunk *types.SSEChunk
+	accumulator := newStreamResponseAccumulator()
 	for chunk := range streamResult.Chunks {
-		lastChunk = chunk
+		accumulator.Add(chunk)
 		if err := writeSSEChunk(c, chunk); err != nil {
 			continue
 		}
@@ -156,8 +157,8 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 	if err := <-streamResult.Err; err != nil {
 		writeSSEError(c, err)
 	} else {
-		if lastChunk != nil {
-			response := convertStreamChunkToResponse(lastChunk)
+		if accumulator.HasData() {
+			response := accumulator.Response()
 			respJSON, _ := json.Marshal(response)
 			fmt.Fprintf(c.Writer, "data: %s\n\n", respJSON)
 			c.Writer.Flush()
@@ -178,60 +179,120 @@ func newGatewayErrorFromTyped(err error) *types.GatewayError {
 	return gatewayErr
 }
 
-func convertStreamChunkToResponse(chunk *types.SSEChunk) *types.Response {
-	output := make([]types.ResponseItem, 0)
-	var outputTexts []string
+type streamResponseAccumulator struct {
+	id        string
+	createdAt int64
+	model     string
+	usage     *types.Usage
+	text      strings.Builder
+	toolCalls map[int]*types.ResponseItem
+	indexes   map[int]struct{}
+}
 
-	if len(chunk.Choices) > 0 {
-		choice := chunk.Choices[0]
+func newStreamResponseAccumulator() *streamResponseAccumulator {
+	return &streamResponseAccumulator{
+		toolCalls: make(map[int]*types.ResponseItem),
+		indexes:   make(map[int]struct{}),
+	}
+}
 
-		if choice.Delta.Content != nil && *choice.Delta.Content != "" {
-			text := *choice.Delta.Content
-			outputTexts = append(outputTexts, text)
+func (a *streamResponseAccumulator) Add(chunk *types.SSEChunk) {
+	if chunk == nil {
+		return
+	}
 
-			output = append(output, types.ResponseItem{
-				ID:     chunk.ID,
-				Type:   "message",
-				Role:   "assistant",
-				Status: "completed",
-				Content: []types.ContentOutput{{
-					Type: "output_text",
-					Text: text,
-				}},
-			})
-		}
+	if chunk.ID != "" {
+		a.id = chunk.ID
+	}
+	if chunk.Created != 0 {
+		a.createdAt = chunk.Created
+	}
+	if chunk.Model != "" {
+		a.model = chunk.Model
+	}
+	if chunk.Usage != nil {
+		a.usage = chunk.Usage
+	}
 
-		for _, tc := range choice.Delta.ToolCalls {
+	if len(chunk.Choices) == 0 {
+		return
+	}
+
+	choice := chunk.Choices[0]
+	if choice.Delta.Content != nil {
+		a.text.WriteString(*choice.Delta.Content)
+	}
+
+	for _, tc := range choice.Delta.ToolCalls {
+		item, ok := a.toolCalls[tc.Index]
+		if !ok {
 			callID := tc.ID
 			if callID == "" {
-				callID = "call_" + chunk.ID
+				callID = "call_" + a.id
 			}
-
-			output = append(output, types.ResponseItem{
-				ID:     "fc_" + chunk.ID,
+			item = &types.ResponseItem{
+				ID:     fmt.Sprintf("fc_%s_%d", a.id, tc.Index),
 				Type:   "function_call",
 				CallID: callID,
 				Status: "completed",
-			})
+			}
+			a.toolCalls[tc.Index] = item
+			a.indexes[tc.Index] = struct{}{}
+		}
 
-			if tc.Function != nil {
-				if tc.Function.Name != nil {
-					output[len(output)-1].Name = *tc.Function.Name
-				}
-				if tc.Function.Arguments != nil {
-					output[len(output)-1].Arguments = *tc.Function.Arguments
-				}
+		if tc.ID != "" {
+			item.CallID = tc.ID
+		}
+
+		if tc.Function != nil {
+			if tc.Function.Name != nil {
+				item.Name += *tc.Function.Name
+			}
+			if tc.Function.Arguments != nil {
+				item.Arguments += *tc.Function.Arguments
 			}
 		}
 	}
+}
+
+func (a *streamResponseAccumulator) HasData() bool {
+	return a.id != "" || a.text.Len() > 0 || len(a.toolCalls) > 0
+}
+
+func (a *streamResponseAccumulator) Response() *types.Response {
+	output := make([]types.ResponseItem, 0, 1+len(a.toolCalls))
+	outputText := a.text.String()
+
+	if outputText != "" {
+		output = append(output, types.ResponseItem{
+			ID:     a.id,
+			Type:   "message",
+			Role:   "assistant",
+			Status: "completed",
+			Content: []types.ContentOutput{{
+				Type: "output_text",
+				Text: outputText,
+			}},
+		})
+	}
+
+	indexes := make([]int, 0, len(a.indexes))
+	for index := range a.indexes {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+	for _, index := range indexes {
+		output = append(output, *a.toolCalls[index])
+	}
 
 	return &types.Response{
-		ID:         "resp_" + chunk.ID,
+		ID:         "resp_" + a.id,
 		Object:     "response",
-		CreatedAt:  chunk.Created,
-		Model:      chunk.Model,
+		CreatedAt:  a.createdAt,
+		Model:      a.model,
 		Output:     output,
-		OutputText: strings.Join(outputTexts, "\n"),
+		OutputText: outputText,
+		Usage:      a.usage,
 		Status:     "completed",
 	}
 }

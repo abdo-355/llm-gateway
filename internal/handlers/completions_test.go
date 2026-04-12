@@ -10,6 +10,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-contrib/requestid"
@@ -323,4 +324,31 @@ func TestCompletions_LogicalModelAppliesRequirements(t *testing.T) {
 	setupCompletionsRouter(router).ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestCompletions_PropagatesRouteContextToRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(requestid.New())
+
+	var logicalModel string
+	var routerProfile string
+	r.Use(func(c *gin.Context) {
+		c.Next()
+		logicalModel = metrics.GetLogicalModel(c.Request.Context())
+		routerProfile = metrics.GetRouterProfile(c.Request.Context())
+	})
+
+	handler := NewCompletionsHandler(&mockRouter{})
+	r.POST("/v1/chat/completions", handler.Handle)
+
+	body := `{"model":"chat-lite","messages":[{"role":"user","content":"Hi"}],"router":{"profile":"balanced"}}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "chat-lite", logicalModel)
+	assert.Equal(t, "balanced", routerProfile)
 }

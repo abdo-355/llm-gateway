@@ -497,3 +497,83 @@ func TestResponses_IncludeField(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestResponses_StreamAccumulatesFinalResponse(t *testing.T) {
+	router := &mockResponsesRouter{
+		deriveRequirementsFn: func(_ types.ChatCompletionRequest, _ *types.RouterHints) types.DerivedRequirements {
+			return types.DerivedRequirements{Output: "text", Streaming: "required", Tools: "allowed"}
+		},
+		executeStreamFn: func(_ context.Context, _ types.RoutingPlan, _ types.ChatCompletionRequest, _ string) types.StreamResult {
+			chunks := make(chan *types.SSEChunk, 3)
+			errs := make(chan *types.GatewayError, 1)
+
+			namePart1 := "get_"
+			namePart2 := "weather"
+			argPart1 := `{"location":`
+			argPart2 := `"Paris"}`
+			textPart1 := "Hello"
+			textPart2 := " world"
+
+			chunks <- &types.SSEChunk{
+				ID:      "chatcmpl-stream",
+				Object:  "chat.completion.chunk",
+				Created: 1700000000,
+				Model:   "llama-3.1-8b-instant",
+				Choices: []types.DeltaChoice{{
+					Index: 0,
+					Delta: types.DeltaMessage{
+						Content: &textPart1,
+						ToolCalls: []types.DeltaToolCall{{
+							Index: 0,
+							ID:    "call_123",
+							Type:  "function",
+							Function: &types.DeltaFunction{
+								Name:      &namePart1,
+								Arguments: &argPart1,
+							},
+						}},
+					},
+				}},
+			}
+			chunks <- &types.SSEChunk{
+				ID:      "chatcmpl-stream",
+				Object:  "chat.completion.chunk",
+				Created: 1700000000,
+				Model:   "llama-3.1-8b-instant",
+				Usage:   &types.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
+				Choices: []types.DeltaChoice{{
+					Index: 0,
+					Delta: types.DeltaMessage{
+						Content: &textPart2,
+						ToolCalls: []types.DeltaToolCall{{
+							Index: 0,
+							Function: &types.DeltaFunction{
+								Name:      &namePart2,
+								Arguments: &argPart2,
+							},
+						}},
+					},
+				}},
+			}
+
+			close(chunks)
+			errs <- nil
+			return types.StreamResult{Chunks: chunks, Err: errs}
+		},
+	}
+
+	requestBody := `{"model":"llama-3.1-8b-instant","input":"Hello","stream":true}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	setupResponsesRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(t, body, `"output_text":"Hello world"`)
+	assert.Contains(t, body, `"call_id":"call_123"`)
+	assert.Contains(t, body, `"name":"get_weather"`)
+	assert.Contains(t, body, `"arguments":"{\"location\":\"Paris\"}"`)
+	assert.Contains(t, body, `"total_tokens":15`)
+	assert.Contains(t, body, "data: [DONE]")
+}
