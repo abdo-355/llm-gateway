@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/gin-contrib/requestid"
@@ -44,6 +43,7 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 		writeExecutionError(c, err)
 		return
 	}
+	c.Request = c.Request.WithContext(result.Ctx)
 
 	if result.Requirements.Streaming == "required" || (result.Requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
 		h.handleStream(c, ctx, req, reqID, result)
@@ -116,62 +116,19 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	var logicalModel *types.LogicalModelConfig
-	var logicalModelID string
-	if req.Model != "" {
-		logicalModel, logicalModelID = resolveLogicalModel(req.Model)
+	result, err := h.pipeline.Route(ctx, req.Model, req.Router, *chatReq)
+	if err != nil {
+		writeExecutionError(c, err)
+		return
 	}
+	c.Request = c.Request.WithContext(result.Ctx)
 
-	ctx = metrics.SetLogicalModel(ctx, logicalModelID)
-	if req.Router != nil && req.Router.Profile != nil {
-		ctx = metrics.SetRouterProfile(ctx, *req.Router.Profile)
-	} else {
-		ctx = metrics.SetRouterProfile(ctx, "default")
-	}
-
-	requirements := h.pipeline.router.DeriveRequirements(*chatReq, req.Router)
-
-	var candidates []types.RoutingCandidate
-	if logicalModel != nil {
-		candidates = h.pipeline.router.GenerateCandidatesFromLogicalModel(logicalModel)
-	} else {
-		candidates = h.pipeline.router.GenerateCandidates()
-		if req.Model != "" {
-			candidates = filterCandidatesByModel(candidates, req.Model)
-		}
-	}
-
-	eligible, filtered := h.pipeline.router.FilterCandidates(ctx, candidates, requirements, *chatReq, req.Router)
-	if len(eligible) == 0 {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"error": gin.H{
-				"type":    "gateway_error",
-				"code":    "NO_ELIGIBLE_PROVIDER",
-				"message": "No eligible provider found",
-				"details": gin.H{
-					"requirements":       requirements,
-					"filtered_providers": filtered,
-				},
-			},
-		})
+	if result.Requirements.Streaming == "required" || (result.Requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
+		h.handleStream(c, ctx, req, reqID, *chatReq, result.Plan, result.LogicalModel)
 		return
 	}
 
-	scored := h.pipeline.router.ScoreCandidates(ctx, eligible, req.Router)
-
-	var slo *types.LogicalModelSLO
-	if logicalModel != nil {
-		slo = logicalModel.SLO
-	}
-
-	plan := h.pipeline.router.CompilePlan(scored, req.Router, slo)
-
-	if requirements.Streaming == "required" || (requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
-		h.handleStream(c, ctx, req, reqID, *chatReq, plan, logicalModel)
-		return
-	}
-
-	execResult, err := h.pipeline.router.Execute(ctx, plan, *chatReq, reqID)
+	execResult, err := h.pipeline.router.Execute(result.Ctx, result.Plan, *chatReq, reqID)
 	if err != nil {
 		writeExecutionError(c, err)
 		return
@@ -179,7 +136,7 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 
 	response := services.ChatCompletionToResponse(&execResult.Response)
 
-	writeResultHeaders(c, execResult, logicalModel)
+	writeResultHeaders(c, execResult, result.LogicalModel)
 	c.JSON(http.StatusOK, response)
 }
 

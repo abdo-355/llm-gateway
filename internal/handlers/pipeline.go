@@ -45,12 +45,16 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 	}
 
 	requirements := p.router.DeriveRequirements(req, hints)
+	requirements = applyLogicalModelRequirements(requirements, logicalModel)
 
 	var candidates []types.RoutingCandidate
 	if logicalModel != nil {
 		candidates = p.router.GenerateCandidatesFromLogicalModel(logicalModel)
 	} else {
 		candidates = p.router.GenerateCandidates()
+		if model != "" {
+			candidates = filterCandidatesByModel(candidates, model)
+		}
 	}
 
 	eligible, filtered := p.router.FilterCandidates(ctx, candidates, requirements, req, hints)
@@ -82,6 +86,22 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		Requirements:   requirements,
 		Ctx:            ctx,
 	}, nil
+}
+
+func applyLogicalModelRequirements(requirements types.DerivedRequirements, logicalModel *types.LogicalModelConfig) types.DerivedRequirements {
+	if logicalModel == nil {
+		return requirements
+	}
+
+	if logicalModel.RequireStrictJSON != nil && *logicalModel.RequireStrictJSON {
+		requirements.Output = "json_schema_strict"
+	}
+
+	if logicalModel.RequireTools != nil && *logicalModel.RequireTools {
+		requirements.Tools = "required"
+	}
+
+	return requirements
 }
 
 func resolveLogicalModel(model string) (*types.LogicalModelConfig, string) {

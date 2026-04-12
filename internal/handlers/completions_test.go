@@ -251,3 +251,76 @@ func TestCompletions_LogicalModelResolution(t *testing.T) {
 	assert.True(t, logicalModelCalled, "should route through GenerateCandidatesFromLogicalModel")
 	assert.Equal(t, "chat-lite", w.Header().Get("X-Gateway-Logical-Model"))
 }
+
+func TestCompletions_FiltersRequestedNativeModel(t *testing.T) {
+	filteredToRequestedModel := false
+	router := &mockRouter{
+		generateCandidatesFn: func() []types.RoutingCandidate {
+			return []types.RoutingCandidate{
+				{Provider: types.ProviderConfig{ID: "groq"}, Model: "llama-3.1-8b-instant", Score: 1.0},
+				{Provider: types.ProviderConfig{ID: "mistral"}, Model: "mistral-large-2411", Score: 1.0},
+			}
+		},
+		filterCandidatesFn: func(_ context.Context, candidates []types.RoutingCandidate, _ types.DerivedRequirements, _ types.ChatCompletionRequest, _ *types.RouterHints) ([]types.RoutingCandidate, map[string]string) {
+			require.Len(t, candidates, 1)
+			assert.Equal(t, "mistral-large-2411", candidates[0].Model)
+			filteredToRequestedModel = true
+			return candidates, nil
+		},
+		executeFn: func(_ context.Context, plan types.RoutingPlan, _ types.ChatCompletionRequest, _ string) (*types.ExecutionResult, error) {
+			require.Len(t, plan.Attempts, 1)
+			assert.Equal(t, "mistral-large-2411", plan.Attempts[0].Model)
+			content := "Hello!"
+			return &types.ExecutionResult{
+				Response: types.ChatCompletionResponse{
+					ID:      "chatcmpl-test",
+					Object:  "chat.completion",
+					Created: 1700000000,
+					Model:   "mistral-large-2411",
+					Choices: []types.Choice{{Index: 0, Message: types.ResponseMessage{Role: "assistant", Content: &content}, FinishReason: "stop"}},
+				},
+				Attempts:   1,
+				ProviderID: "mistral",
+				Model:      "mistral-large-2411",
+			}, nil
+		},
+		compilePlanFn: func(candidates []types.RoutingCandidate, _ *types.RouterHints, _ *types.LogicalModelSLO) types.RoutingPlan {
+			require.Len(t, candidates, 1)
+			return types.RoutingPlan{
+				Attempts:    []types.RoutingAttempt{{ProviderID: candidates[0].Provider.ID, Model: candidates[0].Model}},
+				MaxAttempts: 1,
+			}
+		},
+	}
+
+	body := `{"model":"mistral-large-2411","messages":[{"role":"user","content":"Hi"}]}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, filteredToRequestedModel)
+	assert.Equal(t, "mistral-large-2411", w.Header().Get("X-Gateway-Model"))
+}
+
+func TestCompletions_LogicalModelAppliesRequirements(t *testing.T) {
+	router := &mockRouter{
+		generateCandidatesFromLogicalModelFn: func(lm *types.LogicalModelConfig) []types.RoutingCandidate {
+			assert.Equal(t, "json-safe", lm.ID)
+			return []types.RoutingCandidate{{Provider: types.ProviderConfig{ID: "mistral"}, Model: "mistral-large-2411", Score: 1.0}}
+		},
+		filterCandidatesFn: func(_ context.Context, _ []types.RoutingCandidate, requirements types.DerivedRequirements, _ types.ChatCompletionRequest, _ *types.RouterHints) ([]types.RoutingCandidate, map[string]string) {
+			assert.Equal(t, "json_schema_strict", requirements.Output)
+			return []types.RoutingCandidate{{Provider: types.ProviderConfig{ID: "mistral"}, Model: "mistral-large-2411", Score: 1.0}}, nil
+		},
+	}
+
+	body := `{"model":"json-safe","messages":[{"role":"user","content":"Hi"}]}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
