@@ -108,7 +108,7 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 	pipe.Get(ctx, keys.RPH)
 	pipe.Get(ctx, keys.RPD)
 
-	// TPM: Get entries in window and sum token counts (stored as scores)
+	// TPM: Get entries in window and sum token counts from member payloads.
 	pipe.ZRemRangeByScore(ctx, keys.TPM, "0", fmt.Sprintf("%d", tpmCutoff))
 	pipe.ZRangeWithScores(ctx, keys.TPM, 0, -1)
 
@@ -192,9 +192,11 @@ func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model s
 	pipe.Incr(ctx, keys.RPD)
 	pipe.Expire(ctx, keys.RPD, 25*time.Hour)
 
-	// TPM: sliding window with token counts (store tokens as score for summing)
-	tpmMember := fmt.Sprintf("%d-%d", timestamp, now.Nanosecond())
-	pipe.ZAdd(ctx, keys.TPM, redis.Z{Score: float64(tokensUsed), Member: tpmMember})
+	// TPM: sliding window with timestamp as score and token count in the member payload.
+	pipe.ZAdd(ctx, keys.TPM, redis.Z{
+		Score:  float64(timestamp),
+		Member: formatTokenWindowMember(timestamp, tokensUsed, now.Nanosecond()),
+	})
 	pipe.Expire(ctx, keys.TPM, 60*time.Second)
 
 	// TPH: hourly token counter
@@ -252,7 +254,20 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 				if remaining, err2 := strconv.Atoi(reqRemaining); err2 == nil {
 					used := limit - remaining
 					if used > 0 {
-						s.redis.Set(ctx, keys.RPM, used, 60*time.Second)
+						nowMillis := now.UnixMilli()
+						entries := make([]redis.Z, 0, used)
+						for i := 0; i < used; i++ {
+							entries = append(entries, redis.Z{
+								Score:  float64(nowMillis),
+								Member: fmt.Sprintf("provider-rate-limit-%d-%d", nowMillis, i),
+							})
+						}
+
+						pipe := s.redis.Pipeline()
+						pipe.Del(ctx, keys.RPM)
+						pipe.ZAdd(ctx, keys.RPM, entries...)
+						pipe.Expire(ctx, keys.RPM, 60*time.Second)
+						_, _ = pipe.Exec(ctx)
 					}
 				}
 			}
@@ -356,11 +371,11 @@ func (s *QuotaService) parseResults(results []redis.Cmder, now time.Time) QuotaS
 		status.Rpd = atoi(results[3].(*redis.StringCmd))
 	}
 	if len(results) > 5 {
-		// Sum token counts from ZRangeWithScores (scores are token counts)
+		// Sum token counts from the member payloads.
 		scores := results[5].(*redis.ZSliceCmd).Val()
 		totalTokens := 0
 		for _, z := range scores {
-			totalTokens += int(z.Score)
+			totalTokens += parseTokenWindowMember(z.Member)
 		}
 		status.Tpm = totalTokens
 	}
@@ -375,4 +390,27 @@ func (s *QuotaService) parseResults(results []redis.Cmder, now time.Time) QuotaS
 	}
 
 	return status
+}
+
+func formatTokenWindowMember(timestamp int64, tokensUsed, nonce int) string {
+	return fmt.Sprintf("%d:%d:%d", timestamp, tokensUsed, nonce)
+}
+
+func parseTokenWindowMember(member any) int {
+	memberStr, ok := member.(string)
+	if !ok {
+		return 0
+	}
+
+	parts := strings.SplitN(memberStr, ":", 3)
+	if len(parts) < 2 {
+		return 0
+	}
+
+	tokens, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0
+	}
+
+	return tokens
 }

@@ -241,6 +241,7 @@ func TestQuotaRecordModelUsage(t *testing.T) {
 	assert.Equal(t, 1, status.Rpm, "RPM should be 1")
 	assert.Equal(t, 1, status.Rph, "RPH should be 1")
 	assert.Equal(t, 1, status.Rpd, "RPD should be 1")
+	assert.Equal(t, 150, status.Tpm, "TPM should be 150")
 	assert.Equal(t, 150, status.Tph, "TPH should be 150")
 	assert.Equal(t, 150, status.Tpd, "TPD should be 150")
 	assert.Equal(t, 150, status.Tpmu, "TPMU should be 150")
@@ -259,6 +260,7 @@ func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {
 	assert.Equal(t, 3, status.Rpm, "RPM should be 3 after 3 records")
 	assert.Equal(t, 3, status.Rph, "RPH should be 3")
 	assert.Equal(t, 3, status.Rpd, "RPD should be 3")
+	assert.Equal(t, 400, status.Tpm, "TPM should be 400 (100+250+50)")
 	assert.Equal(t, 400, status.Tph, "TPH should be 400 (100+250+50)")
 	assert.Equal(t, 400, status.Tpd, "TPD should be 400")
 	assert.Equal(t, 400, status.Tpmu, "TPMU should be 400")
@@ -266,12 +268,12 @@ func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {
 
 func TestQuotaHandleProviderRateLimit(t *testing.T) {
 	tests := []struct {
-		name              string
-		statusCode        int
-		headers           map[string]string
-		wantRateLimited   bool
-		wantPayment       bool
-		wantRetryAfter    int
+		name            string
+		statusCode      int
+		headers         map[string]string
+		wantRateLimited bool
+		wantPayment     bool
+		wantRetryAfter  int
 	}{
 		{
 			name:            "429 status returns IsRateLimited true",
@@ -338,6 +340,12 @@ func TestQuotaHandleProviderRateLimit_UpdatesRedis(t *testing.T) {
 	resp.Header.Set("X-RateLimit-Remaining-Requests", "10")
 
 	_ = svc.HandleProviderRateLimit(ctx, "prov1", "model1", resp)
+
+	status := svc.GetModelQuotaStatus(ctx, "prov1", "model1", nil)
+	assert.Equal(t, 90, status.Rpm)
+
+	err := svc.CheckModelQuota(ctx, "prov1", "model1", types.ModelLimits{Rpm: intPtr(90)}, 1)
+	require.Error(t, err)
 }
 
 func TestQuotaGetModelQuotaStatus(t *testing.T) {
@@ -361,6 +369,7 @@ func TestQuotaGetModelQuotaStatus(t *testing.T) {
 	assert.Equal(t, 2, status.Rpm)
 	assert.Equal(t, 2, status.Rph)
 	assert.Equal(t, 2, status.Rpd)
+	assert.Equal(t, 500, status.Tpm)
 	assert.Equal(t, 500, status.Tph)
 	assert.Equal(t, 500, status.Tpd)
 	assert.Equal(t, 500, status.Tpmu)
