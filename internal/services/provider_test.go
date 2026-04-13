@@ -28,6 +28,78 @@ func TestNewProviderService_DefaultTimeout(t *testing.T) {
 	assert.Equal(t, defaultRequestTimeout, svc.httpClient.Timeout)
 }
 
+func TestPrepareRequest_MistralShaping(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		MaxCompletionTokens: ptrInt(12),
+		Seed:                ptrInt(42),
+		User:                "verify-upstream",
+	}
+
+	body, err := svc.prepareRequest(req, "mistral-large-2411", "https://api.mistral.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, float64(12), payload["max_tokens"])
+	assert.Equal(t, float64(42), payload["random_seed"])
+	assert.NotContains(t, payload, "max_completion_tokens")
+	assert.NotContains(t, payload, "seed")
+	assert.NotContains(t, payload, "user")
+}
+
+func TestPrepareRequest_GroqShaping(t *testing.T) {
+	svc := newProviderService()
+	penalty := 0.5
+	req := types.ChatCompletionRequest{
+		Messages:         []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		MaxTokens:        ptrInt(10),
+		Metadata:         map[string]string{"trace": "abc"},
+		FrequencyPenalty: &penalty,
+		PresencePenalty:  &penalty,
+	}
+
+	body, err := svc.prepareRequest(req, "llama-3.1-8b-instant", "https://api.groq.com/openai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, float64(10), payload["max_completion_tokens"])
+	assert.NotContains(t, payload, "max_tokens")
+	assert.NotContains(t, payload, "metadata")
+	assert.NotContains(t, payload, "frequency_penalty")
+	assert.NotContains(t, payload, "presence_penalty")
+}
+
+func TestPrepareRequest_GeminiShaping(t *testing.T) {
+	svc := newProviderService()
+	penalty := 0.5
+	req := types.ChatCompletionRequest{
+		Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		MaxCompletionTokens: ptrInt(9),
+		Metadata:            map[string]string{"trace": "abc"},
+		Seed:                ptrInt(9),
+		User:                "verify-upstream",
+		FrequencyPenalty:    &penalty,
+		PresencePenalty:     &penalty,
+	}
+
+	body, err := svc.prepareRequest(req, "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, float64(9), payload["max_tokens"])
+	assert.NotContains(t, payload, "max_completion_tokens")
+	assert.NotContains(t, payload, "metadata")
+	assert.NotContains(t, payload, "seed")
+	assert.NotContains(t, payload, "random_seed")
+	assert.NotContains(t, payload, "user")
+	assert.NotContains(t, payload, "frequency_penalty")
+	assert.NotContains(t, payload, "presence_penalty")
+}
+
 // ---------------------------------------------------------------------------
 // CallProvider (non-streaming)
 // ---------------------------------------------------------------------------

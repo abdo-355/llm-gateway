@@ -74,6 +74,7 @@ type ChatCompletionRequest struct {
 	PresencePenalty     *float64          `json:"presence_penalty,omitempty"`
 	ResponseFormat      *ResponseFormat   `json:"response_format,omitempty"`
 	Seed                *int              `json:"seed,omitempty"`
+	RandomSeed          *int              `json:"random_seed,omitempty"`
 	Stop                any               `json:"stop,omitempty"` // string or []string
 	Stream              *bool             `json:"stream,omitempty"`
 	StreamOptions       *StreamOptions    `json:"stream_options,omitempty"`

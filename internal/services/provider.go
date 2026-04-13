@@ -36,7 +36,7 @@ func (s *ProviderService) CallProvider(
 	providerType string,
 	auth types.ProviderAuth,
 ) (*types.ChatCompletionResponse, error) {
-	reqBody, err := s.prepareRequest(request, model, providerType)
+	reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (s *ProviderService) StreamProviderChannel(
 	go func() {
 		defer close(chunks)
 
-		reqBody, err := s.prepareRequest(request, model, providerType)
+		reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
 		if err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_PREP_FAILED", Message: err.Error()}
 			return
@@ -160,16 +160,95 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 	return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: err.Error()}
 }
 
-func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, model, providerType string) ([]byte, error) {
+func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, model, baseURL, providerType string, auth types.ProviderAuth) ([]byte, error) {
 	request.Router = nil
 
 	request.Model = model
+	request = normalizeRequestForProvider(request, detectProvider(baseURL, providerType, auth))
 
 	if request.ResponseFormat != nil && request.ResponseFormat.Type == "json_object" {
 		request.Messages = ensureJSONKeyword(request.Messages)
 	}
 
 	return json.Marshal(request)
+}
+
+func normalizeRequestForProvider(request types.ChatCompletionRequest, provider string) types.ChatCompletionRequest {
+	switch provider {
+	case "groq", "cerebras":
+		if request.MaxCompletionTokens == nil && request.MaxTokens != nil {
+			request.MaxCompletionTokens = request.MaxTokens
+		}
+		request.MaxTokens = nil
+	case "mistral":
+		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
+			request.MaxTokens = request.MaxCompletionTokens
+		}
+		request.MaxCompletionTokens = nil
+		if request.RandomSeed == nil && request.Seed != nil {
+			request.RandomSeed = request.Seed
+		}
+		request.Seed = nil
+		request.User = ""
+	case "gemini", "vertex":
+		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
+			request.MaxTokens = request.MaxCompletionTokens
+		}
+		request.MaxCompletionTokens = nil
+	}
+
+	switch provider {
+	case "groq":
+		request.Metadata = nil
+		request.FrequencyPenalty = nil
+		request.PresencePenalty = nil
+	case "cerebras":
+		request.Metadata = nil
+	case "gemini":
+		request.Metadata = nil
+		request.Seed = nil
+		request.RandomSeed = nil
+		request.User = ""
+		request.FrequencyPenalty = nil
+		request.PresencePenalty = nil
+	case "vertex":
+		request.Metadata = nil
+		request.User = ""
+	}
+
+	return request
+}
+
+func detectProvider(baseURL, providerType string, auth types.ProviderAuth) string {
+	switch auth.Env {
+	case "GROQ_API_KEY":
+		return "groq"
+	case "CEREBRAS_API_KEY":
+		return "cerebras"
+	case "MISTRAL_API_KEY":
+		return "mistral"
+	case "GEMINI_API_KEY":
+		return "gemini"
+	}
+
+	if auth.Type == "adc" || providerType == "vertex" {
+		return "vertex"
+	}
+
+	switch {
+	case strings.Contains(baseURL, "api.groq.com"):
+		return "groq"
+	case strings.Contains(baseURL, "api.cerebras.ai"):
+		return "cerebras"
+	case strings.Contains(baseURL, "api.mistral.ai"):
+		return "mistral"
+	case strings.Contains(baseURL, "generativelanguage.googleapis.com"):
+		return "gemini"
+	case strings.Contains(baseURL, "aiplatform.googleapis.com"):
+		return "vertex"
+	default:
+		return ""
+	}
 }
 
 func ensureJSONKeyword(messages []types.OpenAIMessage) []types.OpenAIMessage {
