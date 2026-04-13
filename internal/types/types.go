@@ -248,15 +248,42 @@ type ProviderAuth struct {
 }
 
 type ProviderModels struct {
-	Mode   string                 `json:"mode"`             // allowlist, denylist
-	List   []string               `json:"list"`             // model names
-	Limits map[string]ModelLimits `json:"limits,omitempty"` // per-model limits
+	Mode         string                       `json:"mode"`                   // allowlist, denylist
+	List         []string                     `json:"list"`                   // model names
+	Limits       map[string]ModelLimits       `json:"limits,omitempty"`       // per-model limits
+	Capabilities map[string]ModelCapabilities `json:"capabilities,omitempty"` // per-model capability overrides
 }
 
 type ProviderCapabilities struct {
-	Streaming         bool   `json:"streaming"`
-	Tools             bool   `json:"tools"`
-	StructuredOutputs string `json:"structuredOutputs"` // none, json_object, json_schema_strict, model_dependent, unknown
+	Streaming           bool   `json:"streaming"`
+	Tools               bool   `json:"tools"`
+	StructuredOutputs   string `json:"structuredOutputs"` // none, json_object, json_schema_strict, model_dependent, unknown
+	Logprobs            bool   `json:"logprobs,omitempty"`
+	Metadata            bool   `json:"metadata,omitempty"`
+	Seed                bool   `json:"seed,omitempty"`
+	User                bool   `json:"user,omitempty"`
+	FrequencyPenalty    bool   `json:"frequencyPenalty,omitempty"`
+	PresencePenalty     bool   `json:"presencePenalty,omitempty"`
+	MaxTokens           bool   `json:"maxTokens,omitempty"`
+	MaxCompletionTokens bool   `json:"maxCompletionTokens,omitempty"`
+	MultipleChoices     bool   `json:"multipleChoices,omitempty"`
+	ToolSchema          string `json:"toolSchema,omitempty"` // json_schema, openapi
+}
+
+type ModelCapabilities struct {
+	Streaming           *bool   `json:"streaming,omitempty"`
+	Tools               *bool   `json:"tools,omitempty"`
+	StructuredOutputs   *string `json:"structuredOutputs,omitempty"`
+	Logprobs            *bool   `json:"logprobs,omitempty"`
+	Metadata            *bool   `json:"metadata,omitempty"`
+	Seed                *bool   `json:"seed,omitempty"`
+	User                *bool   `json:"user,omitempty"`
+	FrequencyPenalty    *bool   `json:"frequencyPenalty,omitempty"`
+	PresencePenalty     *bool   `json:"presencePenalty,omitempty"`
+	MaxTokens           *bool   `json:"maxTokens,omitempty"`
+	MaxCompletionTokens *bool   `json:"maxCompletionTokens,omitempty"`
+	MultipleChoices     *bool   `json:"multipleChoices,omitempty"`
+	ToolSchema          *string `json:"toolSchema,omitempty"`
 }
 
 type ProviderLimits struct {

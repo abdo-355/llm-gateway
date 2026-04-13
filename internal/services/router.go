@@ -204,6 +204,7 @@ func (r *Router) FilterCandidates(
 	for _, candidate := range candidates {
 		provider := candidate.Provider
 		model := candidate.Model
+		caps := r.resolveCapabilities(provider, model)
 
 		// Check allow/deny lists
 		if hints != nil && hints.Providers != nil {
@@ -227,10 +228,20 @@ func (r *Router) FilterCandidates(
 		}
 
 		// Check strict JSON requirement
+		if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" && !supportsJSONObject(caps) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_output_not_supported"
+			continue
+		}
+
+		if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_schema" && !supportsJSONSchema(caps) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_schema_not_supported"
+			continue
+		}
+
 		if requirements.Output == "json_schema_strict" {
 			if !candidate.IsCertifiedForStrictSchema {
 				// Check if provider guarantees strict JSON
-				if provider.Capabilities.StructuredOutputs != "json_schema_strict" {
+				if caps.StructuredOutputs != "json_schema_strict" {
 					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "not_certified_for_strict_json"
 					continue
 				}
@@ -238,14 +249,35 @@ func (r *Router) FilterCandidates(
 		}
 
 		// Check streaming requirement
-		if requirements.Streaming == "required" && !provider.Capabilities.Streaming {
+		if requirements.Streaming == "required" && !caps.Streaming {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "streaming_not_supported"
 			continue
 		}
 
 		// Check tools requirement
-		if requirements.Tools == "required" && !provider.Capabilities.Tools {
+		if len(req.Tools) > 0 {
+			if !caps.Tools {
+				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
+				continue
+			}
+			if caps.ToolSchema != "" && caps.ToolSchema != "json_schema" {
+				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tool_schema_dialect_not_supported"
+				continue
+			}
+		}
+
+		if requirements.Tools == "required" && !caps.Tools {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
+			continue
+		}
+
+		if req.Logprobs != nil && *req.Logprobs && !caps.Logprobs {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "logprobs_not_supported"
+			continue
+		}
+
+		if req.N != nil && *req.N > 1 && !caps.MultipleChoices {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "multiple_choices_not_supported"
 			continue
 		}
 
@@ -834,6 +866,74 @@ func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
 		return r.resolveProviderAPIKey(provider.Auth) != ""
 	default:
 		return true
+	}
+}
+
+func (r *Router) resolveCapabilities(provider types.ProviderConfig, model string) types.ProviderCapabilities {
+	resolved := provider.Capabilities
+	overrides, ok := provider.Models.Capabilities[model]
+	if !ok {
+		return resolved
+	}
+
+	if overrides.Streaming != nil {
+		resolved.Streaming = *overrides.Streaming
+	}
+	if overrides.Tools != nil {
+		resolved.Tools = *overrides.Tools
+	}
+	if overrides.StructuredOutputs != nil {
+		resolved.StructuredOutputs = *overrides.StructuredOutputs
+	}
+	if overrides.Logprobs != nil {
+		resolved.Logprobs = *overrides.Logprobs
+	}
+	if overrides.Metadata != nil {
+		resolved.Metadata = *overrides.Metadata
+	}
+	if overrides.Seed != nil {
+		resolved.Seed = *overrides.Seed
+	}
+	if overrides.User != nil {
+		resolved.User = *overrides.User
+	}
+	if overrides.FrequencyPenalty != nil {
+		resolved.FrequencyPenalty = *overrides.FrequencyPenalty
+	}
+	if overrides.PresencePenalty != nil {
+		resolved.PresencePenalty = *overrides.PresencePenalty
+	}
+	if overrides.MaxTokens != nil {
+		resolved.MaxTokens = *overrides.MaxTokens
+	}
+	if overrides.MaxCompletionTokens != nil {
+		resolved.MaxCompletionTokens = *overrides.MaxCompletionTokens
+	}
+	if overrides.MultipleChoices != nil {
+		resolved.MultipleChoices = *overrides.MultipleChoices
+	}
+	if overrides.ToolSchema != nil {
+		resolved.ToolSchema = *overrides.ToolSchema
+	}
+
+	return resolved
+}
+
+func supportsJSONObject(caps types.ProviderCapabilities) bool {
+	switch caps.StructuredOutputs {
+	case "json_object", "json_schema", "json_schema_strict", "model_dependent":
+		return true
+	default:
+		return false
+	}
+}
+
+func supportsJSONSchema(caps types.ProviderCapabilities) bool {
+	switch caps.StructuredOutputs {
+	case "json_schema", "json_schema_strict", "model_dependent":
+		return true
+	default:
+		return false
 	}
 }
 

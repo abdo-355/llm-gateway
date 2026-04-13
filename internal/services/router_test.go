@@ -42,7 +42,19 @@ func testConfig() types.AppConfig {
 					},
 				},
 				Capabilities: types.ProviderCapabilities{
-					Streaming: true, Tools: true, StructuredOutputs: "json_schema_strict",
+					Streaming:           true,
+					Tools:               true,
+					StructuredOutputs:   "json_schema_strict",
+					Logprobs:            true,
+					Metadata:            true,
+					Seed:                true,
+					User:                true,
+					FrequencyPenalty:    true,
+					PresencePenalty:     true,
+					MaxTokens:           true,
+					MaxCompletionTokens: true,
+					MultipleChoices:     true,
+					ToolSchema:          "json_schema",
 				},
 			},
 			{
@@ -57,7 +69,19 @@ func testConfig() types.AppConfig {
 					},
 				},
 				Capabilities: types.ProviderCapabilities{
-					Streaming: false, Tools: false, StructuredOutputs: "none",
+					Streaming:           false,
+					Tools:               false,
+					StructuredOutputs:   "none",
+					Logprobs:            false,
+					Metadata:            false,
+					Seed:                false,
+					User:                false,
+					FrequencyPenalty:    false,
+					PresencePenalty:     false,
+					MaxTokens:           false,
+					MaxCompletionTokens: false,
+					MultipleChoices:     false,
+					ToolSchema:          "json_schema",
 				},
 			},
 		},
@@ -156,6 +180,7 @@ func TestDeriveRequirements(t *testing.T) {
 		assert.Equal(t, "forbidden", reqs.Streaming)
 		assert.Equal(t, "required", reqs.Tools)
 	})
+
 }
 
 // --- GenerateCandidates ---
@@ -271,6 +296,73 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Len(t, eligible, 2)
 		assert.Contains(t, filtered, "provider-a/model-1")
 		assert.Equal(t, "quota_exceeded_rpm", filtered["provider-a/model-1"])
+	})
+
+	t.Run("filters by logprobs requirement", func(t *testing.T) {
+		r, mockQuota, mockHealth, _ := newTestRouter(t)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		logprobReq := baseReq
+		logprobReq.Logprobs = boolPtr(true)
+		logprobReq.TopLogprobs = intPtr(1)
+
+		candidates := r.GenerateCandidates()
+		eligible, filtered := r.FilterCandidates(ctx, candidates, textReqs, logprobReq, nil)
+		assert.Len(t, eligible, 2)
+		assert.Contains(t, filtered, "provider-b/model-3")
+		assert.Equal(t, "logprobs_not_supported", filtered["provider-b/model-3"])
+	})
+
+	t.Run("filters multiple choices when unsupported", func(t *testing.T) {
+		r, mockQuota, mockHealth, _ := newTestRouter(t)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		multiReq := baseReq
+		multiReq.N = intPtr(2)
+
+		candidates := r.GenerateCandidates()
+		eligible, filtered := r.FilterCandidates(ctx, candidates, textReqs, multiReq, nil)
+		assert.Len(t, eligible, 2)
+		assert.Contains(t, filtered, "provider-b/model-3")
+		assert.Equal(t, "multiple_choices_not_supported", filtered["provider-b/model-3"])
+	})
+
+	t.Run("filters tool schema dialect mismatch", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{{
+			ID:      "provider-openapi-tools",
+			BaseURL: "https://api.example.com/v1",
+			Auth:    types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"},
+			Models:  types.ProviderModels{Mode: "allowlist", List: []string{"model-1"}},
+			Capabilities: types.ProviderCapabilities{
+				Streaming:         true,
+				Tools:             true,
+				StructuredOutputs: "json_schema",
+				ToolSchema:        "openapi",
+			},
+		}}}
+
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		toolsReq := baseReq
+		toolsReq.Tools = []types.OpenAITool{{Type: "function"}}
+		toolsReq.ToolChoice = "required"
+
+		candidates := r.GenerateCandidates()
+		eligible, filtered := r.FilterCandidates(ctx, candidates, types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "required"}, toolsReq, nil)
+		assert.Empty(t, eligible)
+		assert.Equal(t, "tool_schema_dialect_not_supported", filtered["provider-openapi-tools/model-1"])
 	})
 }
 
