@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -220,6 +221,11 @@ func (r *Router) FilterCandidates(
 			}
 		}
 
+		if !r.providerAvailable(provider) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "provider_unavailable"
+			continue
+		}
+
 		// Check strict JSON requirement
 		if requirements.Output == "json_schema_strict" {
 			if !candidate.IsCertifiedForStrictSchema {
@@ -344,19 +350,7 @@ func (r *Router) CompilePlan(
 	var attempts []types.RoutingAttempt
 	for i := 0; i < maxAttempts && i < len(candidates); i++ {
 		candidate := candidates[i]
-
-		// Get API key from environment
-		apiKey := ""
-		switch candidate.Provider.Auth.Env {
-		case "GROQ_API_KEY":
-			apiKey = config.GetEnv().GroqAPIKey
-		case "CEREBRAS_API_KEY":
-			apiKey = config.GetEnv().CerebrasAPIKey
-		case "MISTRAL_API_KEY":
-			apiKey = config.GetEnv().MistralAPIKey
-		case "GEMINI_API_KEY":
-			apiKey = config.GetEnv().GeminiAPIKey
-		}
+		apiKey := r.resolveProviderAPIKey(candidate.Provider.Auth)
 
 		// Build the base URL, replacing placeholders for Vertex
 		baseURL := candidate.Provider.BaseURL
@@ -827,6 +821,28 @@ func (r *Router) ShouldRetry(err error, plan types.RoutingPlan, attemptIndex int
 	default:
 		return false
 	}
+}
+
+func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
+	switch provider.Auth.Type {
+	case "adc":
+		return config.GetEnv().GoogleVertexProjectID != "" && IsVertexAuthAvailable()
+	case "bearer", "header":
+		if provider.Auth.Env == "" {
+			return true
+		}
+		return r.resolveProviderAPIKey(provider.Auth) != ""
+	default:
+		return true
+	}
+}
+
+func (r *Router) resolveProviderAPIKey(auth types.ProviderAuth) string {
+	if auth.Env == "" {
+		return ""
+	}
+
+	return os.Getenv(auth.Env)
 }
 
 // CreateGatewayError creates a gateway error from a provider error

@@ -274,6 +274,35 @@ func TestFilterCandidates(t *testing.T) {
 	})
 }
 
+func TestFilterCandidates_FiltersUnavailableProviders(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockQuota := mocks.NewMockQuotaChecker(ctrl)
+	mockHealth := mocks.NewMockHealthChecker(ctrl)
+	mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+	cfg := types.AppConfig{
+		Providers: []types.ProviderConfig{{
+			ID:      "provider-missing-key",
+			BaseURL: "https://api.example.com/v1",
+			Auth:    types.ProviderAuth{Type: "bearer", Env: "MISSING_PROVIDER_KEY"},
+			Models: types.ProviderModels{
+				Mode: "allowlist",
+				List: []string{"model-1"},
+			},
+			Capabilities: types.ProviderCapabilities{Streaming: true, Tools: true, StructuredOutputs: "json_schema_strict"},
+		}},
+	}
+
+	r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "hi"}}}
+	reqs := types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "forbidden"}
+	candidates := r.GenerateCandidates()
+
+	eligible, filtered := r.FilterCandidates(context.Background(), candidates, reqs, req, nil)
+	assert.Empty(t, eligible)
+	assert.Equal(t, "provider_unavailable", filtered["provider-missing-key/model-1"])
+}
+
 // --- ScoreCandidates ---
 
 func TestScoreCandidates(t *testing.T) {

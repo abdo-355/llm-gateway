@@ -64,3 +64,7 @@ func GetVertexToken(ctx context.Context) (string, error) {
 		Msg("Vertex access token acquired")
 	return tok.AccessToken, nil
 }
+
+func IsVertexAuthAvailable() bool {
+	return vertexAuth.ts != nil && vertexAuth.err == nil
+}
