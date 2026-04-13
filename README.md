@@ -27,7 +27,7 @@ LLM Gateway is a unified API interface that sits between your application and LL
 
 - **Groq** - Fast inference for Llama models
 - **Cerebras** - High-throughput Llama and Qwen models
-- **Mistral** - Mistral models including Codestral
+- **Mistral** - Mistral, Ministral, and Pixtral models
 - **Google Vertex AI** - Gemini models (via Vertex AI)
 - **Google Gemini** - Gemini models (via Gemini API)
 
@@ -201,7 +201,7 @@ Optional filters:
 
 ```bash
 go run ./cmd/verify-upstream --provider mistral
-go run ./cmd/verify-upstream --provider gemini --model google/gemini-2.5-flash
+go run ./cmd/verify-upstream --provider gemini --model gemini-2.5-flash
 ```
 
 Optional behavior flags:
