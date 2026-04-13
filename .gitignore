@@ -31,6 +31,9 @@ tmp/
 *.swo
 *~
 
+# Qwen Code settings
+.qwen/
+
 # OS
 .DS_Store
 
