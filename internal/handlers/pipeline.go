@@ -11,6 +11,7 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
+	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
 
@@ -123,6 +124,9 @@ func writeExecutionError(c *gin.Context, err error) {
 			Code:    "EXECUTION_ERROR",
 			Message: err.Error(),
 		}
+	}
+	if gatewayErr.RequestID == "" {
+		gatewayErr.RequestID = requestid.Get(c)
 	}
 
 	status := http.StatusInternalServerError

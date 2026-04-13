@@ -230,6 +230,7 @@ func TestCompletions_ExecuteGenericError(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "EXECUTION_ERROR", errObj["code"])
+	assert.NotEmpty(t, errObj["request_id"])
 }
 
 func TestCompletions_LogicalModelResolution(t *testing.T) {
