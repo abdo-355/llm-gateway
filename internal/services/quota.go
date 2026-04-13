@@ -45,6 +45,7 @@ type RateLimitInfo struct {
 	IsRateLimited     bool
 	RetryAfter        int
 	IsPaymentRequired bool
+	LimitType         string
 }
 
 // EstimateTokens estimates token count from request
@@ -228,6 +229,7 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 	if resp.StatusCode == 402 {
 		result.IsRateLimited = true
 		result.IsPaymentRequired = true
+		result.LimitType = "payment_required"
 		return result
 	}
 
@@ -236,6 +238,7 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 	}
 
 	result.IsRateLimited = true
+	result.LimitType = "rpm"
 
 	// Parse rate limit headers
 	if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
@@ -243,38 +246,80 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 			result.RetryAfter = seconds
 		}
 	}
+	if result.RetryAfter == 0 {
+		for _, header := range []string{"X-RateLimit-Reset-Requests", "X-RateLimit-Reset-Requests-Minute", "X-RateLimit-Reset-Requests-Day"} {
+			if seconds := parseHeaderInt(resp.Header, header); seconds > 0 {
+				result.RetryAfter = seconds
+				break
+			}
+		}
+	}
 
 	// Update local quota based on provider state
 	now := time.Now().UTC()
 	keys := s.buildKeys(providerID, model, now)
 
-	if reqLimit := resp.Header.Get("X-RateLimit-Limit-Requests"); reqLimit != "" {
-		if reqRemaining := resp.Header.Get("X-RateLimit-Remaining-Requests"); reqRemaining != "" {
-			if limit, err1 := strconv.Atoi(reqLimit); err1 == nil {
-				if remaining, err2 := strconv.Atoi(reqRemaining); err2 == nil {
-					used := limit - remaining
-					if used > 0 {
-						nowMillis := now.UnixMilli()
-						entries := make([]redis.Z, 0, used)
-						for i := 0; i < used; i++ {
-							entries = append(entries, redis.Z{
-								Score:  float64(nowMillis),
-								Member: fmt.Sprintf("provider-rate-limit-%d-%d", nowMillis, i),
-							})
-						}
-
-						pipe := s.redis.Pipeline()
-						pipe.Del(ctx, keys.RPM)
-						pipe.ZAdd(ctx, keys.RPM, entries...)
-						pipe.Expire(ctx, keys.RPM, 60*time.Second)
-						_, _ = pipe.Exec(ctx)
-					}
+	limit, remaining, limitType := parseRequestLimitHeaders(providerID, resp.Header)
+	if limitType != "" {
+		result.LimitType = limitType
+	}
+	if limit > 0 && remaining >= 0 {
+		used := limit - remaining
+		if used > 0 {
+			switch limitType {
+			case "rpm", "rph":
+				nowMillis := now.UnixMilli()
+				entries := make([]redis.Z, 0, used)
+				for i := 0; i < used; i++ {
+					entries = append(entries, redis.Z{Score: float64(nowMillis), Member: fmt.Sprintf("provider-rate-limit-%d-%d", nowMillis, i)})
 				}
+				pipe := s.redis.Pipeline()
+				pipe.Del(ctx, keys.RPM)
+				pipe.ZAdd(ctx, keys.RPM, entries...)
+				pipe.Expire(ctx, keys.RPM, 60*time.Second)
+				_, _ = pipe.Exec(ctx)
+			case "rpd":
+				s.redis.Set(ctx, keys.RPD, used, 25*time.Hour)
 			}
 		}
 	}
 
 	return result
+}
+
+func parseRequestLimitHeaders(providerID string, headers http.Header) (int, int, string) {
+	switch providerID {
+	case "groq":
+		limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests")
+		remaining := parseHeaderInt(headers, "X-RateLimit-Remaining-Requests")
+		if limit > 0 {
+			return limit, remaining, "rpd"
+		}
+	case "cerebras":
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests-Minute"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests-Minute"), "rpm"
+		}
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests-Day"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests-Day"), "rpd"
+		}
+	default:
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests"), "rpm"
+		}
+	}
+	return 0, 0, ""
+}
+
+func parseHeaderInt(headers http.Header, key string) int {
+	value := headers.Get(key)
+	if value == "" {
+		return 0
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0
+	}
+	return parsed
 }
 
 func (s *QuotaService) GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) QuotaStatus {

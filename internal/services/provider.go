@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,7 +67,7 @@ func (s *ProviderService) CallProvider(
 	}
 	defer resp.Body.Close()
 
-	return s.handleResponse(resp, providerType, request, model)
+	return s.handleResponse(resp, baseURL, providerType, auth, request, model)
 }
 
 // StreamProviderChannel makes a streaming request to a provider using channels
@@ -118,7 +119,7 @@ func (s *ProviderService) StreamProviderChannel(
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			errChan <- s.convertToGatewayError(s.handleErrorResponse(resp))
+			errChan <- s.convertToGatewayError(s.handleErrorResponse(resp, baseURL, providerType, auth))
 			return
 		}
 
@@ -157,7 +158,35 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 	if ge, ok := err.(*types.GatewayError); ok {
 		return ge
 	}
-	return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: err.Error()}
+
+	switch e := err.(type) {
+	case *errors.RateLimitError:
+		return &types.GatewayError{
+			Type:    "rate_limit_error",
+			Code:    "RATE_LIMITED",
+			Message: e.Message,
+			Details: map[string]any{
+				"retry_after": e.RetryAfter,
+				"limit_type":  e.LimitType,
+				"headers":     e.Headers,
+			},
+		}
+	case *errors.PaymentRequiredError:
+		return &types.GatewayError{Type: "payment_error", Code: "PAYMENT_REQUIRED", Message: e.Message}
+	case *errors.ValidationError:
+		return &types.GatewayError{Type: "validation_error", Code: "VALIDATION_ERROR", Message: e.Message}
+	case *errors.TimeoutError:
+		return &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: e.Message}
+	case *errors.ProviderError:
+		return &types.GatewayError{
+			Type:    "provider_error",
+			Code:    "PROVIDER_ERROR",
+			Message: e.Message,
+			Details: map[string]any{"headers": e.Headers, "status_code": e.StatusCode},
+		}
+	default:
+		return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: err.Error()}
+	}
 }
 
 func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, model, baseURL, providerType string, auth types.ProviderAuth) ([]byte, error) {
@@ -356,29 +385,47 @@ func extractStringContent(content any) string {
 	}
 }
 
-func (s *ProviderService) handleResponse(resp *http.Response, providerType string, _ types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {
+func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerType string, auth types.ProviderAuth, _ types.ChatCompletionRequest, model string) (*types.ChatCompletionResponse, error) {
+	provider := detectProvider(baseURL, providerType, auth)
+	headers := flattenHeaders(resp.Header)
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, errors.NewRateLimitError("Rate limited", 60, "rpm")
+		body, _ := io.ReadAll(resp.Body)
+		retryAfter, limitType := parseRateLimitDetails(provider, resp.Header, body)
+		return nil, &errors.RateLimitError{
+			ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 429, IsRetryable: true, Headers: headers},
+			RetryAfter:    retryAfter,
+			LimitType:     limitType,
+		}
 	}
 
 	if resp.StatusCode == http.StatusPaymentRequired {
-		return nil, errors.NewPaymentRequiredError("Payment required")
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	}
 
 	if resp.StatusCode >= 500 {
+		body, _ := io.ReadAll(resp.Body)
 		return nil, &errors.ProviderError{
-			Message:     fmt.Sprintf("Server error: %d", resp.StatusCode),
+			Message:     normalizeProviderErrorMessage(provider, resp.StatusCode, body),
 			StatusCode:  resp.StatusCode,
 			IsRetryable: true,
+			Headers:     headers,
 		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		message := normalizeProviderErrorMessage(provider, resp.StatusCode, body)
+		if isValidationStatus(resp.StatusCode) {
+			validationErr := errors.NewValidationError(message, nil)
+			validationErr.StatusCode = resp.StatusCode
+			return nil, validationErr
+		}
 		return nil, &errors.ProviderError{
-			Message:     fmt.Sprintf("HTTP error %d: %s", resp.StatusCode, string(body)),
+			Message:     message,
 			StatusCode:  resp.StatusCode,
 			IsRetryable: resp.StatusCode >= 500,
+			Headers:     headers,
 		}
 	}
 
@@ -396,21 +443,141 @@ func (s *ProviderService) handleResponse(resp *http.Response, providerType strin
 	return &response, nil
 }
 
-func (s *ProviderService) handleErrorResponse(resp *http.Response) error {
+func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, providerType string, auth types.ProviderAuth) error {
 	body, _ := io.ReadAll(resp.Body)
+	provider := detectProvider(baseURL, providerType, auth)
+	headers := flattenHeaders(resp.Header)
 
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
-		return errors.NewRateLimitError("Rate limited", 60, "rpm")
+		retryAfter, limitType := parseRateLimitDetails(provider, resp.Header, body)
+		return &errors.RateLimitError{
+			ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 429, IsRetryable: true, Headers: headers},
+			RetryAfter:    retryAfter,
+			LimitType:     limitType,
+		}
 	case http.StatusPaymentRequired:
-		return errors.NewPaymentRequiredError("Payment required")
+		return &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	default:
+		message := normalizeProviderErrorMessage(provider, resp.StatusCode, body)
+		if isValidationStatus(resp.StatusCode) {
+			validationErr := errors.NewValidationError(message, nil)
+			validationErr.StatusCode = resp.StatusCode
+			return validationErr
+		}
 		return &errors.ProviderError{
-			Message:     fmt.Sprintf("HTTP error %d: %s", resp.StatusCode, string(body)),
+			Message:     message,
 			StatusCode:  resp.StatusCode,
 			IsRetryable: resp.StatusCode >= 500,
+			Headers:     headers,
 		}
 	}
+}
+
+func flattenHeaders(headers http.Header) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	flat := make(map[string]string, len(headers))
+	for key, values := range headers {
+		flat[key] = strings.Join(values, ",")
+	}
+	return flat
+}
+
+func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string) {
+	retryAfter := 60
+	if value := headers.Get("Retry-After"); value != "" {
+		if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+			retryAfter = seconds
+		}
+	}
+
+	switch provider {
+	case "groq":
+		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
+			return retryAfter, "rpd"
+		}
+		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
+			return retryAfter, "tpm"
+		}
+	case "cerebras":
+		if headers.Get("X-RateLimit-Limit-Requests-Minute") != "" {
+			return retryAfter, "rpm"
+		}
+		if headers.Get("X-RateLimit-Limit-Tokens-Minute") != "" {
+			return retryAfter, "tpm"
+		}
+		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
+			return retryAfter, "rpd"
+		}
+	case "vertex", "gemini":
+		if strings.Contains(strings.ToUpper(string(body)), "RESOURCE_EXHAUSTED") {
+			return retryAfter, "resource_exhausted"
+		}
+	}
+
+	return retryAfter, "rpm"
+}
+
+func normalizeProviderErrorMessage(provider string, statusCode int, body []byte) string {
+	message := extractProviderErrorMessage(provider, body)
+	if message == "" {
+		trimmed := strings.TrimSpace(string(body))
+		if trimmed == "" {
+			return fmt.Sprintf("HTTP error %d", statusCode)
+		}
+		message = trimmed
+	}
+	return fmt.Sprintf("HTTP error %d: %s", statusCode, message)
+}
+
+func extractProviderErrorMessage(provider string, body []byte) string {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return ""
+	}
+
+	var wrapped struct {
+		Error struct {
+			Message string `json:"message"`
+			Status  string `json:"status"`
+			Type    string `json:"type"`
+			Code    any    `json:"code"`
+		} `json:"error"`
+		Message any    `json:"message"`
+		Type    string `json:"type"`
+		Code    any    `json:"code"`
+		Object  string `json:"object"`
+	}
+	if err := json.Unmarshal(trimmed, &wrapped); err == nil {
+		if wrapped.Error.Message != "" {
+			return wrapped.Error.Message
+		}
+		switch msg := wrapped.Message.(type) {
+		case string:
+			return msg
+		case map[string]any:
+			if detail, ok := msg["detail"]; ok {
+				return fmt.Sprintf("%v", detail)
+			}
+		}
+	}
+
+	var googleArray []map[string]any
+	if err := json.Unmarshal(trimmed, &googleArray); err == nil && len(googleArray) > 0 {
+		if errObj, ok := googleArray[0]["error"].(map[string]any); ok {
+			if message, ok := errObj["message"].(string); ok {
+				return message
+			}
+		}
+	}
+
+	return strings.TrimSpace(string(trimmed))
+}
+
+func isValidationStatus(statusCode int) bool {
+	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity
 }
 
 func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk) error {

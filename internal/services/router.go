@@ -595,10 +595,7 @@ func (r *Router) Execute(
 		}
 
 		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
-				StatusCode: 429,
-				Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", rateLimitErr.RetryAfter)}},
-			})
+			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
 		}
 	}
 
@@ -748,10 +745,7 @@ func (r *Router) ExecuteStream(
 			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
-				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, &http.Response{
-					StatusCode: 429,
-					Header:     http.Header{"Retry-After": []string{fmt.Sprintf("%d", 1)}},
-				})
+				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(r.gatewayErrorToTypedError(err).(*errors.RateLimitError)))
 			}
 
 			// Don't retry if we already sent chunks to the client
@@ -789,10 +783,25 @@ func (r *Router) gatewayErrorToTypedError(ge *types.GatewayError) error {
 	switch ge.Code {
 	case "RATE_LIMITED":
 		retryAfter := 60
+		limitType := "rpm"
+		headers := map[string]string{}
 		if details, ok := ge.Details["retry_after"].(int); ok {
 			retryAfter = details
 		}
-		return errors.NewRateLimitError(ge.Message, retryAfter, "rpm")
+		if details, ok := ge.Details["limit_type"].(string); ok && details != "" {
+			limitType = details
+		}
+		if details, ok := ge.Details["headers"].(map[string]any); ok {
+			for key, value := range details {
+				headers[key] = fmt.Sprintf("%v", value)
+			}
+		}
+		if details, ok := ge.Details["headers"].(map[string]string); ok {
+			headers = details
+		}
+		err := errors.NewRateLimitError(ge.Message, retryAfter, limitType)
+		err.Headers = headers
+		return err
 	case "TIMEOUT", "HARD_TIMEOUT":
 		timeoutType := "request"
 		if ge.Code == "HARD_TIMEOUT" {
@@ -961,6 +970,7 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			Details: map[string]any{
 				"retry_after": e.RetryAfter,
 				"limit_type":  e.LimitType,
+				"headers":     e.Headers,
 				"attempts":    attempts,
 			},
 		}
@@ -1006,6 +1016,15 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 				"attempts": attempts,
 			},
 		}
+	case *errors.ValidationError:
+		return &types.GatewayError{
+			Type:    "validation_error",
+			Code:    "VALIDATION_ERROR",
+			Message: e.Error(),
+			Details: map[string]any{
+				"attempts": attempts,
+			},
+		}
 	default:
 		return &types.GatewayError{
 			Type:    "upstream_error",
@@ -1016,6 +1035,20 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			},
 		}
 	}
+}
+
+func buildRateLimitResponse(rateLimitErr *errors.RateLimitError) *http.Response {
+	header := http.Header{}
+	if rateLimitErr == nil {
+		return &http.Response{StatusCode: 429, Header: header}
+	}
+	if rateLimitErr.RetryAfter > 0 {
+		header.Set("Retry-After", fmt.Sprintf("%d", rateLimitErr.RetryAfter))
+	}
+	for key, value := range rateLimitErr.Headers {
+		header.Set(key, value)
+	}
+	return &http.Response{StatusCode: 429, Header: header}
 }
 
 func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {

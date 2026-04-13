@@ -203,6 +203,7 @@ func TestProviderCallProvider_Success(t *testing.T) {
 
 func TestProviderCallProvider_429_RateLimitError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(http.StatusTooManyRequests)
 		w.Write([]byte(`{"error":"rate limited"}`))
 	}))
@@ -218,6 +219,66 @@ func TestProviderCallProvider_429_RateLimitError(t *testing.T) {
 
 	var rlErr *errors.RateLimitError
 	assert.ErrorAs(t, err, &rlErr)
+	assert.Equal(t, 30, rlErr.RetryAfter)
+}
+
+func TestProviderCallProvider_GroqRateLimitDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit-Requests", "7000")
+		w.Header().Set("X-RateLimit-Remaining-Requests", "0")
+		w.Header().Set("Retry-After", "12")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":{"message":"Rate limit reached","type":"rate_limit_error"}}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "llama-3.1-8b-instant", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"})
+	require.Error(t, err)
+
+	var rlErr *errors.RateLimitError
+	require.ErrorAs(t, err, &rlErr)
+	assert.Equal(t, 12, rlErr.RetryAfter)
+	assert.Equal(t, "rpd", rlErr.LimitType)
+	assert.Equal(t, "7000", rlErr.Headers["X-Ratelimit-Limit-Requests"])
+}
+
+func TestProviderCallProvider_MistralValidationError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		w.Write([]byte(`{"object":"error","message":{"detail":[{"type":"extra_forbidden","loc":["body","seed"],"msg":"Extra inputs are not permitted"}]},"type":"invalid_request_error"}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "mistral-large-2411", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	require.Error(t, err)
+
+	var validationErr *errors.ValidationError
+	require.ErrorAs(t, err, &validationErr)
+	assert.Contains(t, validationErr.Message, "extra_forbidden")
+}
+
+func TestProviderCallProvider_GoogleErrorMessage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`[{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}]`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "gemini-2.5-flash", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"})
+	require.Error(t, err)
+
+	var providerErr *errors.ProviderError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, "HTTP error 403: Permission denied", providerErr.Message)
 }
 
 func TestProviderCallProvider_402_PaymentRequiredError(t *testing.T) {
@@ -369,6 +430,7 @@ func TestProviderStreamProviderChannel_Success(t *testing.T) {
 
 func TestProviderStreamProviderChannel_ErrorResponse(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "15")
 		w.WriteHeader(http.StatusTooManyRequests)
 		w.Write([]byte(`{"error":"rate limited"}`))
 	}))
@@ -387,7 +449,8 @@ func TestProviderStreamProviderChannel_ErrorResponse(t *testing.T) {
 	select {
 	case gErr := <-result.Err:
 		require.NotNil(t, gErr)
-		assert.Contains(t, gErr.Message, "Rate limited")
+		assert.Equal(t, "RATE_LIMITED", gErr.Code)
+		assert.Equal(t, 15, gErr.Details["retry_after"])
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("timed out waiting for error")
 	}

@@ -101,7 +101,7 @@ func TestProviderCallProvider_RateLimitHeaderExtraction(t *testing.T) {
 			name:            "429 with Retry-After header",
 			statusCode:      429,
 			headers:         map[string]string{"Retry-After": "30"},
-			wantRetryAfter:  60, // Implementation uses hardcoded 60
+			wantRetryAfter:  30,
 			wantIsRateLimit: true,
 		},
 		{
@@ -405,7 +405,7 @@ func TestProviderCallProvider_ErrorEdgeCases(t *testing.T) {
 			name:           "400 Bad Request - not retryable",
 			statusCode:     400,
 			responseBody:   `{"error":"bad request"}`,
-			wantErrorType:  "ProviderError",
+			wantErrorType:  "ValidationError",
 			wantRetryable:  false,
 			wantStatusCode: 400,
 		},
@@ -437,7 +437,7 @@ func TestProviderCallProvider_ErrorEdgeCases(t *testing.T) {
 			name:           "422 Unprocessable Entity - not retryable",
 			statusCode:     422,
 			responseBody:   `{"error":"validation failed"}`,
-			wantErrorType:  "ProviderError",
+			wantErrorType:  "ValidationError",
 			wantRetryable:  false,
 			wantStatusCode: 422,
 		},
@@ -481,6 +481,11 @@ func TestProviderCallProvider_ErrorEdgeCases(t *testing.T) {
 				require.ErrorAs(t, err, &timeoutErr)
 				assert.Equal(t, tt.wantStatusCode, timeoutErr.StatusCode)
 				assert.Equal(t, tt.wantRetryable, timeoutErr.IsRetryable)
+			case "ValidationError":
+				var validationErr *errors.ValidationError
+				require.ErrorAs(t, err, &validationErr)
+				assert.Equal(t, tt.wantStatusCode, validationErr.StatusCode)
+				assert.Equal(t, tt.wantRetryable, validationErr.IsRetryable)
 			case "json.SyntaxError":
 				// JSON parsing errors are returned directly
 				assert.Error(t, err)

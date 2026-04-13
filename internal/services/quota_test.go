@@ -269,6 +269,7 @@ func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {
 func TestQuotaHandleProviderRateLimit(t *testing.T) {
 	tests := []struct {
 		name            string
+		providerID      string
 		statusCode      int
 		headers         map[string]string
 		wantRateLimited bool
@@ -277,11 +278,13 @@ func TestQuotaHandleProviderRateLimit(t *testing.T) {
 	}{
 		{
 			name:            "429 status returns IsRateLimited true",
+			providerID:      "prov1",
 			statusCode:      429,
 			wantRateLimited: true,
 		},
 		{
 			name:       "429 with Retry-After header",
+			providerID: "prov1",
 			statusCode: 429,
 			headers: map[string]string{
 				"Retry-After": "30",
@@ -290,13 +293,26 @@ func TestQuotaHandleProviderRateLimit(t *testing.T) {
 			wantRetryAfter:  30,
 		},
 		{
+			name:       "groq request headers treated as daily",
+			providerID: "groq",
+			statusCode: 429,
+			headers: map[string]string{
+				"X-RateLimit-Limit-Requests":     "7000",
+				"X-RateLimit-Remaining-Requests": "0",
+			},
+			wantRateLimited: true,
+			wantRetryAfter:  0,
+		},
+		{
 			name:            "402 status returns IsPaymentRequired true",
+			providerID:      "prov1",
 			statusCode:      402,
 			wantRateLimited: true,
 			wantPayment:     true,
 		},
 		{
 			name:            "200 status returns zero value",
+			providerID:      "prov1",
 			statusCode:      200,
 			wantRateLimited: false,
 			wantPayment:     false,
@@ -318,10 +334,13 @@ func TestQuotaHandleProviderRateLimit(t *testing.T) {
 			}
 			resp.Body = http.NoBody
 
-			info := svc.HandleProviderRateLimit(ctx, "prov1", "model1", resp)
+			info := svc.HandleProviderRateLimit(ctx, tt.providerID, "model1", resp)
 			assert.Equal(t, tt.wantRateLimited, info.IsRateLimited)
 			assert.Equal(t, tt.wantPayment, info.IsPaymentRequired)
 			assert.Equal(t, tt.wantRetryAfter, info.RetryAfter)
+			if tt.name == "groq request headers treated as daily" {
+				assert.Equal(t, "rpd", info.LimitType)
+			}
 		})
 	}
 }
@@ -346,6 +365,38 @@ func TestQuotaHandleProviderRateLimit_UpdatesRedis(t *testing.T) {
 
 	err := svc.CheckModelQuota(ctx, "prov1", "model1", types.ModelLimits{Rpm: intPtr(90)}, 1)
 	require.Error(t, err)
+}
+
+func TestQuotaHandleProviderRateLimit_GroqDailyHeaders(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	resp := &http.Response{StatusCode: 429, Header: http.Header{}, Body: http.NoBody}
+	resp.Header.Set("X-RateLimit-Limit-Requests", "7000")
+	resp.Header.Set("X-RateLimit-Remaining-Requests", "6990")
+
+	info := svc.HandleProviderRateLimit(ctx, "groq", "model1", resp)
+	assert.Equal(t, "rpd", info.LimitType)
+
+	status := svc.GetModelQuotaStatus(ctx, "groq", "model1", nil)
+	assert.Equal(t, 10, status.Rpd)
+}
+
+func TestQuotaHandleProviderRateLimit_CerebrasMinuteHeaders(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	resp := &http.Response{StatusCode: 429, Header: http.Header{}, Body: http.NoBody}
+	resp.Header.Set("X-RateLimit-Limit-Requests-Minute", "30")
+	resp.Header.Set("X-RateLimit-Remaining-Requests-Minute", "5")
+
+	info := svc.HandleProviderRateLimit(ctx, "cerebras", "model1", resp)
+	assert.Equal(t, "rpm", info.LimitType)
+
+	status := svc.GetModelQuotaStatus(ctx, "cerebras", "model1", nil)
+	assert.Equal(t, 25, status.Rpm)
 }
 
 func TestQuotaGetModelQuotaStatus(t *testing.T) {
