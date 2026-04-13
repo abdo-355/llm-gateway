@@ -100,6 +100,62 @@ func TestPrepareRequest_GeminiShaping(t *testing.T) {
 	assert.NotContains(t, payload, "presence_penalty")
 }
 
+func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "test",
+				Strict: boolPtr(true),
+				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}}}`),
+			},
+		},
+	}
+
+	_, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "additionalProperties=false")
+}
+
+func TestPrepareRequest_CerebrasAllowsStrictSchemaWithAdditionalPropertiesFalse(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "test",
+				Strict: boolPtr(true),
+				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}},"additionalProperties":false}`),
+			},
+		},
+	}
+
+	_, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
+	require.NoError(t, err)
+}
+
+func TestPrepareRequest_VertexRejectsRecursiveSchema(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "test",
+				Strict: boolPtr(true),
+				Schema: json.RawMessage(`{"type":"object","properties":{"node":{"$ref":"#/$defs/node"}},"$defs":{"node":{"type":"object","additionalProperties":false}}}`),
+			},
+		},
+	}
+
+	_, err := svc.prepareRequest(req, "google/gemini-3.1-pro-preview", "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/endpoints/openapi", "vertex", types.ProviderAuth{Type: "adc"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "recursive")
+}
+
 // ---------------------------------------------------------------------------
 // CallProvider (non-streaming)
 // ---------------------------------------------------------------------------

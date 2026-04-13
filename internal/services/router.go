@@ -233,6 +233,11 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
+		if provider.ID == "cerebras" && req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" && req.Stream != nil && *req.Stream {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_object_streaming_not_supported"
+			continue
+		}
+
 		if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_schema" && !supportsJSONSchema(caps) {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_schema_not_supported"
 			continue

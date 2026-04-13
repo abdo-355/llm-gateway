@@ -164,13 +164,41 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 	request.Router = nil
 
 	request.Model = model
-	request = normalizeRequestForProvider(request, detectProvider(baseURL, providerType, auth))
+	provider := detectProvider(baseURL, providerType, auth)
+	request = normalizeRequestForProvider(request, provider)
+	if err := validateRequestForProvider(request, provider); err != nil {
+		return nil, err
+	}
 
 	if request.ResponseFormat != nil && request.ResponseFormat.Type == "json_object" {
 		request.Messages = ensureJSONKeyword(request.Messages)
 	}
 
 	return json.Marshal(request)
+}
+
+func validateRequestForProvider(request types.ChatCompletionRequest, provider string) error {
+	if request.ResponseFormat == nil {
+		return nil
+	}
+
+	if provider == "cerebras" && request.ResponseFormat.Type == "json_object" && request.Stream != nil && *request.Stream {
+		return fmt.Errorf("cerebras does not support json_object with streaming")
+	}
+
+	if provider == "cerebras" && request.ResponseFormat.Type == "json_schema" && request.ResponseFormat.JSONSchema != nil {
+		if !schemaObjectsDisallowAdditionalProperties(request.ResponseFormat.JSONSchema.Schema) {
+			return fmt.Errorf("cerebras strict json_schema requires additionalProperties=false on every object")
+		}
+	}
+
+	if provider == "vertex" && request.ResponseFormat.Type == "json_schema" && request.ResponseFormat.JSONSchema != nil {
+		if schemaContainsRecursiveRef(request.ResponseFormat.JSONSchema.Schema) {
+			return fmt.Errorf("vertex does not support recursive json_schema references")
+		}
+	}
+
+	return nil
 }
 
 func normalizeRequestForProvider(request types.ChatCompletionRequest, provider string) types.ChatCompletionRequest {
@@ -249,6 +277,47 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	default:
 		return ""
 	}
+}
+
+func schemaObjectsDisallowAdditionalProperties(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+
+	var schema any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return false
+	}
+
+	return walkSchemaAdditionalProperties(schema)
+}
+
+func walkSchemaAdditionalProperties(node any) bool {
+	switch typed := node.(type) {
+	case map[string]any:
+		if schemaType, ok := typed["type"].(string); ok && schemaType == "object" {
+			flag, ok := typed["additionalProperties"].(bool)
+			if !ok || flag {
+				return false
+			}
+		}
+		for _, value := range typed {
+			if !walkSchemaAdditionalProperties(value) {
+				return false
+			}
+		}
+	case []any:
+		for _, value := range typed {
+			if !walkSchemaAdditionalProperties(value) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func schemaContainsRecursiveRef(raw json.RawMessage) bool {
+	return strings.Contains(string(raw), `"$ref":"#`) || strings.Contains(string(raw), `"$ref": "#`)
 }
 
 func ensureJSONKeyword(messages []types.OpenAIMessage) []types.OpenAIMessage {

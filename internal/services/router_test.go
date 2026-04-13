@@ -315,6 +315,41 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Equal(t, "logprobs_not_supported", filtered["provider-b/model-3"])
 	})
 
+	t.Run("filters cerebras json_object streaming combination", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{{
+			ID:      "cerebras",
+			BaseURL: "https://api.cerebras.ai/v1",
+			Auth:    types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"},
+			Models:  types.ProviderModels{Mode: "allowlist", List: []string{"model-1"}},
+			Capabilities: types.ProviderCapabilities{
+				Streaming:           true,
+				Tools:               true,
+				StructuredOutputs:   "json_schema_strict",
+				MaxCompletionTokens: true,
+				ToolSchema:          "json_schema",
+			},
+		}}}
+
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		streamReq := baseReq
+		streamReq.Stream = boolPtr(true)
+		streamReq.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
+
+		candidates := r.GenerateCandidates()
+		eligible, filtered := r.FilterCandidates(ctx, candidates, types.DerivedRequirements{Output: "text", Streaming: "required", Tools: "forbidden"}, streamReq, nil)
+		assert.Empty(t, eligible)
+		assert.Equal(t, "json_object_streaming_not_supported", filtered["cerebras/model-1"])
+	})
+
 	t.Run("filters multiple choices when unsupported", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
