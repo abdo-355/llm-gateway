@@ -165,6 +165,64 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ---
 
+## Manual Model Verification
+
+Use the standalone upstream verifier to manually test every configured provider/model combination against the provider endpoints directly.
+
+It is manual-only:
+- it does not run on startup
+- it does not run in CI/CD
+- it uses tiny prompts and low token limits
+- it prints a final stdout report with exact failures
+- it does not depend on the gateway server being up
+
+### What It Tests
+
+For every configured provider/model combination, the verifier exercises:
+- basic text generation
+- grouped request-field acceptance
+- logprobs
+- streaming with usage chunks
+- `json_object`
+- strict `json_schema`
+- tools/function calling
+
+The verifier calls each provider directly using the configured base URL and authentication method, and paces requests to respect configured RPM limits to reduce false negatives.
+
+### Run It
+
+Run:
+
+```bash
+go run ./cmd/verify-upstream
+```
+
+Optional filters:
+
+```bash
+go run ./cmd/verify-upstream --provider mistral
+go run ./cmd/verify-upstream --provider gemini --model google/gemini-2.5-flash
+```
+
+Optional behavior flags:
+
+```bash
+go run ./cmd/verify-upstream --timeout 45s --fail-fast
+```
+
+### Failure Reporting
+
+Failures include the exact reason when available, for example:
+- missing provider auth envs like `GEMINI_API_KEY`
+- missing `GOOGLE_VERTEX_PROJECT_ID`
+- Vertex ADC initialization failures
+- provider HTTP status and error message
+- invalid JSON output when structured output was requested
+- missing tool calls when tools were required
+- missing stream usage chunks when streaming usage was requested
+
+---
+
 ## Configuration
 
 ### Environment Variables
