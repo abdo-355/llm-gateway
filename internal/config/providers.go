@@ -119,7 +119,9 @@ func getGroqConfig() types.ProviderConfig {
 				},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"allam-2-7b": {Tools: boolPtr(false)},
+				"allam-2-7b":         {Tools: boolPtr(false)},
+				"groq/compound":      {Tools: boolPtr(false)},
+				"groq/compound-mini": {Tools: boolPtr(false)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
