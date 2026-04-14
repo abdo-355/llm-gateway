@@ -11,12 +11,16 @@ import (
 
 type Runner struct {
 	config  Config
-	client  *client
+	client  probeClient
 	limiter *rpmLimiter
 	ctx     context.Context
 }
 
 func Run(ctx context.Context, cfg Config) (*Report, error) {
+	return runWithClient(ctx, cfg, newClient(cfg))
+}
+
+func runWithClient(ctx context.Context, cfg Config, probeClient probeClient) (*Report, error) {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
 	}
@@ -31,18 +35,27 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 
 	runner := &Runner{
 		config:  cfg,
-		client:  newClient(cfg),
+		client:  probeClient,
 		limiter: newRPMLimiter(),
 		ctx:     ctx,
 	}
 
 	probes := BuildProbes(cfg)
 	report := &Report{StartedAt: time.Now().UTC()}
+	rateLimited := make(map[string]string)
 
 	for _, combo := range combos {
 		for _, probe := range probes {
+			if reason, ok := rateLimited[combo.Key()]; ok {
+				report.Results = append(report.Results, rateLimitedSkip(combo, probe, reason))
+				continue
+			}
+
 			result := runner.runProbe(combo, probe)
 			report.Results = append(report.Results, result)
+			if isRateLimitedResult(result) {
+				rateLimited[combo.Key()] = result.Failure
+			}
 			if runner.config.FailFast && result.Status == "FAIL" {
 				report.EndedAt = time.Now().UTC()
 				return report, fmt.Errorf("probe failed for %s %s %s: %s", combo.Provider.ID, combo.Model, probe.Name, result.Failure)
@@ -79,6 +92,23 @@ func (r *Runner) runProbe(combo Combo, probe Probe) ProbeResult {
 	return probe.Run(r, combo)
 }
 
+func rateLimitedSkip(combo Combo, probe Probe, failure string) ProbeResult {
+	if failure == "" {
+		failure = "rate_limited: earlier probe returned 429"
+	}
+
+	return ProbeResult{
+		Provider:   combo.Provider.ID,
+		Model:      combo.Model,
+		Endpoint:   combo.Endpoint,
+		Probe:      probe.Name,
+		Fields:     probe.Fields,
+		Status:     "SKIP",
+		HTTPStatus: 429,
+		Failure:    failure,
+	}
+}
+
 func (r *Runner) runJSONProbe(combo Combo, name string, fields []string, req types.ChatCompletionRequest, validate func(*types.ChatCompletionResponse) error) ProbeResult {
 	if cancelled := r.waitForSlot(combo, name); cancelled != nil {
 		cancelled.Fields = fields
@@ -103,7 +133,11 @@ func (r *Runner) runJSONProbe(combo Combo, name string, fields []string, req typ
 		TokensUsed: call.TokensUsed,
 	}
 	if call.Failure != "" {
-		result.Status = "FAIL"
+		if call.HTTPStatus == 429 {
+			result.Status = "SKIP"
+		} else {
+			result.Status = "FAIL"
+		}
 		result.Failure = call.Failure
 		return result
 	}
@@ -142,7 +176,11 @@ func (r *Runner) runStreamProbe(combo Combo, name string, fields []string, req t
 		TokensUsed: call.TokensUsed,
 	}
 	if call.Failure != "" {
-		result.Status = "FAIL"
+		if call.HTTPStatus == 429 {
+			result.Status = "SKIP"
+		} else {
+			result.Status = "FAIL"
+		}
 		result.Failure = call.Failure
 		return result
 	}
@@ -198,6 +236,10 @@ func hasUsageChunk(chunks []types.SSEChunk) bool {
 		}
 	}
 	return false
+}
+
+func isRateLimitedResult(result ProbeResult) bool {
+	return result.Status == "SKIP" && result.HTTPStatus == 429
 }
 
 type rpmLimiter struct {

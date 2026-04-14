@@ -2,6 +2,7 @@ package verification
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,7 @@ func TestPrintReport(t *testing.T) {
 	assert.Contains(t, contents, "Upstream Model Verification Report")
 	assert.Contains(t, contents, "Provider Summary")
 	assert.Contains(t, contents, "Feature Summary")
+	assert.Contains(t, contents, "Skipped")
 	assert.Contains(t, contents, "Failures")
 	assert.Contains(t, contents, "missing [DONE]")
 	assert.True(t, strings.Contains(contents, "Passed: 1"))
@@ -89,4 +91,86 @@ func TestSupportsStrictJSON(t *testing.T) {
 func TestProbeTokenPtr(t *testing.T) {
 	assert.Equal(t, 8, *probeTokenPtr(Config{}, 8))
 	assert.Equal(t, 64, *probeTokenPtr(Config{ProbeMaxTokens: 64}, 8))
+}
+
+func TestPrintReportIncludesDetailedSkips(t *testing.T) {
+	report := &Report{
+		Results: []ProbeResult{
+			{Provider: "groq", Model: "m1", Endpoint: "https://api.groq.com/openai/v1/chat/completions", Probe: "basic_text", Status: "SKIP", HTTPStatus: 429, Failure: "rate_limited: retry_after=2 limit_type=rpm"},
+			{Provider: "groq", Model: "m1", Endpoint: "https://api.groq.com/openai/v1/chat/completions", Probe: "tools", Status: "SKIP", Failure: "not applicable for configured provider capabilities"},
+		},
+	}
+
+	var output bytes.Buffer
+	PrintReport(&output, report)
+
+	contents := output.String()
+	assert.Contains(t, contents, "Skipped")
+	assert.Contains(t, contents, "rate_limited: retry_after=2 limit_type=rpm")
+	assert.NotContains(t, contents, "not applicable for configured provider capabilities")
+	assert.Contains(t, contents, "Failures\nNone")
+}
+
+func TestRunSkipsRemainingProbesAfterRateLimit(t *testing.T) {
+	client := &fakeProbeClient{
+		callResult: requestResult{HTTPStatus: 429, Failure: "rate_limited: retry_after=60 limit_type=rpm", Attempted: true},
+	}
+
+	report, err := runWithClient(context.Background(), Config{
+		Provider: "groq",
+		Model:    "llama-3.1-8b-instant",
+		Timeout:  time.Second,
+	}, client)
+
+	assert.NoError(t, err)
+	assert.Len(t, report.Results, 7)
+	assert.Equal(t, "basic_text", report.Results[0].Probe)
+	assert.Equal(t, "SKIP", report.Results[0].Status)
+	assert.Equal(t, 429, report.Results[0].HTTPStatus)
+	assert.Equal(t, "rate_limited: retry_after=60 limit_type=rpm", report.Results[0].Failure)
+	for _, result := range report.Results[1:] {
+		assert.Equal(t, "SKIP", result.Status)
+		assert.Equal(t, 429, result.HTTPStatus)
+		assert.Equal(t, "rate_limited: retry_after=60 limit_type=rpm", result.Failure)
+	}
+	assert.Equal(t, 1, client.callCount)
+	assert.Equal(t, 0, client.streamCount)
+}
+
+func TestRunPreservesNonRateLimitFailures(t *testing.T) {
+	client := &fakeProbeClient{
+		callResult:   requestResult{HTTPStatus: 500, Failure: "provider_error: status=500 message=boom", Attempted: true},
+		streamResult: requestResult{HTTPStatus: 500, Failure: "provider_error: status=500 message=boom", Attempted: true},
+	}
+
+	report, err := runWithClient(context.Background(), Config{
+		Provider: "cerebras",
+		Model:    "llama3.1-8b",
+		Timeout:  time.Second,
+	}, client)
+
+	assert.NoError(t, err)
+	assert.NotEmpty(t, report.Results)
+	assert.Equal(t, "FAIL", report.Results[0].Status)
+	assert.Equal(t, 500, report.Results[0].HTTPStatus)
+	assert.Equal(t, "provider_error: status=500 message=boom", report.Results[0].Failure)
+	assert.GreaterOrEqual(t, client.callCount, 1)
+	assert.GreaterOrEqual(t, client.streamCount, 1)
+}
+
+type fakeProbeClient struct {
+	callResult   requestResult
+	streamResult requestResult
+	callCount    int
+	streamCount  int
+}
+
+func (f *fakeProbeClient) call(_ context.Context, _ Combo, _ types.ChatCompletionRequest) requestResult {
+	f.callCount++
+	return f.callResult
+}
+
+func (f *fakeProbeClient) stream(_ context.Context, _ Combo, _ types.ChatCompletionRequest) requestResult {
+	f.streamCount++
+	return f.streamResult
 }

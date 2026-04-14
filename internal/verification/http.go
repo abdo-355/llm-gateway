@@ -17,6 +17,11 @@ type client struct {
 	requestTimeout  time.Duration
 }
 
+type probeClient interface {
+	call(ctx context.Context, combo Combo, request types.ChatCompletionRequest) requestResult
+	stream(ctx context.Context, combo Combo, request types.ChatCompletionRequest) requestResult
+}
+
 func newClient(cfg Config) *client {
 	return &client{
 		providerService: services.NewProviderService(),

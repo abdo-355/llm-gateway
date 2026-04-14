@@ -36,6 +36,7 @@ func PrintReport(w io.Writer, report *Report) {
 
 	printProviderSummary(w, report)
 	printFeatureSummary(w, report)
+	printSkipped(w, report)
 	printFailures(w, report)
 }
 
@@ -94,6 +95,38 @@ func printFailures(w io.Writer, report *Report) {
 		)
 	}
 	_ = tw.Flush()
+}
+
+func printSkipped(w io.Writer, report *Report) {
+	skips := make([]ProbeResult, 0)
+	for _, result := range report.Results {
+		if result.Status == "SKIP" && shouldPrintSkip(result) {
+			skips = append(skips, result)
+		}
+	}
+
+	fmt.Fprintf(w, "Skipped\n")
+	if len(skips) == 0 {
+		fmt.Fprintf(w, "None\n\n")
+		return
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPROBE\tHTTP\tFAILURE")
+	for _, result := range skips {
+		_, _ = fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%s\t%d\t%s\n",
+			result.Provider,
+			result.Model,
+			result.Endpoint,
+			result.Probe,
+			result.HTTPStatus,
+			result.Failure,
+		)
+	}
+	_ = tw.Flush()
+	fmt.Fprintln(w)
 }
 
 func providerSummaries(report *Report) []providerSummary {
@@ -160,4 +193,8 @@ func emptyDash(value string) string {
 		return "-"
 	}
 	return value
+}
+
+func shouldPrintSkip(result ProbeResult) bool {
+	return result.Failure != "" && result.Failure != "not applicable for configured provider capabilities"
 }
