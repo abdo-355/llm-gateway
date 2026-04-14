@@ -20,6 +20,9 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
 	}
+	if cfg.ProbeMaxTokens <= 0 {
+		cfg.ProbeMaxTokens = DefaultProbeMaxTokens
+	}
 
 	combos := EnumerateCombos(cfg)
 	if len(combos) == 0 {
@@ -33,7 +36,7 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 		ctx:     ctx,
 	}
 
-	probes := BuildProbes()
+	probes := BuildProbes(cfg)
 	report := &Report{StartedAt: time.Now().UTC()}
 
 	for _, combo := range combos {

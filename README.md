@@ -172,7 +172,7 @@ Use the standalone upstream verifier to manually test every configured provider/
 It is manual-only:
 - it does not run on startup
 - it does not run in CI/CD
-- it uses tiny prompts and low token limits
+- it uses short prompts with a configurable token cap (default `1024` via `--probe-max-tokens`)
 - it prints a final stdout report with exact failures
 - it does not depend on the gateway server being up
 
@@ -208,7 +208,23 @@ Optional behavior flags:
 
 ```bash
 go run ./cmd/verify-upstream --timeout 45s --fail-fast
+go run ./cmd/verify-upstream --probe-max-tokens 2048
 ```
+
+### Debug Raw Upstream Responses
+
+When a provider returns `200 OK` but the visible content is empty, you can log the raw successful response body and raw SSE `data:` payloads before the gateway parses them.
+
+```bash
+LOG_RAW_PROVIDER_RESPONSES=1 \
+LOG_RAW_PROVIDER_RESPONSE_FILTERS=gemini,vertex,mistral/magistral-* \
+go run ./cmd/verify-upstream --provider gemini
+```
+
+Notes:
+- `LOG_RAW_PROVIDER_RESPONSES=1` enables the logging
+- `LOG_RAW_PROVIDER_RESPONSE_FILTERS` is optional and accepts comma-separated provider names, exact model names, or `provider/model` prefixes ending in `*`
+- logs only include raw provider response payloads, not auth headers
 
 ### Failure Reporting
 

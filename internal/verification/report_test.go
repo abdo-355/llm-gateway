@@ -85,3 +85,8 @@ func TestSupportsStrictJSON(t *testing.T) {
 	assert.True(t, supportsStrictJSON(Combo{StrictJSONCertified: true}))
 	assert.False(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "model_dependent"}}}))
 }
+
+func TestProbeTokenPtr(t *testing.T) {
+	assert.Equal(t, 8, *probeTokenPtr(Config{}, 8))
+	assert.Equal(t, 64, *probeTokenPtr(Config{ProbeMaxTokens: 64}, 8))
+}

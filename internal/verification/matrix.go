@@ -51,7 +51,7 @@ func EnumerateCombos(cfg Config) []Combo {
 	return combos
 }
 
-func BuildProbes() []Probe {
+func BuildProbes(cfg Config) []Probe {
 	return []Probe{
 		{
 			Name:   "basic_text",
@@ -60,7 +60,7 @@ func BuildProbes() []Probe {
 				req := types.ChatCompletionRequest{
 					Model:     combo.Model,
 					Messages:  basicMessages("Reply with OK only."),
-					MaxTokens: intPtr(8),
+					MaxTokens: probeTokenPtr(cfg, 8),
 				}
 				return r.runJSONProbe(combo, "basic_text", []string{"messages", "max_tokens"}, req, validateNonEmptyChatMessage)
 			},
@@ -74,7 +74,7 @@ func BuildProbes() []Probe {
 					Messages:            basicMessages("Reply with OK only."),
 					Temperature:         floatPtr(0),
 					TopP:                floatPtr(1),
-					MaxCompletionTokens: intPtr(8),
+					MaxCompletionTokens: probeTokenPtr(cfg, 8),
 					PresencePenalty:     floatPtr(0),
 					FrequencyPenalty:    floatPtr(0),
 					Stop:                []string{"__probe_stop__"},
@@ -95,7 +95,7 @@ func BuildProbes() []Probe {
 					Messages:    basicMessages("Reply with OK only."),
 					Logprobs:    boolPtr(true),
 					TopLogprobs: intPtr(1),
-					MaxTokens:   intPtr(8),
+					MaxTokens:   probeTokenPtr(cfg, 8),
 				}
 				return r.runJSONProbe(combo, "logprobs", []string{"logprobs", "top_logprobs"}, req, validateLogprobs)
 			},
@@ -112,7 +112,7 @@ func BuildProbes() []Probe {
 					StreamOptions: &types.StreamOptions{
 						IncludeUsage: boolPtr(true),
 					},
-					MaxCompletionTokens: intPtr(8),
+					MaxCompletionTokens: probeTokenPtr(cfg, 8),
 				}
 				return r.runStreamProbe(combo, "stream", []string{"stream", "stream_options.include_usage"}, req)
 			},
@@ -126,7 +126,7 @@ func BuildProbes() []Probe {
 					Model:               combo.Model,
 					Messages:            basicMessages("Return a JSON object with key ok set to true."),
 					ResponseFormat:      &types.ResponseFormat{Type: "json_object"},
-					MaxCompletionTokens: intPtr(12),
+					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
 				return r.runJSONProbe(combo, "json_object", []string{"response_format.type=json_object"}, req, validateJSONObjectChat)
 			},
@@ -140,7 +140,7 @@ func BuildProbes() []Probe {
 					Model:               combo.Model,
 					Messages:            basicMessages("Return JSON only with ok=true."),
 					ResponseFormat:      strictJSONSchemaFormat(),
-					MaxCompletionTokens: intPtr(12),
+					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
 				return r.runJSONProbe(combo, "json_schema_strict", []string{"response_format.type=json_schema", "response_format.json_schema.strict"}, req, validateStrictJSONChat)
 			},
@@ -156,12 +156,19 @@ func BuildProbes() []Probe {
 					Tools:               probeTools(),
 					ToolChoice:          "required",
 					ParallelToolCalls:   boolPtr(false),
-					MaxCompletionTokens: intPtr(12),
+					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
 				return r.runJSONProbe(combo, "tools", []string{"tools", "tool_choice", "parallel_tool_calls"}, req, validateToolCallChat)
 			},
 		},
 	}
+}
+
+func probeTokenPtr(cfg Config, fallback int) *int {
+	if cfg.ProbeMaxTokens > 0 {
+		return intPtr(cfg.ProbeMaxTokens)
+	}
+	return intPtr(fallback)
 }
 
 func resolveEndpoint(provider types.ProviderConfig) string {

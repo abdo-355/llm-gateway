@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,8 @@ import (
 )
 
 type ProviderService struct {
-	httpClient *http.Client
+	httpClient      *http.Client
+	rawResponseLogs rawProviderResponseLogConfig
 }
 
 func NewProviderService() *ProviderService {
@@ -26,6 +28,36 @@ func NewProviderService() *ProviderService {
 		httpClient: &http.Client{
 			Timeout: defaultRequestTimeout,
 		},
+		rawResponseLogs: loadRawProviderResponseLogConfig(),
+	}
+}
+
+type rawProviderResponseLogConfig struct {
+	enabled bool
+	filters []string
+}
+
+func loadRawProviderResponseLogConfig() rawProviderResponseLogConfig {
+	filters := make([]string, 0)
+	for _, filter := range strings.Split(os.Getenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS"), ",") {
+		filter = strings.ToLower(strings.TrimSpace(filter))
+		if filter != "" {
+			filters = append(filters, filter)
+		}
+	}
+
+	return rawProviderResponseLogConfig{
+		enabled: envFlagEnabled("LOG_RAW_PROVIDER_RESPONSES"),
+		filters: filters,
+	}
+}
+
+func envFlagEnabled(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -123,7 +155,8 @@ func (s *ProviderService) StreamProviderChannel(
 			return
 		}
 
-		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks); err != nil {
+		provider := detectProvider(baseURL, providerType, auth)
+		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks, provider, model); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
 		} else {
 			errChan <- nil
@@ -308,6 +341,85 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	}
 }
 
+func (s *ProviderService) shouldLogRawProviderResponse(provider, model string) bool {
+	if !s.rawResponseLogs.enabled {
+		return false
+	}
+
+	if len(s.rawResponseLogs.filters) == 0 {
+		return true
+	}
+
+	candidates := []string{strings.ToLower(provider), strings.ToLower(model)}
+	if provider != "" && model != "" {
+		candidates = append(candidates, strings.ToLower(provider)+"/"+strings.ToLower(model))
+	}
+
+	for _, filter := range s.rawResponseLogs.filters {
+		if matchesRawProviderResponseFilter(filter, candidates) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func matchesRawProviderResponseFilter(filter string, candidates []string) bool {
+	if filter == "" {
+		return false
+	}
+
+	prefix := filter
+	wildcard := strings.HasSuffix(filter, "*")
+	if wildcard {
+		prefix = strings.TrimSuffix(filter, "*")
+	}
+
+	for _, candidate := range candidates {
+		if wildcard {
+			if strings.HasPrefix(candidate, prefix) {
+				return true
+			}
+			continue
+		}
+
+		if candidate == filter {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *ProviderService) logRawProviderResponseBody(provider, model string, statusCode int, body []byte) {
+	if !s.shouldLogRawProviderResponse(provider, model) {
+		return
+	}
+
+	logger.Info().
+		Str("type", "http").
+		Str("event", "provider.response_body_raw").
+		Str("provider", provider).
+		Str("model", model).
+		Int("status_code", statusCode).
+		Str("body", string(body)).
+		Msg("Logged raw upstream response body")
+}
+
+func (s *ProviderService) logRawProviderSSEData(provider, model, data string) {
+	if !s.shouldLogRawProviderResponse(provider, model) {
+		return
+	}
+
+	logger.Info().
+		Str("type", "http").
+		Str("event", "provider.sse_data_raw").
+		Str("provider", provider).
+		Str("model", model).
+		Str("data", data).
+		Msg("Logged raw upstream SSE payload")
+}
+
 func schemaObjectsDisallowAdditionalProperties(raw json.RawMessage) bool {
 	if len(raw) == 0 {
 		return true
@@ -434,6 +546,7 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	if err != nil {
 		return nil, err
 	}
+	s.logRawProviderResponseBody(provider, model, resp.StatusCode, body)
 
 	var response types.ChatCompletionResponse
 	if err := json.Unmarshal(body, &response); err != nil {
@@ -580,7 +693,7 @@ func isValidationStatus(statusCode int) bool {
 	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity
 }
 
-func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk) error {
+func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk, provider, model string) error {
 	scanner := bufio.NewScanner(body)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
@@ -636,6 +749,7 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 			}
 
 			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			s.logRawProviderSSEData(provider, model, data)
 
 			if data == "[DONE]" {
 				return nil

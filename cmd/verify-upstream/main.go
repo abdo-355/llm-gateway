@@ -22,16 +22,18 @@ func main() {
 	model := flag.String("model", "", "Only test a single model ID")
 	timeout := flag.Duration("timeout", 30*time.Second, "Per-request timeout")
 	failFast := flag.Bool("fail-fast", false, "Stop on the first failure")
+	probeMaxTokens := flag.Int("probe-max-tokens", verification.DefaultProbeMaxTokens, "Override per-probe token limits for diagnostics")
 	flag.Parse()
 
 	logger.Init("verify-upstream", getEnvString("ENV", "development"), getEnvString("LOG_LEVEL", "info"))
 
 	report, err := verification.Run(context.Background(), verification.Config{
-		Provider: *provider,
-		Model:    *model,
-		Timeout:  *timeout,
-		FailFast: *failFast,
-		Progress: os.Stderr,
+		Provider:       *provider,
+		Model:          *model,
+		Timeout:        *timeout,
+		FailFast:       *failFast,
+		Progress:       os.Stderr,
+		ProbeMaxTokens: *probeMaxTokens,
 	})
 	if report != nil {
 		verification.PrintReport(os.Stdout, report)

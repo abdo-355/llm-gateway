@@ -28,6 +28,38 @@ func TestNewProviderService_DefaultTimeout(t *testing.T) {
 	assert.Equal(t, defaultRequestTimeout, svc.httpClient.Timeout)
 }
 
+func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "gemini,vertex,mistral/magistral-*")
+
+	svc := newProviderService()
+
+	assert.False(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
+}
+
+func TestProviderServiceShouldLogRawProviderResponse_EnabledWithoutFilters(t *testing.T) {
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "1")
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "")
+
+	svc := newProviderService()
+
+	assert.True(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
+	assert.True(t, svc.shouldLogRawProviderResponse("mistral", "mistral-large-2411"))
+}
+
+func TestProviderServiceShouldLogRawProviderResponse_FilterMatching(t *testing.T) {
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "true")
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "gemini,vertex,mistral/magistral-*")
+
+	svc := newProviderService()
+
+	assert.True(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
+	assert.True(t, svc.shouldLogRawProviderResponse("vertex", "google/gemini-2.5-pro"))
+	assert.True(t, svc.shouldLogRawProviderResponse("mistral", "magistral-medium-2509"))
+	assert.False(t, svc.shouldLogRawProviderResponse("mistral", "mistral-large-2411"))
+	assert.False(t, svc.shouldLogRawProviderResponse("groq", "llama-3.1-8b-instant"))
+}
+
 func TestPrepareRequest_MistralShaping(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{
