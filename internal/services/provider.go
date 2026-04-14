@@ -652,6 +652,10 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 				continue
 			}
 
+			if shouldSkipChunk(chunk) {
+				continue
+			}
+
 			select {
 			case chunks <- &chunk:
 			case <-ctx.Done():
@@ -660,4 +664,18 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 			}
 		}
 	}
+}
+
+func shouldSkipChunk(chunk types.SSEChunk) bool {
+	if chunk.Usage != nil {
+		return false
+	}
+
+	for _, choice := range chunk.Choices {
+		if choice.Delta.Role != "" || choice.Delta.Content != nil || choice.Delta.Refusal != nil || len(choice.Delta.ToolCalls) > 0 || choice.FinishReason != nil {
+			return false
+		}
+	}
+
+	return true
 }

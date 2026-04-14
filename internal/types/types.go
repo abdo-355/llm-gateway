@@ -1,8 +1,10 @@
 package types
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // OpenAIMessage represents a chat message in OpenAI format
@@ -115,6 +117,31 @@ type ResponseMessage struct {
 	Refusal   *string    `json:"refusal,omitempty"`
 }
 
+func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Role      string          `json:"role"`
+		Content   json.RawMessage `json:"content"`
+		ToolCalls []ToolCall      `json:"tool_calls,omitempty"`
+		Refusal   *string         `json:"refusal,omitempty"`
+	}
+
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	content, err := parseVisibleContent(parsed.Content)
+	if err != nil {
+		return err
+	}
+
+	m.Role = parsed.Role
+	m.Content = content
+	m.ToolCalls = parsed.ToolCalls
+	m.Refusal = parsed.Refusal
+	return nil
+}
+
 // Logprobs represents log probabilities
 type Logprobs struct {
 	Content []LogprobContent `json:"content,omitempty"`
@@ -177,6 +204,31 @@ type DeltaMessage struct {
 	Refusal   *string         `json:"refusal,omitempty"`
 }
 
+func (m *DeltaMessage) UnmarshalJSON(data []byte) error {
+	type alias struct {
+		Role      string          `json:"role,omitempty"`
+		Content   json.RawMessage `json:"content,omitempty"`
+		ToolCalls []DeltaToolCall `json:"tool_calls,omitempty"`
+		Refusal   *string         `json:"refusal,omitempty"`
+	}
+
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	content, err := parseVisibleContent(parsed.Content)
+	if err != nil {
+		return err
+	}
+
+	m.Role = parsed.Role
+	m.Content = content
+	m.ToolCalls = parsed.ToolCalls
+	m.Refusal = parsed.Refusal
+	return nil
+}
+
 type DeltaToolCall struct {
 	Index    int            `json:"index"`
 	ID       string         `json:"id,omitempty"`
@@ -187,6 +239,69 @@ type DeltaToolCall struct {
 type DeltaFunction struct {
 	Name      *string `json:"name,omitempty"`
 	Arguments *string `json:"arguments,omitempty"`
+}
+
+func parseVisibleContent(raw json.RawMessage) (*string, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil, nil
+	}
+
+	var value any
+	if err := json.Unmarshal(trimmed, &value); err != nil {
+		return nil, err
+	}
+
+	text := collectVisibleText(value)
+	if text == "" {
+		return nil, nil
+	}
+
+	return &text, nil
+}
+
+func collectVisibleText(value any) string {
+	parts := make([]string, 0)
+	appendVisibleText(value, &parts)
+	return strings.Join(parts, "")
+}
+
+func appendVisibleText(value any, parts *[]string) {
+	switch typed := value.(type) {
+	case string:
+		if typed != "" {
+			*parts = append(*parts, typed)
+		}
+	case []any:
+		for _, item := range typed {
+			appendVisibleText(item, parts)
+		}
+	case map[string]any:
+		if thinking := typed["thinking"]; thinking != nil {
+			return
+		}
+		if reasoning := typed["reasoning"]; reasoning != nil {
+			return
+		}
+		if partType, ok := typed["type"].(string); ok {
+			switch partType {
+			case "text", "output_text":
+				if text, ok := typed["text"].(string); ok && text != "" {
+					*parts = append(*parts, text)
+				}
+				return
+			case "thinking", "reasoning":
+				return
+			}
+		}
+		if text, ok := typed["text"].(string); ok && text != "" {
+			*parts = append(*parts, text)
+			return
+		}
+		if content, ok := typed["content"]; ok {
+			appendVisibleText(content, parts)
+		}
+	}
 }
 
 type RouterHints struct {

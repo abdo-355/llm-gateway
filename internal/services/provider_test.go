@@ -156,6 +156,87 @@ func TestPrepareRequest_VertexRejectsRecursiveSchema(t *testing.T) {
 	assert.Contains(t, err.Error(), "recursive")
 }
 
+func TestProviderCallProvider_ParsesArrayContentResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"id":"chatcmpl-array",
+			"object":"chat.completion",
+			"created":1700000000,
+			"model":"magistral-medium-2509",
+			"choices":[{
+				"index":0,
+				"message":{
+					"role":"assistant",
+					"content":[
+						{"type":"thinking","thinking":[{"type":"text","text":"Hidden"}]},
+						{"type":"text","text":"Visible answer"}
+					]
+				},
+				"finish_reason":"stop"
+			}]
+		}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	resp, err := svc.CallProvider(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	require.NoError(t, err)
+	require.NotNil(t, resp.Choices[0].Message.Content)
+	assert.Equal(t, "Visible answer", *resp.Choices[0].Message.Content)
+}
+
+func TestProviderStreamProviderChannel_SkipsThinkingOnlyChunks(t *testing.T) {
+	visibleChunk := types.SSEChunk{
+		ID: "chunk-visible", Object: "chat.completion.chunk", Model: "magistral-medium-2509",
+		Choices: []types.DeltaChoice{{Index: 0, Delta: types.DeltaMessage{Content: ptrString("Visible")}}},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		require.True(t, ok)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+
+		fmt.Fprint(w, "data: {\"id\":\"chunk-thinking\",\"object\":\"chat.completion.chunk\",\"model\":\"magistral-medium-2509\",\"choices\":[{\"index\":0,\"delta\":{\"content\":[{\"type\":\"thinking\",\"thinking\":[{\"type\":\"text\",\"text\":\"Hidden\"}]}]},\"finish_reason\":null}]}\n\n")
+		flusher.Flush()
+
+		data, _ := json.Marshal(visibleChunk)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}, Stream: boolPtr(true)}
+
+	result := svc.StreamProviderChannel(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+
+	var received []*types.SSEChunk
+	for chunk := range result.Chunks {
+		received = append(received, chunk)
+	}
+
+	select {
+	case gErr := <-result.Err:
+		if gErr != nil {
+			t.Fatalf("unexpected error: %v", gErr)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timed out waiting for completion signal")
+	}
+
+	require.Len(t, received, 1)
+	require.NotNil(t, received[0].Choices[0].Delta.Content)
+	assert.Equal(t, "Visible", *received[0].Choices[0].Delta.Content)
+}
+
 // ---------------------------------------------------------------------------
 // CallProvider (non-streaming)
 // ---------------------------------------------------------------------------
