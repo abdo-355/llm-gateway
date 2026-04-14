@@ -189,6 +189,8 @@ For every configured provider/model combination, the verifier exercises:
 
 The verifier calls each provider directly using the configured base URL and authentication method, and paces requests to respect configured RPM limits to reduce false negatives.
 
+If a probe hits `429`, that probe is recorded as `SKIP` and the verifier skips the remaining probes for that same provider/model combination so the rest of the matrix can continue.
+
 ### Run It
 
 Run:

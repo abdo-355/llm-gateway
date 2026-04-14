@@ -52,9 +52,8 @@ Loads `.env` file automatically. Requires provider API keys:
 - `GROQ_API_KEY` - Groq provider
 - `CEREBRAS_API_KEY` - Cerebras provider
 - `MISTRAL_API_KEY` - Mistral provider
-- `GOOGLE_API_KEY` - Google AI Studio (not Vertex)
-- `VERTEX_PROJECT` - GCP project for Vertex tests
-- `VERTEX_LOCATION` - GCP location for Vertex (default: us-central1)
+- `GEMINI_API_KEY` - Google Gemini API
+- `GOOGLE_VERTEX_PROJECT_ID` - GCP project for Vertex tests
 
 Optional:
 - `ENV` - environment name (development/production)
@@ -64,18 +63,17 @@ Vertex requires valid GCP credentials (`gcloud auth application-default-login` o
 
 ## Exit Codes
 
-- `0` - all probes passed
-- `1` - one or more probes failed
-- `2` - configuration/credential error
+- `0` - verifier completed without run-level error
+- `1` - verifier failed to run or `--fail-fast` stopped on a probe failure
 
 ## Output
 
 Reports each probe with:
-- status: pass, fail, skip, error
+- status: pass, fail, or skip
 - model tested
 - latency in ms
-- error message (if failed)
-- visible content preview (first 100 chars)
+- token usage when available
+- failure or skip reason when available
 
 ## Notes
 
@@ -83,3 +81,4 @@ Reports each probe with:
 - Uses minimal prompts (single word or short sentence) to reduce noise
 - Successful 200 with empty visible content = fail (treated as provider issue)
 - Structured output (JSON/tools) tested separately from basic text generation
+- `429` responses are recorded as `SKIP`, and remaining probes for that same provider/model are skipped for the rest of the run
