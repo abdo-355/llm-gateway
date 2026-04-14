@@ -327,8 +327,12 @@ func getGeminiConfig() types.ProviderConfig {
 	rpm5 := 5
 	rpm10 := 10
 	rpm15 := 15
+	rpm30 := 30
 	rpd20 := 20
+	rpd1500 := 1500
+	rpd14400 := 14400
 	rpd500 := 500
+	tpm15000 := 15000
 	tpm250000 := 250000
 
 	return types.ProviderConfig{
@@ -341,12 +345,46 @@ func getGeminiConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"gemma-3-1b-it",
+				"gemma-3-4b-it",
+				"gemma-3-12b-it",
+				"gemma-3-27b-it",
+				"gemma-4-26b-a4b-it",
+				"gemma-4-31b-it",
 				"gemini-2.5-flash",
 				"gemini-2.5-flash-lite",
 				"gemini-3-flash-preview",
 				"gemini-3.1-flash-lite-preview",
 			},
 			Limits: map[string]types.ModelLimits{
+				"gemma-3-1b-it": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm15000,
+				},
+				"gemma-3-4b-it": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm15000,
+				},
+				"gemma-3-12b-it": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm15000,
+				},
+				"gemma-3-27b-it": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm15000,
+				},
+				"gemma-4-26b-a4b-it": {
+					Rpm: &rpm15,
+					Rpd: &rpd1500,
+				},
+				"gemma-4-31b-it": {
+					Rpm: &rpm15,
+					Rpd: &rpd1500,
+				},
 				"gemini-2.5-flash": {
 					Rpm: &rpm5,
 					Rpd: &rpd20,
