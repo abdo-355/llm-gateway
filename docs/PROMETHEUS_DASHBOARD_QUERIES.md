@@ -4,19 +4,14 @@ This document contains PromQL queries for building a comprehensive LLM Gateway d
 
 ## Available Labels
 
-### Logical Models (10)
-- `chat-lite` - Lightweight chat (fast, cheap)
-- `chat-pro` - Production chat
-- `chat-max` - Maximum quality chat
-- `analysis-pro` - Analysis tasks
-- `json-fast` - Fast JSON extraction
-- `json-safe` - Reliable JSON extraction
-- `code-fast` - Fast code generation
-- `code-pro` - Production code generation
-- `tools-pro` - Tool orchestration
-- `reasoning-max` - Maximum reasoning
+### Tiers (5)
+- `lite` - Lowest-latency and lowest-cost tier
+- `default` - Balanced general-purpose tier
+- `strong` - Higher-capability tier
+- `frontier` - Highest-capability general tier
+- `deep-think` - Deliberative/high-reasoning tier
 
-### Router Profiles
+### Router Strategies
 - `default` - Default routing
 - `cheap_fast` - Optimize for cost/speed
 - `reliable_structured` - Optimize for reliability/structured outputs
@@ -30,15 +25,31 @@ This document contains PromQL queries for building a comprehensive LLM Gateway d
 - `completion` - Output tokens
 - `total` - Total tokens
 
+### Static Model Metadata
+- `gateway_model_info{provider,model,tier,cost_band,latency_band,context_band,reasoning_band,strict_json}`
+- value is always `1` for configured models
+
 ---
 
 ## 1. Request Volume & Traffic
 
-### HTTP Requests by Logical Model (rate)
+### Configured Models by Tier
 ```promql
-sum by (logical_model) (rate(gateway_http_requests_total[5m]))
+count by (tier) (gateway_model_info)
 ```
-**Description**: Requests per second grouped by logical model.
+**Description**: Number of configured provider models in each tier.
+
+### Configured Models by Metadata Bands
+```promql
+count by (tier, cost_band, latency_band, reasoning_band) (gateway_model_info)
+```
+**Description**: Static model inventory breakdown by tier and capability bands.
+
+### HTTP Requests by Tier (rate)
+```promql
+sum by (tier) (rate(gateway_http_requests_total[5m]))
+```
+**Description**: Requests per second grouped by tier.
 
 ### HTTP Requests by Path & Method
 ```promql
@@ -62,13 +73,13 @@ gateway_http_requests_in_flight
 
 ## 2. Success & Error Rates
 
-### Provider Success Rate by Logical Model
+### Provider Success Rate by Tier
 ```promql
-sum by (logical_model) (rate(gateway_provider_requests_total{status="success"}[5m])) 
+sum by (tier) (rate(gateway_provider_requests_total{status="success"}[5m])) 
 / 
-sum by (logical_model) (rate(gateway_provider_requests_total[5m]))
+sum by (tier) (rate(gateway_provider_requests_total[5m]))
 ```
-**Description**: Percentage of successful provider requests per logical model.
+**Description**: Percentage of successful provider requests per tier.
 
 ### Provider Success Rate by Provider
 ```promql
@@ -84,11 +95,11 @@ sum by (error_type) (rate(gateway_provider_requests_total{status!="success"}[5m]
 ```
 **Description**: Request errors grouped by error type (rate_limit, timeout, etc.).
 
-### Error Rate by Logical Model
+### Error Rate by Tier
 ```promql
-sum by (logical_model) (rate(gateway_provider_requests_total{status!="success"}[5m]))
+sum by (tier) (rate(gateway_provider_requests_total{status!="success"}[5m]))
 ```
-**Description**: Error rate per logical model.
+**Description**: Error rate per tier.
 
 ### Auth Rejections
 ```promql
@@ -106,11 +117,11 @@ sum by (reason) (rate(gateway_rate_limit_rejections_total[5m]))
 
 ## 3. Token Usage & Cost
 
-### Total Tokens by Logical Model
+### Total Tokens by Tier
 ```promql
-sum by (logical_model) (rate(gateway_provider_tokens_total[5m]))
+sum by (tier) (rate(gateway_provider_tokens_total[5m]))
 ```
-**Description**: Token consumption rate per logical model.
+**Description**: Token consumption rate per tier.
 
 ### Tokens by Direction (prompt/completion/total)
 ```promql
@@ -124,17 +135,17 @@ sum by (provider, direction) (rate(gateway_provider_tokens_total[5m]))
 ```
 **Description**: Token usage per provider, split by direction.
 
-### Tokens by Logical Model & Direction
+### Tokens by Tier & Direction
 ```promql
-sum by (logical_model, direction) (rate(gateway_provider_tokens_total[5m]))
+sum by (tier, direction) (rate(gateway_provider_tokens_total[5m]))
 ```
-**Description**: Detailed token usage: logical model × direction.
+**Description**: Detailed token usage: tier × direction.
 
-### Average Tokens per Request by Logical Model
+### Average Tokens per Request by Tier
 ```promql
-sum by (logical_model) (rate(gateway_provider_tokens_total[5m])) 
+sum by (tier) (rate(gateway_provider_tokens_total[5m])) 
 / 
-sum by (logical_model) (rate(gateway_provider_requests_total{status="success"}[5m]))
+sum by (tier) (rate(gateway_provider_requests_total{status="success"}[5m]))
 ```
 **Description**: Average token consumption per successful request.
 
@@ -146,33 +157,33 @@ sum by (provider) (rate(gateway_provider_requests_total{status="success"}[5m]))
 ```
 **Description**: Average tokens per request per provider.
 
-### Router Profile Token Usage
+### Strategy Token Usage
 ```promql
-sum by (router_profile, direction) (rate(gateway_provider_tokens_total[5m]))
+sum by (strategy, direction) (rate(gateway_provider_tokens_total[5m]))
 ```
-**Description**: Token usage grouped by router profile and direction.
+**Description**: Token usage grouped by strategy and direction.
 
 ---
 
 ## 4. Latency & Performance
 
-### P50 Latency by Logical Model
+### P50 Latency by Tier
 ```promql
-histogram_quantile(0.50, sum by (le, logical_model) (rate(gateway_provider_latency_seconds_bucket[5m])))
+histogram_quantile(0.50, sum by (le, tier) (rate(gateway_provider_latency_seconds_bucket[5m])))
 ```
-**Description**: Median latency per logical model.
+**Description**: Median latency per tier.
 
-### P95 Latency by Logical Model
+### P95 Latency by Tier
 ```promql
-histogram_quantile(0.95, sum by (le, logical_model) (rate(gateway_provider_latency_seconds_bucket[5m])))
+histogram_quantile(0.95, sum by (le, tier) (rate(gateway_provider_latency_seconds_bucket[5m])))
 ```
-**Description**: 95th percentile latency per logical model.
+**Description**: 95th percentile latency per tier.
 
-### P99 Latency by Logical Model
+### P99 Latency by Tier
 ```promql
-histogram_quantile(0.99, sum by (le, logical_model) (rate(gateway_provider_latency_seconds_bucket[5m])))
+histogram_quantile(0.99, sum by (le, tier) (rate(gateway_provider_latency_seconds_bucket[5m])))
 ```
-**Description**: 99th percentile latency per logical model.
+**Description**: 99th percentile latency per tier.
 
 ### P50 Latency by Provider
 ```promql
@@ -186,11 +197,11 @@ histogram_quantile(0.95, sum by (le, provider) (rate(gateway_provider_latency_se
 ```
 **Description**: 95th percentile latency per provider.
 
-### P50 Latency by Router Profile
+### P50 Latency by Strategy
 ```promql
-histogram_quantile(0.50, sum by (le, router_profile) (rate(gateway_provider_latency_seconds_bucket[5m])))
+histogram_quantile(0.50, sum by (le, strategy) (rate(gateway_provider_latency_seconds_bucket[5m])))
 ```
-**Description**: Median latency per router profile.
+**Description**: Median latency per strategy.
 
 ### HTTP Request Duration by Path
 ```promql
@@ -198,11 +209,11 @@ histogram_quantile(0.50, sum by (le, path) (rate(gateway_http_request_duration_s
 ```
 **Description**: End-to-end HTTP request duration by API path.
 
-### Latency Distribution by Logical Model (full histogram)
+### Latency Distribution by Tier (full histogram)
 ```promql
-sum by (le, logical_model) (rate(gateway_provider_latency_seconds_bucket[5m]))
+sum by (le, tier) (rate(gateway_provider_latency_seconds_bucket[5m]))
 ```
-**Description**: Full latency histogram for each logical model.
+**Description**: Full latency histogram for each tier.
 
 ---
 
@@ -214,19 +225,19 @@ sum by (le) (rate(gateway_routing_attempts_total_bucket[5m]))
 ```
 **Description**: Distribution of routing attempts per request.
 
-### Average Routing Attempts by Logical Model
+### Average Routing Attempts by Tier
 ```promql
-sum by (logical_model) (rate(gateway_routing_attempts_total_sum[5m])) 
+sum by (tier) (rate(gateway_routing_attempts_total_sum[5m])) 
 / 
-sum by (logical_model) (rate(gateway_routing_attempts_total_count[5m]))
+sum by (tier) (rate(gateway_routing_attempts_total_count[5m]))
 ```
 **Description**: Average number of provider attempts before success.
 
 ### Failover Events
 ```promql
-sum by (logical_model) (rate(gateway_failover_events_total[5m]))
+sum by (tier) (rate(gateway_failover_events_total[5m]))
 ```
-**Description**: Failover events per logical model.
+**Description**: Failover events per tier.
 
 ### Failover Flow (from → to provider)
 ```promql
@@ -236,19 +247,19 @@ sum by (from_provider, to_provider) (rate(gateway_failover_events_total[5m]))
 
 ### Retry Success Rate
 ```promql
-sum by (logical_model) (rate(gateway_retry_success_total[5m])) 
+sum by (tier) (rate(gateway_retry_success_total[5m])) 
 / 
-sum by (logical_model) (rate(gateway_provider_requests_total{status=~"error|timeout|rate_limited"}[5m]))
+sum by (tier) (rate(gateway_provider_requests_total{status=~"error|timeout|rate_limited"}[5m]))
 ```
 **Description**: Percentage of failed requests that succeeded on retry.
 
-### Routing Attempts by Router Profile
+### Routing Attempts by Strategy
 ```promql
-sum by (router_profile) (rate(gateway_routing_attempts_total_sum[5m])) 
+sum by (strategy) (rate(gateway_routing_attempts_total_sum[5m])) 
 / 
-sum by (router_profile) (rate(gateway_routing_attempts_total_count[5m]))
+sum by (strategy) (rate(gateway_routing_attempts_total_count[5m]))
 ```
-**Description**: Average routing attempts by router profile.
+**Description**: Average routing attempts by strategy.
 
 ---
 
@@ -256,31 +267,31 @@ sum by (router_profile) (rate(gateway_routing_attempts_total_count[5m]))
 
 ### Stream Duration P50
 ```promql
-histogram_quantile(0.50, sum by (le, logical_model) (rate(gateway_stream_duration_seconds_bucket[5m])))
+histogram_quantile(0.50, sum by (le, tier) (rate(gateway_stream_duration_seconds_bucket[5m])))
 ```
 **Description**: Median streaming response duration.
 
 ### Stream Duration P95
 ```promql
-histogram_quantile(0.95, sum by (le, logical_model) (rate(gateway_stream_duration_seconds_bucket[5m])))
+histogram_quantile(0.95, sum by (le, tier) (rate(gateway_stream_duration_seconds_bucket[5m])))
 ```
 **Description**: 95th percentile streaming duration.
 
 ### Time to First Byte P50
 ```promql
-histogram_quantile(0.50, sum by (le, logical_model) (rate(gateway_stream_ttfb_seconds_bucket[5m])))
+histogram_quantile(0.50, sum by (le, tier) (rate(gateway_stream_ttfb_seconds_bucket[5m])))
 ```
 **Description**: Median time to first token.
 
 ### Time to First Byte P95
 ```promql
-histogram_quantile(0.95, sum by (le, logical_model) (rate(gateway_stream_ttfb_seconds_bucket[5m])))
+histogram_quantile(0.95, sum by (le, tier) (rate(gateway_stream_ttfb_seconds_bucket[5m])))
 ```
 **Description**: 95th percentile time to first token.
 
-### Stream Output Tokens by Logical Model
+### Stream Output Tokens by Tier
 ```promql
-sum by (logical_model) (rate(gateway_stream_output_tokens_total[5m]))
+sum by (tier) (rate(gateway_stream_output_tokens_total[5m]))
 ```
 **Description**: Streaming output token rate.
 
@@ -332,29 +343,29 @@ sum by (provider, model, quota_type) (rate(gateway_quota_rejections_total[5m]))
 
 ## 9. Cross-Dimensional Analytics
 
-### Requests: Logical Model × Router Profile
+### Requests: Tier × Strategy
 ```promql
-sum by (logical_model, router_profile) (rate(gateway_http_requests_total[5m]))
+sum by (tier, strategy) (rate(gateway_http_requests_total[5m]))
 ```
 **Description**: Request volume cross-section.
 
-### Success Rate: Logical Model × Router Profile
+### Success Rate: Tier × Strategy
 ```promql
-sum by (logical_model, router_profile) (rate(gateway_provider_requests_total{status="success"}[5m])) 
+sum by (tier, strategy) (rate(gateway_provider_requests_total{status="success"}[5m])) 
 / 
-sum by (logical_model, router_profile) (rate(gateway_provider_requests_total[5m]))
+sum by (tier, strategy) (rate(gateway_provider_requests_total[5m]))
 ```
 **Description**: Success rate matrix.
 
-### Latency P50: Logical Model × Provider
+### Latency P50: Tier × Provider
 ```promql
-histogram_quantile(0.50, sum by (le, logical_model, provider) (rate(gateway_provider_latency_seconds_bucket[5m])))
+histogram_quantile(0.50, sum by (le, tier, provider) (rate(gateway_provider_latency_seconds_bucket[5m])))
 ```
-**Description**: Median latency per logical model and provider combination.
+**Description**: Median latency per tier and provider combination.
 
-### Token Usage: Logical Model × Router Profile
+### Token Usage: Tier × Strategy
 ```promql
-sum by (logical_model, router_profile, direction) (rate(gateway_provider_tokens_total[5m]))
+sum by (tier, strategy, direction) (rate(gateway_provider_tokens_total[5m]))
 ```
 **Description**: Token consumption matrix.
 
@@ -370,7 +381,7 @@ sum(rate(gateway_provider_requests_total{status!="success"}[5m])) / sum(rate(gat
 
 ### High Latency Alert (P95 > 30s)
 ```promql
-histogram_quantile(0.95, sum by (le, logical_model) (rate(gateway_provider_latency_seconds_bucket[5m]))) > 30
+histogram_quantile(0.95, sum by (le, tier) (rate(gateway_provider_latency_seconds_bucket[5m]))) > 30
 ```
 **Alert**: 95th percentile latency exceeds 30 seconds.
 
@@ -397,7 +408,7 @@ sum(rate(gateway_failover_events_total[5m])) > 10
 ## Dashboard Layout Recommendations
 
 ### Row 1: Overview
-- HTTP Requests by Logical Model (graph)
+- HTTP Requests by Tier (graph)
 - Active Requests In Flight (single value)
 - Overall Success Rate (gauge)
 
@@ -407,17 +418,17 @@ sum(rate(gateway_failover_events_total[5m])) > 10
 - Active Requests Over Time (time series)
 
 ### Row 3: Token Usage
-- Total Tokens by Logical Model (stack)
+- Total Tokens by Tier (stack)
 - Tokens by Direction (pie chart)
 - Average Tokens per Request (bar)
 
 ### Row 4: Latency
-- P50/P95/P99 Latency by Logical Model (multi-line)
+- P50/P95/P99 Latency by Tier (multi-line)
 - Latency by Provider (heatmap)
 - HTTP Duration by Path (table)
 
 ### Row 5: Errors & Routing
-- Error Rate by Logical Model (graph)
+- Error Rate by Tier (graph)
 - Failover Events (graph)
 - Routing Attempts Distribution (histogram)
 
@@ -432,6 +443,6 @@ sum(rate(gateway_failover_events_total[5m])) > 10
 - Retry Success Rate (gauge)
 
 ### Row 8: Cross-Dimensional
-- Logical Model × Router Profile Heatmap
-- Latency Matrix (Logical Model × Provider)
-- Success Rate Matrix (Logical Model × Provider)
+- Tier × Strategy Heatmap
+- Latency Matrix (Tier × Provider)
+- Success Rate Matrix (Tier × Provider)

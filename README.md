@@ -40,7 +40,7 @@ The gateway examines each request to determine what it needs (streaming, JSON ou
 - Model capabilities (which providers support the requested model)
 - Provider health (success rates, latency)
 - Your preferences (preferred providers, deny lists)
-- Weights from logical model configuration
+- Tier strategy scoring from model metadata
 
 ### Automatic Failover
 If a provider fails (timeout, error, rate limit), the gateway automatically tries the next available provider. This happens transparently - your code sees a successful response or a final error.
@@ -58,12 +58,13 @@ When a limit is reached, that model/provider is filtered out and other options a
 ### Unified API
 The gateway implements OpenAI's chat completions API. Your existing code calling OpenAI can switch to the gateway by changing the base URL.
 
-### Logical Models
-Abstract provider-specific models into semantic categories:
-- `chat-pro` - General purpose conversation
-- `json-safe` - Guaranteed JSON output
-- `code-pro` - Code generation
-- `tools-pro` - Function calling
+### Tier-Based Models
+Select relative capability tiers directly:
+- `lite` - Lowest-latency and lowest-cost options
+- `default` - Balanced quality, speed, and cost
+- `strong` - Higher capability for more complex tasks
+- `frontier` - Highest general capability models
+- `deep-think` - Deliberative/high-reasoning models
 
 ---
 
@@ -158,7 +159,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer ${GATEWAY_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "chat-pro",
+    "model": "default",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
@@ -264,24 +265,19 @@ Failures include the exact reason when available, for example:
 | `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
 | `CORS_ORIGINS` | * | Allowed CORS origins |
 
-### Logical Models
+### Tiers
 
-Logical models abstract provider-specific models into semantic categories:
+The public `model` selector maps to relative capability tiers:
 
-| Model | Use Case |
-|-------|----------|
-| `chat-lite` | Fast, simple responses |
-| `chat-pro` | General purpose conversation |
-| `chat-max` | Complex, long tasks |
-| `analysis-pro` | Reasoning and analysis |
-| `json-fast` | Quick JSON output |
-| `json-safe` | Strict JSON schema output |
-| `code-fast` | Quick code generation |
-| `code-pro` | Production code |
-| `tools-pro` | Function calling |
-| `reasoning-max` | Deep reasoning tasks |
+| Tier | Use Case |
+|------|----------|
+| `lite` | Fast, low-cost responses |
+| `default` | General purpose responses |
+| `strong` | More complex tasks |
+| `frontier` | Highest-capability general workloads |
+| `deep-think` | Long-horizon reasoning tasks |
 
-Models are configured in `internal/config/logical_models.go`.
+Tiers are configured in `internal/config/tiers.go`, and per-provider model metadata is configured in `internal/config/providers.go`.
 
 ### Provider Configuration
 
@@ -327,7 +323,7 @@ POST /v1/chat/completions
 
 ```json
 {
-  "model": "chat-pro",
+  "model": "default",
   "messages": [{"role": "user", "content": "Hello!"}],
   "temperature": 0.7
 }
@@ -355,6 +351,7 @@ POST /v1/chat/completions
 **Response Headers:**
 - `X-Gateway-Provider` - Provider used (e.g., groq)
 - `X-Gateway-Model` - Model used (e.g., llama-3.3-70b-versatile)
+- `X-Gateway-Tier` - Selected tier when tier routing is used (e.g., default)
 
 ### Streaming
 
@@ -362,7 +359,7 @@ Set `stream: true` in your request:
 
 ```json
 {
-  "model": "chat-pro",
+  "model": "default",
   "messages": [{"role": "user", "content": "Tell me a story"}],
   "stream": true
 }

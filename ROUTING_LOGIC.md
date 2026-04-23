@@ -161,36 +161,29 @@ if hints != nil && hints.Requirements != nil {
 
 There are two ways to generate candidates:
 
-### Path A: From Logical Model (Most Common)
+### Path A: From Tier (Most Common)
 
-Uses the logical model configuration (e.g., "chat-pro") to find candidates.
+Uses the request tier (e.g., `default`) to select all provider models whose metadata matches that tier.
 
 ```go
-func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *LogicalModelConfig) []RoutingCandidate {
+func (r *Router) GenerateCandidatesForTier(tier Tier) []RoutingCandidate {
     var candidates []RoutingCandidate
 
-    for _, candidate := range logicalModel.Candidates {
-        // Find provider config by ID
-        provider := findProvider(candidate.Provider)
+    for _, provider := range r.config.Providers {
+        for _, model := range provider.Models.List {
+            attrs, ok := provider.Models.Attributes[model]
+            if !ok || attrs.Tier != tier {
+                continue
+            }
 
-        // Check if model exists in provider
-        if !slices.Contains(provider.Models.List, candidate.Model) {
-            log.Warn("Model not found in provider")
-            continue
+            isCertified := r.isCertifiedForStrictSchema(provider.ID, model)
+            candidates = append(candidates, RoutingCandidate{
+                Provider:                   provider,
+                Model:                      model,
+                IsCertifiedForStrictSchema: isCertified,
+                ScoreBreakdown:             map[string]float64{},
+            })
         }
-
-        // Check if certified for strict JSON
-        isCertified := r.isCertifiedForStrictSchema(candidate.Provider, candidate.Model)
-
-        candidates = append(candidates, RoutingCandidate{
-            Provider:                   *provider,
-            Model:                      candidate.Model,
-            IsCertifiedForStrictSchema: isCertified,
-            Score:                      candidate.Weight, // from logical model config
-            ScoreBreakdown: map[string]float64{
-                "logical_model_weight": candidate.Weight,
-            },
-        })
     }
 
     return candidates
@@ -199,7 +192,7 @@ func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *LogicalModelCo
 
 ### Path B: All Available Models
 
-Generates candidates for every model in every provider (used when no logical model is specified).
+Generates candidates for every model in every provider (used when tier is not selected and a direct provider model is requested).
 
 ```go
 func (r *Router) GenerateCandidates() []RoutingCandidate {
