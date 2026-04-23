@@ -123,6 +123,19 @@ func getGroqConfig() types.ProviderConfig {
 				"groq/compound":      {Tools: boolPtr(false)},
 				"groq/compound-mini": {Tools: boolPtr(false)},
 			},
+			Attributes: map[string]types.ModelAttributes{
+				"allam-2-7b":                                attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandMedium, types.ReasoningBandLow),
+				"groq/compound":                             attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandMedium),
+				"groq/compound-mini":                        attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFast, types.ContextBandLarge, types.ReasoningBandLow),
+				"llama-3.1-8b-instant":                      attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandMedium, types.ReasoningBandLow),
+				"llama-3.3-70b-versatile":                   attrs(types.TierStrong, types.CostBandLow, types.LatencyBandFast, types.ContextBandLarge, types.ReasoningBandMedium),
+				"meta-llama/llama-4-scout-17b-16e-instruct": attrs(types.TierStrong, types.CostBandLow, types.LatencyBandFast, types.ContextBandLarge, types.ReasoningBandMedium),
+				"moonshotai/kimi-k2-instruct":               attrs(types.TierDeepThink, types.CostBandMedium, types.LatencyBandSlow, types.ContextBandLarge, types.ReasoningBandHigh),
+				"moonshotai/kimi-k2-instruct-0905":          attrs(types.TierDeepThink, types.CostBandMedium, types.LatencyBandSlow, types.ContextBandLarge, types.ReasoningBandHigh),
+				"openai/gpt-oss-120b":                       attrs(types.TierFrontier, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandHigh),
+				"openai/gpt-oss-20b":                        attrs(types.TierStrong, types.CostBandLow, types.LatencyBandFast, types.ContextBandLarge, types.ReasoningBandMedium),
+				"qwen/qwen3-32b":                            attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFast, types.ContextBandLarge, types.ReasoningBandMedium),
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -182,6 +195,10 @@ func getCerebrasConfig() types.ProviderConfig {
 					Tph: &tph1000000,
 					Tpd: &tpd1000000,
 				},
+			},
+			Attributes: map[string]types.ModelAttributes{
+				"llama3.1-8b":                    attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandMedium, types.ReasoningBandLow),
+				"qwen-3-235b-a22b-instruct-2507": attrs(types.TierDeepThink, types.CostBandHigh, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandHigh),
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -257,6 +274,22 @@ func getMistralConfig() types.ProviderConfig {
 				"open-mistral-nemo":     {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 				"pixtral-large-2411":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 			},
+			Attributes: map[string]types.ModelAttributes{
+				"magistral-medium-2509": attrs(types.TierDeepThink, types.CostBandHigh, types.LatencyBandSlow, types.ContextBandLarge, types.ReasoningBandHigh),
+				"magistral-small-2509":  attrs(types.TierFrontier, types.CostBandHigh, types.LatencyBandSlow, types.ContextBandLarge, types.ReasoningBandHigh),
+				"ministral-14b-2512":    attrs(types.TierStrong, types.CostBandLow, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"ministral-3b-2512":     attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandSmall, types.ReasoningBandNone),
+				"ministral-8b-2512":     attrs(types.TierDefault, types.CostBandFree, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"mistral-large-2411":    attrs(types.TierFrontier, types.CostBandHigh, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandHigh),
+				"mistral-large-2512":    attrs(types.TierFrontier, types.CostBandHigh, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandHigh),
+				"mistral-medium-2505":   attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandMedium),
+				"mistral-medium-2508":   attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandMedium),
+				"mistral-saba-2502":     attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"mistral-small-2506":    attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"mistral-small-2603":    attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"open-mistral-nemo":     attrs(types.TierDefault, types.CostBandFree, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"pixtral-large-2411":    attrs(types.TierFrontier, types.CostBandHigh, types.LatencyBandSlow, types.ContextBandLarge, types.ReasoningBandMedium),
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -301,6 +334,10 @@ func getVertexConfig() types.ProviderConfig {
 				"google/gemini-3-flash-preview": {
 					Rpm: &rpm60,
 				},
+			},
+			Attributes: map[string]types.ModelAttributes{
+				"google/gemini-3.1-pro-preview": attrs(types.TierFrontier, types.CostBandHigh, types.LatencyBandMedium, types.ContextBandVeryLarge, types.ReasoningBandHigh),
+				"google/gemini-3-flash-preview": attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandFast, types.ContextBandVeryLarge, types.ReasoningBandMedium),
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -406,6 +443,18 @@ func getGeminiConfig() types.ProviderConfig {
 					Tpm: &tpm250000,
 				},
 			},
+			Attributes: map[string]types.ModelAttributes{
+				"gemma-3-1b-it":                 attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandSmall, types.ReasoningBandNone),
+				"gemma-3-4b-it":                 attrs(types.TierLite, types.CostBandFree, types.LatencyBandFastest, types.ContextBandSmall, types.ReasoningBandLow),
+				"gemma-3-12b-it":                attrs(types.TierDefault, types.CostBandFree, types.LatencyBandFast, types.ContextBandMedium, types.ReasoningBandLow),
+				"gemma-3-27b-it":                attrs(types.TierStrong, types.CostBandLow, types.LatencyBandMedium, types.ContextBandMedium, types.ReasoningBandMedium),
+				"gemma-4-26b-a4b-it":            attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandMedium),
+				"gemma-4-31b-it":                attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandMedium, types.ContextBandLarge, types.ReasoningBandMedium),
+				"gemini-2.5-flash":              attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandFast, types.ContextBandVeryLarge, types.ReasoningBandMedium),
+				"gemini-2.5-flash-lite":         attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFastest, types.ContextBandVeryLarge, types.ReasoningBandLow),
+				"gemini-3-flash-preview":        attrs(types.TierStrong, types.CostBandMedium, types.LatencyBandFast, types.ContextBandVeryLarge, types.ReasoningBandMedium),
+				"gemini-3.1-flash-lite-preview": attrs(types.TierDefault, types.CostBandLow, types.LatencyBandFastest, types.ContextBandVeryLarge, types.ReasoningBandMedium),
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -445,4 +494,18 @@ func LoadConfig() types.AppConfig {
 		Providers:      GetProviders(),
 		Certifications: GetCertifications(),
 	}
+}
+
+func attrs(tier types.Tier, cost types.CostBand, latency types.LatencyBand, context types.ContextBand, reasoning types.ReasoningBand) types.ModelAttributes {
+	return types.ModelAttributes{
+		Tier:          tier,
+		CostBand:      cost,
+		LatencyBand:   latency,
+		ContextBand:   context,
+		ReasoningBand: reasoning,
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

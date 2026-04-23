@@ -57,7 +57,7 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	writeResultHeaders(c, execResult, result.LogicalModel)
+	writeResultHeaders(c, execResult, result.Tier)
 	c.JSON(http.StatusOK, execResult.Response)
 }
 
@@ -125,7 +125,7 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 	c.Request = c.Request.WithContext(result.Ctx)
 
 	if result.Requirements.Streaming == "required" || (result.Requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
-		h.handleStream(c, ctx, req, reqID, *chatReq, result.Plan, result.LogicalModel)
+		h.handleStream(c, result.Ctx, req, reqID, *chatReq, result.Plan)
 		return
 	}
 
@@ -137,11 +137,11 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 
 	response := services.ChatCompletionToResponse(&execResult.Response)
 
-	writeResultHeaders(c, execResult, result.LogicalModel)
+	writeResultHeaders(c, execResult, result.Tier)
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan, logicalModel *types.LogicalModelConfig) {
+func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan) {
 	writeStreamHeaders(c)
 
 	streamResult := h.pipeline.router.ExecuteStream(ctx, plan, chatReq, reqID)

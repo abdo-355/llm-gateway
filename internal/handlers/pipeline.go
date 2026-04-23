@@ -24,33 +24,30 @@ func NewPipeline(router services.RouterHandler) *Pipeline {
 }
 
 type RouteResult struct {
-	LogicalModel   *types.LogicalModelConfig
-	LogicalModelID string
-	Plan           types.RoutingPlan
-	Requirements   types.DerivedRequirements
-	Ctx            context.Context
+	Tier         *types.TierConfig
+	Plan         types.RoutingPlan
+	Requirements types.DerivedRequirements
+	Ctx          context.Context
 }
 
 func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterHints, req types.ChatCompletionRequest) (*RouteResult, error) {
-	var logicalModel *types.LogicalModelConfig
-	var logicalModelID string
+	var tierConfig *types.TierConfig
 	if model != "" {
-		logicalModel, logicalModelID = resolveLogicalModel(model)
+		tierConfig = resolveTier(model)
 	}
 
-	ctx = metrics.SetLogicalModel(ctx, logicalModelID)
-	if hints != nil && hints.Profile != nil {
-		ctx = metrics.SetRouterProfile(ctx, *hints.Profile)
+	ctx = metrics.SetTier(ctx, resolveMetricTier(model, tierConfig))
+	if hints != nil && hints.Strategy != nil {
+		ctx = metrics.SetStrategy(ctx, *hints.Strategy)
 	} else {
-		ctx = metrics.SetRouterProfile(ctx, "default")
+		ctx = metrics.SetStrategy(ctx, "default")
 	}
 
 	requirements := p.router.DeriveRequirements(req, hints)
-	requirements = applyLogicalModelRequirements(requirements, logicalModel)
 
 	var candidates []types.RoutingCandidate
-	if logicalModel != nil {
-		candidates = p.router.GenerateCandidatesFromLogicalModel(logicalModel)
+	if tierConfig != nil {
+		candidates = p.router.GenerateCandidatesForTier(tierConfig.Tier)
 	} else {
 		candidates = p.router.GenerateCandidates()
 		if model != "" {
@@ -73,47 +70,40 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 
 	scored := p.router.ScoreCandidates(ctx, eligible, hints)
 
-	var slo *types.LogicalModelSLO
-	if logicalModel != nil {
-		slo = logicalModel.SLO
+	var slo *types.TierSLO
+	if tierConfig != nil {
+		slo = tierConfig.SLO
 	}
 
 	plan := p.router.CompilePlan(scored, hints, slo)
 
 	return &RouteResult{
-		LogicalModel:   logicalModel,
-		LogicalModelID: logicalModelID,
-		Plan:           plan,
-		Requirements:   requirements,
-		Ctx:            ctx,
+		Tier:         tierConfig,
+		Plan:         plan,
+		Requirements: requirements,
+		Ctx:          ctx,
 	}, nil
 }
 
-func applyLogicalModelRequirements(requirements types.DerivedRequirements, logicalModel *types.LogicalModelConfig) types.DerivedRequirements {
-	if logicalModel == nil {
-		return requirements
+func resolveTier(model string) *types.TierConfig {
+	if model == "" {
+		return nil
 	}
-
-	if logicalModel.RequireStrictJSON != nil && *logicalModel.RequireStrictJSON {
-		requirements.Output = "json_schema_strict"
+	tier := types.Tier(model)
+	if !tier.IsValid() {
+		return nil
 	}
-
-	if logicalModel.RequireTools != nil && *logicalModel.RequireTools {
-		requirements.Tools = "required"
-	}
-
-	return requirements
+	return config.GetTierConfig(tier)
 }
 
-func resolveLogicalModel(model string) (*types.LogicalModelConfig, string) {
-	if model == "" {
-		return nil, ""
+func resolveMetricTier(model string, tierConfig *types.TierConfig) string {
+	if tierConfig != nil {
+		return string(tierConfig.Tier)
 	}
-	lm := config.GetLogicalModel(model)
-	if lm != nil {
-		return lm, lm.ID
+	if model != "" {
+		return "direct"
 	}
-	return nil, model
+	return "unknown"
 }
 
 func writeExecutionError(c *gin.Context, err error) {
@@ -140,11 +130,11 @@ func writeExecutionError(c *gin.Context, err error) {
 	c.JSON(status, gin.H{"error": gatewayErr})
 }
 
-func writeResultHeaders(c *gin.Context, result *types.ExecutionResult, logicalModel *types.LogicalModelConfig) {
+func writeResultHeaders(c *gin.Context, result *types.ExecutionResult, tierConfig *types.TierConfig) {
 	c.Header("X-Gateway-Provider", result.ProviderID)
 	c.Header("X-Gateway-Model", result.Model)
-	if logicalModel != nil {
-		c.Header("X-Gateway-Logical-Model", logicalModel.ID)
+	if tierConfig != nil {
+		c.Header("X-Gateway-Tier", string(tierConfig.Tier))
 	}
 	c.Header("X-Gateway-Attempts", strconv.Itoa(result.Attempts))
 

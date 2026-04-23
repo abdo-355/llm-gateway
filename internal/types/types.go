@@ -305,7 +305,7 @@ func appendVisibleText(value any, parts *[]string) {
 }
 
 type RouterHints struct {
-	Profile      *string              `json:"profile,omitempty"` // cheap_fast, reliable_structured, balanced
+	Strategy     *string              `json:"strategy,omitempty"` // cheap_fast, reliable_structured, balanced
 	Requirements *RouterRequirements  `json:"requirements,omitempty"`
 	Budget       *BudgetConfig        `json:"budget,omitempty"`
 	SLO          *SLOConfig           `json:"slo,omitempty"`
@@ -363,11 +363,84 @@ type ProviderAuth struct {
 	HeaderName string `json:"headerName,omitempty"` // for header auth type
 }
 
+type Tier string
+
+const (
+	TierLite      Tier = "lite"
+	TierDefault   Tier = "default"
+	TierStrong    Tier = "strong"
+	TierFrontier  Tier = "frontier"
+	TierDeepThink Tier = "deep-think"
+)
+
+func (t Tier) IsValid() bool {
+	switch t {
+	case TierLite, TierDefault, TierStrong, TierFrontier, TierDeepThink:
+		return true
+	}
+	return false
+}
+
+type CostBand string
+
+const (
+	CostBandFree   CostBand = "free"
+	CostBandLow    CostBand = "low"
+	CostBandMedium CostBand = "medium"
+	CostBandHigh   CostBand = "high"
+)
+
+type LatencyBand string
+
+const (
+	LatencyBandFastest LatencyBand = "fastest"
+	LatencyBandFast    LatencyBand = "fast"
+	LatencyBandMedium  LatencyBand = "medium"
+	LatencyBandSlow    LatencyBand = "slow"
+)
+
+type ContextBand string
+
+const (
+	ContextBandSmall     ContextBand = "small"
+	ContextBandMedium    ContextBand = "medium"
+	ContextBandLarge     ContextBand = "large"
+	ContextBandVeryLarge ContextBand = "very-large"
+)
+
+type ReasoningBand string
+
+const (
+	ReasoningBandNone   ReasoningBand = "none"
+	ReasoningBandLow    ReasoningBand = "low"
+	ReasoningBandMedium ReasoningBand = "medium"
+	ReasoningBandHigh   ReasoningBand = "high"
+)
+
+type ModelAttributes struct {
+	Tier          Tier          `json:"tier"`
+	CostBand      CostBand      `json:"costBand"`
+	LatencyBand   LatencyBand   `json:"latencyBand"`
+	ContextBand   ContextBand   `json:"contextBand"`
+	ReasoningBand ReasoningBand `json:"reasoningBand"`
+}
+
+type TierConfig struct {
+	Tier Tier     `json:"tier"`
+	SLO  *TierSLO `json:"slo,omitempty"`
+}
+
+type TierSLO struct {
+	MaxLatencyMs *int `json:"maxLatencyMs,omitempty"`
+	MaxAttempts  *int `json:"maxAttempts,omitempty"`
+}
+
 type ProviderModels struct {
-	Mode         string                       `json:"mode"`                   // allowlist, denylist
-	List         []string                     `json:"list"`                   // model names
-	Limits       map[string]ModelLimits       `json:"limits,omitempty"`       // per-model limits
-	Capabilities map[string]ModelCapabilities `json:"capabilities,omitempty"` // per-model capability overrides
+	Mode         string                       `json:"mode"`
+	List         []string                     `json:"list"`
+	Limits       map[string]ModelLimits       `json:"limits,omitempty"`
+	Capabilities map[string]ModelCapabilities `json:"capabilities,omitempty"`
+	Attributes   map[string]ModelAttributes   `json:"attributes,omitempty"`
 }
 
 type ProviderCapabilities struct {
@@ -433,26 +506,6 @@ type Certification struct {
 type AppConfig struct {
 	Providers      []ProviderConfig `json:"providers"`
 	Certifications []Certification  `json:"certifications"`
-}
-
-type LogicalModelConfig struct {
-	ID                string                  `json:"id"`
-	TaskType          string                  `json:"taskType"` // chat, analysis, json_extraction, code, tool_orchestration
-	Candidates        []LogicalModelCandidate `json:"candidates"`
-	SLO               *LogicalModelSLO        `json:"slo,omitempty"`
-	RequireStrictJSON *bool                   `json:"requireStrictJson,omitempty"`
-	RequireTools      *bool                   `json:"requireTools,omitempty"`
-}
-
-type LogicalModelCandidate struct {
-	Provider string  `json:"provider"`         // Provider ID
-	Model    string  `json:"model"`            // Provider-native model ID
-	Weight   float64 `json:"weight,omitempty"` // Soft preference weight (0.0-1.0)
-}
-
-type LogicalModelSLO struct {
-	MaxLatencyMs *int `json:"maxLatencyMs,omitempty"`
-	MaxAttempts  *int `json:"maxAttempts,omitempty"`
 }
 
 type DerivedRequirements struct {

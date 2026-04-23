@@ -106,7 +106,7 @@ func TestDeriveRequirements_EdgeCases(t *testing.T) {
 			Stream: boolPtr(true),
 		}
 		hints := &types.RouterHints{
-			Profile: strPtr("cheap_fast"),
+			Strategy: strPtr("cheap_fast"),
 		}
 		reqs := r.DeriveRequirements(req, hints)
 		assert.Equal(t, "required", reqs.Streaming)

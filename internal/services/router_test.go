@@ -501,8 +501,8 @@ func TestCompilePlan(t *testing.T) {
 		assert.Equal(t, 5000, plan.Attempts[0].TimeoutMs)
 	})
 
-	t.Run("uses logical model SLO", func(t *testing.T) {
-		slo := &types.LogicalModelSLO{MaxLatencyMs: intPtr(10000), MaxAttempts: intPtr(2)}
+	t.Run("uses tier SLO", func(t *testing.T) {
+		slo := &types.TierSLO{MaxLatencyMs: intPtr(10000), MaxAttempts: intPtr(2)}
 		plan := r.CompilePlan(candidates, nil, slo)
 		assert.Equal(t, 10000, plan.Attempts[0].TimeoutMs)
 		assert.Len(t, plan.Attempts, 2)

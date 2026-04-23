@@ -28,8 +28,10 @@ func NewRouter(
 	healthSvc HealthChecker,
 	providerSvc ProviderCaller,
 ) *Router {
+	cfg := config.LoadConfig()
+	metrics.RegisterModelInfo(cfg)
 	return &Router{
-		config:          config.LoadConfig(),
+		config:          cfg,
 		quotaService:    quotaSvc,
 		healthService:   healthSvc,
 		providerService: providerSvc,
@@ -42,6 +44,7 @@ func NewRouterWithConfig(
 	healthSvc HealthChecker,
 	providerSvc ProviderCaller,
 ) *Router {
+	metrics.RegisterModelInfo(cfg)
 	return &Router{
 		config:          cfg,
 		quotaService:    quotaSvc,
@@ -138,53 +141,33 @@ func (r *Router) GenerateCandidates() []types.RoutingCandidate {
 	return candidates
 }
 
-func (r *Router) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate {
+func (r *Router) GenerateCandidatesForTier(tier types.Tier) []types.RoutingCandidate {
 	var candidates []types.RoutingCandidate
 
-	for _, candidate := range logicalModel.Candidates {
-		// Find provider config
-		var provider *types.ProviderConfig
-		for _, p := range r.config.Providers {
-			if p.ID == candidate.Provider {
-				provider = &p
-				break
+	for _, provider := range r.config.Providers {
+		for _, model := range provider.Models.List {
+			attr, ok := provider.Models.Attributes[model]
+			if !ok {
+				logger.Warn().
+					Str("type", "router").
+					Str("event", "tier.attributes_missing").
+					Str("provider", provider.ID).
+					Str("model", model).
+					Msg("Model attributes missing for configured model")
+				continue
 			}
+			if attr.Tier != tier {
+				continue
+			}
+
+			isCertified := r.isCertifiedForStrictSchema(provider.ID, model)
+			candidates = append(candidates, types.RoutingCandidate{
+				Provider:                   provider,
+				Model:                      model,
+				IsCertifiedForStrictSchema: isCertified,
+				ScoreBreakdown:             make(map[string]float64),
+			})
 		}
-
-		if provider == nil {
-			logger.Warn().
-				Str("type", "router").
-				Str("event", "logical_model.provider_not_found").
-				Str("provider", candidate.Provider).
-				Str("logical_model", logicalModel.ID).
-				Msg("Provider not found for logical model candidate")
-			continue
-		}
-
-		// Check if model exists in provider
-		found := slices.Contains(provider.Models.List, candidate.Model)
-
-		if !found {
-			logger.Warn().
-				Str("type", "router").
-				Str("event", "logical_model.model_not_found").
-				Str("provider", candidate.Provider).
-				Str("model", candidate.Model).
-				Msg("Model not found in provider for logical model candidate")
-			continue
-		}
-
-		isCertified := r.isCertifiedForStrictSchema(candidate.Provider, candidate.Model)
-
-		candidates = append(candidates, types.RoutingCandidate{
-			Provider:                   *provider,
-			Model:                      candidate.Model,
-			IsCertifiedForStrictSchema: isCertified,
-			Score:                      candidate.Weight,
-			ScoreBreakdown: map[string]float64{
-				"logical_model_weight": candidate.Weight,
-			},
-		})
 	}
 
 	return candidates
@@ -313,9 +296,19 @@ func (r *Router) FilterCandidates(
 
 // Stage 4: Score Candidates
 func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+	strategy := "default"
+	if hints != nil && hints.Strategy != nil && *hints.Strategy != "" {
+		strategy = *hints.Strategy
+	}
+
 	for i := range candidates {
 		candidate := &candidates[i]
 		baseScore := 1.0
+		if candidate.ScoreBreakdown == nil {
+			candidate.ScoreBreakdown = make(map[string]float64)
+		}
+		attributes := candidate.Provider.Models.Attributes[candidate.Model]
+		applyStrategyScore(candidate, strategy, attributes)
 
 		// Preference bonus
 		if hints != nil && hints.Providers != nil {
@@ -355,14 +348,14 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 func (r *Router) CompilePlan(
 	candidates []types.RoutingCandidate,
 	hints *types.RouterHints,
-	logicalModelSLO *types.LogicalModelSLO,
+	tierSLO *types.TierSLO,
 ) types.RoutingPlan {
 	// Determine max attempts
 	maxAttempts := 3
 	if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
 		maxAttempts = *hints.Fallback.MaxAttempts
-	} else if logicalModelSLO != nil && logicalModelSLO.MaxAttempts != nil {
-		maxAttempts = *logicalModelSLO.MaxAttempts
+	} else if tierSLO != nil && tierSLO.MaxAttempts != nil {
+		maxAttempts = *tierSLO.MaxAttempts
 	}
 
 	if maxAttempts > len(candidates) {
@@ -373,8 +366,8 @@ func (r *Router) CompilePlan(
 	timeoutMs := defaultRequestTimeoutMs
 	if hints != nil && hints.SLO != nil && hints.SLO.MaxLatencyMs != nil {
 		timeoutMs = *hints.SLO.MaxLatencyMs
-	} else if logicalModelSLO != nil && logicalModelSLO.MaxLatencyMs != nil {
-		timeoutMs = *logicalModelSLO.MaxLatencyMs
+	} else if tierSLO != nil && tierSLO.MaxLatencyMs != nil {
+		timeoutMs = *tierSLO.MaxLatencyMs
 	}
 
 	// Determine hard timeout
@@ -443,8 +436,8 @@ func (r *Router) Execute(
 ) (*types.ExecutionResult, error) {
 	startTime := time.Now()
 
-	logicalModel := metrics.GetLogicalModel(ctx)
-	routerProfile := metrics.GetRouterProfile(ctx)
+	tier := metrics.GetTier(ctx)
+	strategy := metrics.GetStrategy(ctx)
 
 	var previousProvider string
 	var hadFailure bool
@@ -495,30 +488,30 @@ func (r *Router) Execute(
 			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
 			if hadFailure {
-				metrics.RetrySuccessTotal.WithLabelValues(logicalModel).Inc()
+				metrics.RetrySuccessTotal.WithLabelValues(tier).Inc()
 			}
 
 			metrics.ProviderRequestsTotal.WithLabelValues(
 				attempt.ProviderID, attempt.Model, "success",
-				logicalModel, routerProfile, "",
+				tier, strategy, "",
 			).Inc()
 			metrics.ProviderLatencySeconds.WithLabelValues(
 				attempt.ProviderID, attempt.Model,
-				logicalModel, routerProfile,
+				tier, strategy,
 			).Observe(float64(latencyMs) / 1000.0)
 			if resp.Usage != nil {
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "prompt", logicalModel, routerProfile,
+					attempt.ProviderID, attempt.Model, "prompt", tier, strategy,
 				).Add(float64(resp.Usage.PromptTokens))
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "completion", logicalModel, routerProfile,
+					attempt.ProviderID, attempt.Model, "completion", tier, strategy,
 				).Add(float64(resp.Usage.CompletionTokens))
 				metrics.ProviderTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, "total", logicalModel, routerProfile,
+					attempt.ProviderID, attempt.Model, "total", tier, strategy,
 				).Add(float64(resp.Usage.TotalTokens))
 			}
 			metrics.RoutingAttemptsTotal.WithLabelValues(
-				logicalModel, routerProfile,
+				tier, strategy,
 			).Observe(float64(i + 1))
 
 			logger.Info().
@@ -545,7 +538,7 @@ func (r *Router) Execute(
 
 		if previousProvider != "" {
 			metrics.FailoverEventsTotal.WithLabelValues(
-				previousProvider, attempt.ProviderID, logicalModel,
+				previousProvider, attempt.ProviderID, tier,
 			).Inc()
 		}
 		previousProvider = attempt.ProviderID
@@ -578,7 +571,7 @@ func (r *Router) Execute(
 		}
 		metrics.ProviderRequestsTotal.WithLabelValues(
 			attempt.ProviderID, attempt.Model, status,
-			logicalModel, routerProfile, errorType,
+			tier, strategy, errorType,
 		).Inc()
 
 		logger.Warn().
@@ -600,7 +593,7 @@ func (r *Router) Execute(
 	}
 
 	metrics.RoutingAttemptsTotal.WithLabelValues(
-		logicalModel, routerProfile,
+		tier, strategy,
 	).Observe(float64(len(plan.Attempts)))
 
 	return nil, &types.GatewayError{
@@ -627,8 +620,8 @@ func (r *Router) ExecuteStream(
 		startTime := time.Now()
 		var ttfbRecorded bool
 
-		logicalModel := metrics.GetLogicalModel(ctx)
-		routerProfile := metrics.GetRouterProfile(ctx)
+		tier := metrics.GetTier(ctx)
+		strategy := metrics.GetStrategy(ctx)
 
 		var previousProvider string
 		var hadFailure bool
@@ -664,7 +657,7 @@ func (r *Router) ExecuteStream(
 			for chunk := range result.Chunks {
 				if !ttfbRecorded {
 					metrics.StreamTTFBSeconds.WithLabelValues(
-						attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
+						attempt.ProviderID, attempt.Model, tier, strategy,
 					).Observe(time.Since(startTime).Seconds())
 					ttfbRecorded = true
 				}
@@ -691,25 +684,25 @@ func (r *Router) ExecuteStream(
 				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
 				if hadFailure {
-					metrics.RetrySuccessTotal.WithLabelValues(logicalModel).Inc()
+					metrics.RetrySuccessTotal.WithLabelValues(tier).Inc()
 				}
 
 				metrics.ProviderRequestsTotal.WithLabelValues(
 					attempt.ProviderID, attempt.Model, "success",
-					logicalModel, routerProfile, "",
+					tier, strategy, "",
 				).Inc()
 				metrics.ProviderLatencySeconds.WithLabelValues(
 					attempt.ProviderID, attempt.Model,
-					logicalModel, routerProfile,
+					tier, strategy,
 				).Observe(float64(latencyMs) / 1000.0)
 				metrics.StreamDurationSeconds.WithLabelValues(
-					attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
+					attempt.ProviderID, attempt.Model, tier, strategy,
 				).Observe(float64(latencyMs) / 1000.0)
 				metrics.StreamOutputTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, logicalModel, routerProfile,
+					attempt.ProviderID, attempt.Model, tier, strategy,
 				).Add(float64(outputTokenCount))
 				metrics.RoutingAttemptsTotal.WithLabelValues(
-					logicalModel, routerProfile,
+					tier, strategy,
 				).Observe(float64(i + 1))
 				errChan <- nil
 				return
@@ -719,7 +712,7 @@ func (r *Router) ExecuteStream(
 
 			if previousProvider != "" {
 				metrics.FailoverEventsTotal.WithLabelValues(
-					previousProvider, attempt.ProviderID, logicalModel,
+					previousProvider, attempt.ProviderID, tier,
 				).Inc()
 			}
 			previousProvider = attempt.ProviderID
@@ -740,7 +733,7 @@ func (r *Router) ExecuteStream(
 			}
 			metrics.ProviderRequestsTotal.WithLabelValues(
 				attempt.ProviderID, attempt.Model, status,
-				logicalModel, routerProfile, errorType,
+				tier, strategy, errorType,
 			).Inc()
 			ttfbRecorded = false
 
@@ -948,6 +941,80 @@ func supportsJSONSchema(caps types.ProviderCapabilities) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func applyStrategyScore(candidate *types.RoutingCandidate, strategy string, attributes types.ModelAttributes) {
+	var score float64
+
+	switch strategy {
+	case "cheap_fast":
+		score += scoreCostBand(attributes.CostBand)
+		score += scoreLatencyBand(attributes.LatencyBand)
+	case "reliable_structured":
+		score += scoreReasoningBand(attributes.ReasoningBand)
+		score += scoreContextBand(attributes.ContextBand)
+	default:
+		score += scoreLatencyBand(attributes.LatencyBand) * 0.5
+		score += scoreReasoningBand(attributes.ReasoningBand) * 0.5
+		score += scoreContextBand(attributes.ContextBand) * 0.25
+	}
+
+	if score != 0 {
+		candidate.Score += score
+		candidate.ScoreBreakdown["strategy_bonus"] = score
+	}
+}
+
+func scoreCostBand(band types.CostBand) float64 {
+	switch band {
+	case types.CostBandFree:
+		return 0.5
+	case types.CostBandLow:
+		return 0.35
+	case types.CostBandMedium:
+		return 0.15
+	default:
+		return 0
+	}
+}
+
+func scoreLatencyBand(band types.LatencyBand) float64 {
+	switch band {
+	case types.LatencyBandFastest:
+		return 0.5
+	case types.LatencyBandFast:
+		return 0.35
+	case types.LatencyBandMedium:
+		return 0.15
+	default:
+		return 0
+	}
+}
+
+func scoreContextBand(band types.ContextBand) float64 {
+	switch band {
+	case types.ContextBandVeryLarge:
+		return 0.4
+	case types.ContextBandLarge:
+		return 0.3
+	case types.ContextBandMedium:
+		return 0.15
+	default:
+		return 0
+	}
+}
+
+func scoreReasoningBand(band types.ReasoningBand) float64 {
+	switch band {
+	case types.ReasoningBandHigh:
+		return 0.45
+	case types.ReasoningBandMedium:
+		return 0.25
+	case types.ReasoningBandLow:
+		return 0.1
+	default:
+		return 0
 	}
 }
 

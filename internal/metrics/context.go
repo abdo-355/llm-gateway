@@ -5,27 +5,27 @@ import "context"
 type ctxKey string
 
 const (
-	logicalModelKey  ctxKey = "logical_model"
-	routerProfileKey ctxKey = "router_profile"
+	tierKey     ctxKey = "tier"
+	strategyKey ctxKey = "strategy"
 )
 
-func SetLogicalModel(ctx context.Context, model string) context.Context {
-	return context.WithValue(ctx, logicalModelKey, model)
+func SetTier(ctx context.Context, tier string) context.Context {
+	return context.WithValue(ctx, tierKey, tier)
 }
 
-func GetLogicalModel(ctx context.Context) string {
-	if v, ok := ctx.Value(logicalModelKey).(string); ok {
+func GetTier(ctx context.Context) string {
+	if v, ok := ctx.Value(tierKey).(string); ok {
 		return v
 	}
 	return "unknown"
 }
 
-func SetRouterProfile(ctx context.Context, profile string) context.Context {
-	return context.WithValue(ctx, routerProfileKey, profile)
+func SetStrategy(ctx context.Context, strategy string) context.Context {
+	return context.WithValue(ctx, strategyKey, strategy)
 }
 
-func GetRouterProfile(ctx context.Context) string {
-	if v, ok := ctx.Value(routerProfileKey).(string); ok {
+func GetStrategy(ctx context.Context) string {
+	if v, ok := ctx.Value(strategyKey).(string); ok {
 		return v
 	}
 	return "default"

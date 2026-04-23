@@ -32,15 +32,15 @@ func Metrics() gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		logicalModel := metrics.GetLogicalModel(ctx)
-		routerProfile := metrics.GetRouterProfile(ctx)
+		tier := metrics.GetTier(ctx)
+		strategy := metrics.GetStrategy(ctx)
 
 		metrics.HTTPRequestsTotal.WithLabelValues(
-			method, path, statusStr, logicalModel, routerProfile,
+			method, path, statusStr, tier, strategy,
 		).Inc()
 
 		metrics.HTTPRequestDurationSeconds.WithLabelValues(
-			method, path, logicalModel, routerProfile,
+			method, path, tier, strategy,
 		).Observe(elapsed.Seconds())
 	}
 }

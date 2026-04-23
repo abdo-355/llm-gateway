@@ -18,14 +18,14 @@ import (
 )
 
 type mockResponsesRouter struct {
-	deriveRequirementsFn                 func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
-	generateCandidatesFn                 func() []types.RoutingCandidate
-	generateCandidatesFromLogicalModelFn func(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate
-	filterCandidatesFn                   func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
-	scoreCandidatesFn                    func(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
-	compilePlanFn                        func(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan
-	executeFn                            func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
-	executeStreamFn                      func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
+	deriveRequirementsFn        func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements
+	generateCandidatesFn        func() []types.RoutingCandidate
+	generateCandidatesForTierFn func(tier types.Tier) []types.RoutingCandidate
+	filterCandidatesFn          func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
+	scoreCandidatesFn           func(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
+	compilePlanFn               func(candidates []types.RoutingCandidate, hints *types.RouterHints, tierSLO *types.TierSLO) types.RoutingPlan
+	executeFn                   func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
+	executeStreamFn             func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
 }
 
 func (m *mockResponsesRouter) DeriveRequirements(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
@@ -42,9 +42,9 @@ func (m *mockResponsesRouter) GenerateCandidates() []types.RoutingCandidate {
 	return []types.RoutingCandidate{{Provider: types.ProviderConfig{ID: "groq"}, Model: "llama-3.1-8b-instant", Score: 1.0}}
 }
 
-func (m *mockResponsesRouter) GenerateCandidatesFromLogicalModel(logicalModel *types.LogicalModelConfig) []types.RoutingCandidate {
-	if m.generateCandidatesFromLogicalModelFn != nil {
-		return m.generateCandidatesFromLogicalModelFn(logicalModel)
+func (m *mockResponsesRouter) GenerateCandidatesForTier(tier types.Tier) []types.RoutingCandidate {
+	if m.generateCandidatesForTierFn != nil {
+		return m.generateCandidatesForTierFn(tier)
 	}
 	return []types.RoutingCandidate{{Provider: types.ProviderConfig{ID: "groq"}, Model: "llama-3.1-8b-instant", Score: 1.0}}
 }
@@ -63,9 +63,9 @@ func (m *mockResponsesRouter) ScoreCandidates(ctx context.Context, candidates []
 	return candidates
 }
 
-func (m *mockResponsesRouter) CompilePlan(candidates []types.RoutingCandidate, hints *types.RouterHints, logicalModelSLO *types.LogicalModelSLO) types.RoutingPlan {
+func (m *mockResponsesRouter) CompilePlan(candidates []types.RoutingCandidate, hints *types.RouterHints, tierSLO *types.TierSLO) types.RoutingPlan {
 	if m.compilePlanFn != nil {
-		return m.compilePlanFn(candidates, hints, logicalModelSLO)
+		return m.compilePlanFn(candidates, hints, tierSLO)
 	}
 	return types.RoutingPlan{Attempts: []types.RoutingAttempt{{ProviderID: "groq", Model: "llama-3.1-8b-instant"}}, MaxAttempts: 1}
 }
