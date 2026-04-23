@@ -26,7 +26,7 @@ This document contains PromQL queries for building a comprehensive LLM Gateway d
 - `total` - Total tokens
 
 ### Static Model Metadata
-- `gateway_model_info{provider,model,tier,cost_band,latency_band,context_band,reasoning_band,strict_json}`
+- `gateway_model_info{provider,model,tier,strict_json}`
 - value is always `1` for configured models
 
 ---
@@ -39,11 +39,11 @@ count by (tier) (gateway_model_info)
 ```
 **Description**: Number of configured provider models in each tier.
 
-### Configured Models by Metadata Bands
+### Configured Models by Tier and Strict JSON
 ```promql
-count by (tier, cost_band, latency_band, reasoning_band) (gateway_model_info)
+count by (tier, strict_json) (gateway_model_info)
 ```
-**Description**: Static model inventory breakdown by tier and capability bands.
+**Description**: Static model inventory breakdown by tier and strict JSON certification.
 
 ### HTTP Requests by Tier (rate)
 ```promql

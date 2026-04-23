@@ -54,7 +54,7 @@ var (
 	ModelInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "gateway_model_info",
 		Help: "Static metadata for configured provider models.",
-	}, []string{"provider", "model", "tier", "cost_band", "latency_band", "context_band", "reasoning_band", "strict_json"})
+	}, []string{"provider", "model", "tier", "strict_json"})
 )
 
 var (
@@ -146,10 +146,6 @@ func RegisterModelInfo(cfg types.AppConfig) {
 					provider.ID,
 					model,
 					string(attr.Tier),
-					string(attr.CostBand),
-					string(attr.LatencyBand),
-					string(attr.ContextBand),
-					string(attr.ReasoningBand),
 					strict,
 				).Set(1)
 			}

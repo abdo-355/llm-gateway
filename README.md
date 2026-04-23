@@ -40,7 +40,7 @@ The gateway examines each request to determine what it needs (streaming, JSON ou
 - Model capabilities (which providers support the requested model)
 - Provider health (success rates, latency)
 - Your preferences (preferred providers, deny lists)
-- Tier strategy scoring from model metadata
+- Provider preference and health-based ranking within each tier
 
 ### Automatic Failover
 If a provider fails (timeout, error, rate limit), the gateway automatically tries the next available provider. This happens transparently - your code sees a successful response or a final error.

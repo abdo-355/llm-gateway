@@ -296,19 +296,12 @@ func (r *Router) FilterCandidates(
 
 // Stage 4: Score Candidates
 func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
-	strategy := "default"
-	if hints != nil && hints.Strategy != nil && *hints.Strategy != "" {
-		strategy = *hints.Strategy
-	}
-
 	for i := range candidates {
 		candidate := &candidates[i]
 		baseScore := 1.0
 		if candidate.ScoreBreakdown == nil {
 			candidate.ScoreBreakdown = make(map[string]float64)
 		}
-		attributes := candidate.Provider.Models.Attributes[candidate.Model]
-		applyStrategyScore(candidate, strategy, attributes)
 
 		// Preference bonus
 		if hints != nil && hints.Providers != nil {
@@ -941,80 +934,6 @@ func supportsJSONSchema(caps types.ProviderCapabilities) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-func applyStrategyScore(candidate *types.RoutingCandidate, strategy string, attributes types.ModelAttributes) {
-	var score float64
-
-	switch strategy {
-	case "cheap_fast":
-		score += scoreCostBand(attributes.CostBand)
-		score += scoreLatencyBand(attributes.LatencyBand)
-	case "reliable_structured":
-		score += scoreReasoningBand(attributes.ReasoningBand)
-		score += scoreContextBand(attributes.ContextBand)
-	default:
-		score += scoreLatencyBand(attributes.LatencyBand) * 0.5
-		score += scoreReasoningBand(attributes.ReasoningBand) * 0.5
-		score += scoreContextBand(attributes.ContextBand) * 0.25
-	}
-
-	if score != 0 {
-		candidate.Score += score
-		candidate.ScoreBreakdown["strategy_bonus"] = score
-	}
-}
-
-func scoreCostBand(band types.CostBand) float64 {
-	switch band {
-	case types.CostBandFree:
-		return 0.5
-	case types.CostBandLow:
-		return 0.35
-	case types.CostBandMedium:
-		return 0.15
-	default:
-		return 0
-	}
-}
-
-func scoreLatencyBand(band types.LatencyBand) float64 {
-	switch band {
-	case types.LatencyBandFastest:
-		return 0.5
-	case types.LatencyBandFast:
-		return 0.35
-	case types.LatencyBandMedium:
-		return 0.15
-	default:
-		return 0
-	}
-}
-
-func scoreContextBand(band types.ContextBand) float64 {
-	switch band {
-	case types.ContextBandVeryLarge:
-		return 0.4
-	case types.ContextBandLarge:
-		return 0.3
-	case types.ContextBandMedium:
-		return 0.15
-	default:
-		return 0
-	}
-}
-
-func scoreReasoningBand(band types.ReasoningBand) float64 {
-	switch band {
-	case types.ReasoningBandHigh:
-		return 0.45
-	case types.ReasoningBandMedium:
-		return 0.25
-	case types.ReasoningBandLow:
-		return 0.1
-	default:
-		return 0
 	}
 }
 

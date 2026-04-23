@@ -381,48 +381,8 @@ func (t Tier) IsValid() bool {
 	return false
 }
 
-type CostBand string
-
-const (
-	CostBandFree   CostBand = "free"
-	CostBandLow    CostBand = "low"
-	CostBandMedium CostBand = "medium"
-	CostBandHigh   CostBand = "high"
-)
-
-type LatencyBand string
-
-const (
-	LatencyBandFastest LatencyBand = "fastest"
-	LatencyBandFast    LatencyBand = "fast"
-	LatencyBandMedium  LatencyBand = "medium"
-	LatencyBandSlow    LatencyBand = "slow"
-)
-
-type ContextBand string
-
-const (
-	ContextBandSmall     ContextBand = "small"
-	ContextBandMedium    ContextBand = "medium"
-	ContextBandLarge     ContextBand = "large"
-	ContextBandVeryLarge ContextBand = "very-large"
-)
-
-type ReasoningBand string
-
-const (
-	ReasoningBandNone   ReasoningBand = "none"
-	ReasoningBandLow    ReasoningBand = "low"
-	ReasoningBandMedium ReasoningBand = "medium"
-	ReasoningBandHigh   ReasoningBand = "high"
-)
-
 type ModelAttributes struct {
-	Tier          Tier          `json:"tier"`
-	CostBand      CostBand      `json:"costBand"`
-	LatencyBand   LatencyBand   `json:"latencyBand"`
-	ContextBand   ContextBand   `json:"contextBand"`
-	ReasoningBand ReasoningBand `json:"reasoningBand"`
+	Tier Tier `json:"tier"`
 }
 
 type TierConfig struct {
