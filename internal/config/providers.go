@@ -452,6 +452,7 @@ func getNIMConfig() types.ProviderConfig {
 	rpm15 := 15
 	rpm30 := 30
 	rpm40 := 40
+	rpm60 := 60
 	rpd500 := 500
 	rpd14400 := 14400
 	tpm250000 := 250000
@@ -467,32 +468,52 @@ func getNIMConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"nvidia/llama-3.1-nemotron-70b-instruct",
-				"nvidia/llama-3.2-90b-instruct",
-				"nvidia/llama-3.2-11b-vision-instruct",
-				"nvidia/nemotron-4-340b-instruct",
+				"moonshotai/kimi-k2-instruct",
+				"moonshotai/kimi-k2-instruct-0905",
+				"moonshotai/kimi-k2.5",
+				"moonshotai/kimi-k2-thinking",
+				"qwen/qwen3-next-80b-a3b-thinking",
+				"qwen/qwen3-next-80b-a3b-instruct",
+				"qwen/qwen3.5-397b-a17b",
+				"qwen/qwen3.5-122b-a10b",
+				"mistralai/devstral-2-123b-instruct-2512",
+				"mistralai/mistral-large-3-675b-instruct-2512",
+				"mistralai/mistral-medium-3-instruct",
+				"deepseek-ai/deepseek-v3.2",
+				"deepseek-ai/deepseek-v3.1-terminus",
+				"minimaxai/minimax-m2.5",
+				"minimaxai/minimax-m2.7",
+				"stepfun-ai/step-3.5-flash",
+				"z-ai/glm-5.1",
+				"z-ai/glm5",
+				"z-ai/glm4.7",
+				"openai/gpt-oss-120b",
+				"google/gemma-4-31b-it",
+				"google/gemma-4-26b-a4b-it",
 			},
 			Limits: map[string]types.ModelLimits{
-				"nvidia/llama-3.1-nemotron-70b-instruct": {
-					Rpm: &rpm30,
-					Rpd: &rpd14400,
-					Tpm: &tpm500000,
-				},
-				"nvidia/llama-3.2-90b-instruct": {
-					Rpm: &rpm15,
-					Rpd: &rpd500,
-					Tpm: &tpm250000,
-				},
-				"nvidia/llama-3.2-11b-vision-instruct": {
-					Rpm: &rpm30,
-					Rpd: &rpd14400,
-					Tpm: &tpm250000,
-				},
-				"nvidia/nemotron-4-340b-instruct": {
-					Rpm: &rpm15,
-					Rpd: &rpd500,
-					Tpm: &tpm250000,
-				},
+				"moonshotai/kimi-k2-instruct":                  {Rpm: &rpm60, Rpd: &rpd14400, Tpm: &tpm500000},
+				"moonshotai/kimi-k2-instruct-0905":             {Rpm: &rpm60, Rpd: &rpd14400, Tpm: &tpm500000},
+				"moonshotai/kimi-k2.5":                         {Rpm: &rpm60, Rpd: &rpd14400, Tpm: &tpm500000},
+				"moonshotai/kimi-k2-thinking":                  {Rpm: &rpm60, Rpd: &rpd14400, Tpm: &tpm500000},
+				"qwen/qwen3-next-80b-a3b-thinking":             {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"qwen/qwen3-next-80b-a3b-instruct":             {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"qwen/qwen3.5-397b-a17b":                       {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"qwen/qwen3.5-122b-a10b":                       {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"mistralai/devstral-2-123b-instruct-2512":      {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"mistralai/mistral-large-3-675b-instruct-2512": {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"mistralai/mistral-medium-3-instruct":          {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"deepseek-ai/deepseek-v3.2":                    {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"deepseek-ai/deepseek-v3.1-terminus":           {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"minimaxai/minimax-m2.5":                       {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"minimaxai/minimax-m2.7":                       {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"stepfun-ai/step-3.5-flash":                    {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"z-ai/glm-5.1":                                 {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"z-ai/glm5":                                    {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"z-ai/glm4.7":                                  {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"openai/gpt-oss-120b":                          {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm500000},
+				"google/gemma-4-31b-it":                        {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"google/gemma-4-26b-a4b-it":                    {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
