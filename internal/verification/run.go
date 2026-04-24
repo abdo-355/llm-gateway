@@ -3,17 +3,18 @@ package verification
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
 type Runner struct {
-	config  Config
-	client  probeClient
-	limiter *rpmLimiter
-	ctx     context.Context
+	config Config
+	client probeClient
+	ctx    context.Context
 }
 
 func Run(ctx context.Context, cfg Config) (*Report, error) {
@@ -22,10 +23,13 @@ func Run(ctx context.Context, cfg Config) (*Report, error) {
 
 func runWithClient(ctx context.Context, cfg Config, probeClient probeClient) (*Report, error) {
 	if cfg.Timeout <= 0 {
-		cfg.Timeout = 30 * time.Second
+		cfg.Timeout = 5 * time.Minute
 	}
 	if cfg.ProbeMaxTokens <= 0 {
 		cfg.ProbeMaxTokens = DefaultProbeMaxTokens
+	}
+	if cfg.Retries <= 0 {
+		cfg.Retries = 3
 	}
 
 	combos := EnumerateCombos(cfg)
@@ -33,70 +37,78 @@ func runWithClient(ctx context.Context, cfg Config, probeClient probeClient) (*R
 		return nil, fmt.Errorf("no provider/model combinations matched the requested filters")
 	}
 
-	runner := &Runner{
-		config:  cfg,
-		client:  probeClient,
-		limiter: newRPMLimiter(),
-		ctx:     ctx,
+	report := &Report{StartedAt: time.Now().UTC()}
+
+	byProvider := groupCombosByProvider(combos)
+	probes := BuildProbes(cfg)
+
+	var wg sync.WaitGroup
+	results := make(chan ProbeResult, 0)
+
+	for providerID, providerCombos := range byProvider {
+		wg.Add(1)
+		go runProviderGoroutine(providerID, providerCombos, probes, &Runner{
+			config: cfg,
+			client: probeClient,
+			ctx:    ctx,
+		}, results, &wg)
 	}
 
-	probes := BuildProbes(cfg)
-	report := &Report{StartedAt: time.Now().UTC()}
-	rateLimited := make(map[string]string)
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
-	for _, combo := range combos {
-		for _, probe := range probes {
-			if reason, ok := rateLimited[combo.Key()]; ok {
-				report.Results = append(report.Results, rateLimitedSkip(combo, probe, reason))
-				continue
-			}
-
-			result := runner.runProbe(combo, probe)
-			report.Results = append(report.Results, result)
-			if isRateLimitedResult(result) {
-				rateLimited[combo.Key()] = result.Failure
-			}
-			if runner.config.FailFast && result.Status == "FAIL" {
-				report.EndedAt = time.Now().UTC()
-				return report, fmt.Errorf("probe failed for %s %s %s: %s", combo.Provider.ID, combo.Model, probe.Name, result.Failure)
-			}
-		}
+	for result := range results {
+		report.Results = append(report.Results, result)
 	}
 
 	report.EndedAt = time.Now().UTC()
-	sort.Slice(report.Results, func(i, j int) bool {
-		if report.Results[i].Provider != report.Results[j].Provider {
-			return report.Results[i].Provider < report.Results[j].Provider
-		}
-		if report.Results[i].Model != report.Results[j].Model {
-			return report.Results[i].Model < report.Results[j].Model
-		}
-		return report.Results[i].Probe < report.Results[j].Probe
-	})
+	sortResults(report.Results)
 
 	return report, nil
 }
 
-func (r *Runner) runProbe(combo Combo, probe Probe) ProbeResult {
-	if probe.Applicable != nil && !probe.Applicable(combo) {
-		return ProbeResult{
-			Provider: combo.Provider.ID,
-			Model:    combo.Model,
-			Endpoint: combo.Endpoint,
-			Probe:    probe.Name,
-			Fields:   probe.Fields,
-			Status:   "SKIP",
-			Failure:  "not applicable for configured provider capabilities",
-		}
+func groupCombosByProvider(combos []Combo) map[string][]Combo {
+	byProvider := make(map[string][]Combo)
+	for _, combo := range combos {
+		byProvider[combo.Provider.ID] = append(byProvider[combo.Provider.ID], combo)
 	}
-	return probe.Run(r, combo)
+	return byProvider
 }
 
-func rateLimitedSkip(combo Combo, probe Probe, failure string) ProbeResult {
-	if failure == "" {
-		failure = "rate_limited: earlier probe returned 429"
-	}
+func runProviderGoroutine(providerID string, combos []Combo, probes []Probe, runner *Runner, results chan<- ProbeResult, wg *sync.WaitGroup) {
+	defer wg.Done()
 
+	limiter := newProviderLimiter()
+	rateLimited := make(map[string]string)
+
+	for _, combo := range combos {
+		for _, probe := range probes {
+			if msg, ok := rateLimited[combo.Model]; ok {
+				result := rateLimitedSkip(combo, probe, msg)
+				results <- result
+				continue
+			}
+
+			result := runProbeWithRetry(runner, limiter, combo, probe)
+			results <- result
+
+			if result.HTTPStatus == 429 {
+				rateLimited[combo.Model] = result.Failure
+			}
+
+			if runner.config.FailFast && result.Status == "FAIL" {
+				return
+			}
+		}
+	}
+}
+
+func rateLimitedSkip(combo Combo, probe Probe, failureMsg string) ProbeResult {
+	if failureMsg == "" {
+		failureMsg = "rate_limited: earlier probe returned 429"
+	}
 	return ProbeResult{
 		Provider:   combo.Provider.ID,
 		Model:      combo.Model,
@@ -105,8 +117,85 @@ func rateLimitedSkip(combo Combo, probe Probe, failure string) ProbeResult {
 		Fields:     probe.Fields,
 		Status:     "SKIP",
 		HTTPStatus: 429,
-		Failure:    failure,
+		Failure:    failureMsg,
 	}
+}
+
+func runProbeWithRetry(runner *Runner, limiter *providerLimiter, combo Combo, probe Probe) ProbeResult {
+	var lastResult ProbeResult
+	retries := runner.config.Retries
+
+	for attempt := 0; attempt <= retries; attempt++ {
+		result := runSingleProbe(runner, combo, probe)
+		result.Retries = attempt
+
+		if result.Status == "PASS" {
+			return result
+		}
+
+		if result.HTTPStatus == 429 || result.HTTPStatus == 0 {
+			lastResult = result
+			break
+		}
+
+		lastResult = result
+
+		if attempt < retries && isRetryable(result) {
+			backoff := calculateBackoff(attempt)
+			runner.logProgress("retry %d/%d for %s %s %s after %s (failed: %s)\n",
+				attempt+1, retries, combo.Provider.ID, combo.Model, probe.Name,
+				backoff.Round(time.Second), result.Failure)
+			time.Sleep(backoff)
+			continue
+		}
+		break
+	}
+
+	return lastResult
+}
+
+func runSingleProbe(runner *Runner, combo Combo, probe Probe) ProbeResult {
+	if probe.Applicable != nil && !probe.Applicable(combo) {
+		return ProbeResult{
+			Provider:   combo.Provider.ID,
+			Model:      combo.Model,
+			Endpoint:   combo.Endpoint,
+			Probe:      probe.Name,
+			Fields:     probe.Fields,
+			Status:     "SKIP",
+			Latency:    0,
+			HTTPStatus: 0,
+			Failure:    "not applicable for configured provider capabilities",
+		}
+	}
+
+	result := probe.Run(runner, combo)
+	return result
+}
+
+func isRetryable(result ProbeResult) bool {
+	if result.HTTPStatus == 0 {
+		return true
+	}
+	switch result.HTTPStatus {
+	case 408, 429, 500, 502, 503, 504:
+		return true
+	}
+	return false
+}
+
+func calculateBackoff(attempt int) time.Duration {
+	base := 1 * time.Second
+	maxBackoff := 30 * time.Second
+
+	backoff := time.Duration(math.Min(
+		float64(base)*math.Pow(2, float64(attempt)),
+		float64(maxBackoff),
+	))
+
+	jitter := time.Duration(float64(backoff) * 0.1 * (float64(attempt)*0.5 + 0.5))
+
+	return backoff + jitter
 }
 
 func (r *Runner) runJSONProbe(combo Combo, name string, fields []string, req types.ChatCompletionRequest, validate func(*types.ChatCompletionResponse) error) ProbeResult {
@@ -119,9 +208,6 @@ func (r *Runner) runJSONProbe(combo Combo, name string, fields []string, req typ
 	defer cancel()
 
 	call := r.client.call(ctx, combo, req)
-	if call.Attempted {
-		r.limiter.Record(combo)
-	}
 	result := ProbeResult{
 		Provider:   combo.Provider.ID,
 		Model:      combo.Model,
@@ -162,9 +248,6 @@ func (r *Runner) runStreamProbe(combo Combo, name string, fields []string, req t
 	defer cancel()
 
 	call := r.client.stream(ctx, combo, req)
-	if call.Attempted {
-		r.limiter.Record(combo)
-	}
 	result := ProbeResult{
 		Provider:   combo.Provider.ID,
 		Model:      combo.Model,
@@ -204,25 +287,28 @@ func (r *Runner) runStreamProbe(combo Combo, name string, fields []string, req t
 }
 
 func (r *Runner) waitForSlot(combo Combo, probe string) *ProbeResult {
-	if wait := r.limiter.WaitDuration(combo); wait > 0 {
-		r.logProgress("waiting %s to respect RPM for %s\n", wait.Round(time.Second), combo.Key())
-		select {
-		case <-time.After(wait):
-		case <-r.ctx.Done():
-			return &ProbeResult{
-				Provider: combo.Provider.ID,
-				Model:    combo.Model,
-				Endpoint: combo.Endpoint,
-				Probe:    probe,
-				Status:   "FAIL",
-				Failure:  "request cancelled",
+	limiter := getProviderLimiter(combo.Provider.ID)
+	if limiter != nil {
+		if wait := limiter.WaitDuration(combo); wait > 0 {
+			r.logProgress("waiting %s to respect RPM for %s\n", wait.Round(time.Second), combo.Provider.ID)
+			select {
+			case <-time.After(wait):
+			case <-r.ctx.Done():
+				return &ProbeResult{
+					Provider: combo.Provider.ID,
+					Model:    combo.Model,
+					Endpoint: combo.Endpoint,
+					Probe:    probe,
+					Status:   "FAIL",
+					Failure:  "request cancelled",
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func (r *Runner) logProgress(format string, args ...any) {
+func (r *Runner) logProgress(format string, args ...interface{}) {
 	if r.config.Progress == nil {
 		return
 	}
@@ -238,27 +324,68 @@ func hasUsageChunk(chunks []types.SSEChunk) bool {
 	return false
 }
 
-func isRateLimitedResult(result ProbeResult) bool {
-	return result.Status == "SKIP" && result.HTTPStatus == 429
+func sortResults(results []ProbeResult) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Provider != results[j].Provider {
+			return results[i].Provider < results[j].Provider
+		}
+		if results[i].Model != results[j].Model {
+			return results[i].Model < results[j].Model
+		}
+		return results[i].Probe < results[j].Probe
+	})
 }
 
-type rpmLimiter struct {
-	history map[string][]time.Time
+type providerLimiter struct {
+	mu       sync.Mutex
+	rpmLimit int
+	history  map[string][]time.Time
 }
 
-func newRPMLimiter() *rpmLimiter {
-	return &rpmLimiter{history: make(map[string][]time.Time)}
+var (
+	globalLimiters     = make(map[string]*providerLimiter)
+	globalLimitersLock sync.Mutex
+)
+
+func newProviderLimiter() *providerLimiter {
+	return &providerLimiter{
+		history: make(map[string][]time.Time),
+	}
 }
 
-func (l *rpmLimiter) WaitDuration(combo Combo) time.Duration {
-	limit := comboRPMLimit(combo)
-	if limit <= 0 {
+func getProviderLimiter(providerID string) *providerLimiter {
+	globalLimitersLock.Lock()
+	defer globalLimitersLock.Unlock()
+
+	if limiter, exists := globalLimiters[providerID]; exists {
+		return limiter
+	}
+
+	limiter := &providerLimiter{
+		history: make(map[string][]time.Time),
+	}
+	globalLimiters[providerID] = limiter
+	return limiter
+}
+
+func (l *providerLimiter) WaitDuration(combo Combo) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.rpmLimit == 0 {
+		l.rpmLimit = comboRPMLimit(combo)
+		if l.rpmLimit == 0 && combo.Provider.Limits.Rpm != nil {
+			l.rpmLimit = *combo.Provider.Limits.Rpm
+		}
+	}
+
+	if l.rpmLimit <= 0 {
 		return 0
 	}
 
 	now := time.Now()
-	history := l.trim(combo.Key(), now)
-	if len(history) < limit {
+	history := l.trimModel(combo.Model, now)
+	if len(history) < l.rpmLimit {
 		return 0
 	}
 
@@ -269,21 +396,23 @@ func (l *rpmLimiter) WaitDuration(combo Combo) time.Duration {
 	return 0
 }
 
-func (l *rpmLimiter) Record(combo Combo) {
-	key := combo.Key()
+func (l *providerLimiter) Record(combo Combo) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	now := time.Now()
-	l.history[key] = append(l.trim(key, now), now)
+	l.history[combo.Model] = append(l.trimModel(combo.Model, now), now)
 }
 
-func (l *rpmLimiter) trim(key string, now time.Time) []time.Time {
-	history := l.history[key]
+func (l *providerLimiter) trimModel(model string, now time.Time) []time.Time {
+	history := l.history[model]
 	trimmed := history[:0]
 	for _, ts := range history {
 		if now.Sub(ts) < time.Minute {
 			trimmed = append(trimmed, ts)
 		}
 	}
-	l.history[key] = trimmed
+	l.history[model] = trimmed
 	return trimmed
 }
 

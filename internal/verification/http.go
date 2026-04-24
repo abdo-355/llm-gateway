@@ -23,9 +23,13 @@ type probeClient interface {
 }
 
 func newClient(cfg Config) *client {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
 	return &client{
 		providerService: services.NewProviderService(),
-		requestTimeout:  cfg.Timeout,
+		requestTimeout:  timeout,
 	}
 }
 

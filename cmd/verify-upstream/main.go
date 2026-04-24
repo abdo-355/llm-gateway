@@ -20,7 +20,8 @@ func main() {
 
 	provider := flag.String("provider", "", "Only test a single provider ID")
 	model := flag.String("model", "", "Only test a single model ID")
-	timeout := flag.Duration("timeout", 30*time.Second, "Per-request timeout")
+	timeout := flag.Duration("timeout", 5*time.Minute, "Per-request timeout (default 5m)")
+	retries := flag.Int("retries", 3, "Number of retries for failed probes")
 	failFast := flag.Bool("fail-fast", false, "Stop on the first failure")
 	probeMaxTokens := flag.Int("probe-max-tokens", verification.DefaultProbeMaxTokens, "Override per-probe token limits for diagnostics")
 	flag.Parse()
@@ -34,6 +35,7 @@ func main() {
 		FailFast:       *failFast,
 		Progress:       os.Stderr,
 		ProbeMaxTokens: *probeMaxTokens,
+		Retries:        *retries,
 	})
 	if report != nil {
 		verification.PrintReport(os.Stdout, report)

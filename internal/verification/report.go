@@ -14,7 +14,9 @@ func PrintReport(w io.Writer, report *Report) {
 	}
 
 	passed, failed, skipped := 0, 0, 0
+	totalRetries := 0
 	for _, result := range report.Results {
+		totalRetries += result.Retries
 		switch result.Status {
 		case "PASS":
 			passed++
@@ -32,7 +34,8 @@ func PrintReport(w io.Writer, report *Report) {
 	fmt.Fprintf(w, "Total Probes: %d\n", len(report.Results))
 	fmt.Fprintf(w, "Passed: %d\n", passed)
 	fmt.Fprintf(w, "Failed: %d\n", failed)
-	fmt.Fprintf(w, "Skipped: %d\n\n", skipped)
+	fmt.Fprintf(w, "Skipped: %d\n", skipped)
+	fmt.Fprintf(w, "Total Retries: %d\n\n", totalRetries)
 
 	printProviderSummary(w, report)
 	printFeatureSummary(w, report)
@@ -79,11 +82,11 @@ func printFailures(w io.Writer, report *Report) {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPROBE\tHTTP\tLATENCY\tTOKENS\tFAILURE")
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPROBE\tHTTP\tLATENCY\tTOKENS\tFAILURE\tretries")
 	for _, result := range failures {
 		_, _ = fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\tretries=%d\n",
 			result.Provider,
 			result.Model,
 			result.Endpoint,
@@ -92,6 +95,7 @@ func printFailures(w io.Writer, report *Report) {
 			result.Latency.Round(time.Millisecond),
 			emptyDash(result.TokensUsed),
 			result.Failure,
+			result.Retries,
 		)
 	}
 	_ = tw.Flush()

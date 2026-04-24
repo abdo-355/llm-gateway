@@ -7,7 +7,11 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
-const DefaultProbeMaxTokens = 1024
+const (
+	DefaultProbeMaxTokens = 1024
+	DefaultRetries        = 3
+	DefaultRequestTimeout = 5 * time.Minute
+)
 
 type Config struct {
 	Provider       string
@@ -16,6 +20,8 @@ type Config struct {
 	FailFast       bool
 	Progress       io.Writer
 	ProbeMaxTokens int
+	Retries        int
+	RequestTimeout time.Duration
 }
 
 type Combo struct {
@@ -44,6 +50,7 @@ type ProbeResult struct {
 	Probe      string
 	Fields     []string
 	Status     string
+	Retries    int
 	Latency    time.Duration
 	HTTPStatus int
 	TokensUsed string
