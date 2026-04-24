@@ -3,6 +3,7 @@ package metrics
 import (
 	"sync"
 
+	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -135,9 +136,16 @@ func RegisterModelInfo(cfg types.AppConfig) {
 			}
 		}
 
+		modelToTier := map[string]types.Tier{}
+		for tier, tierConfig := range config.GetAllTierConfigs() {
+			for _, entry := range tierConfig.Entries {
+				modelToTier[entry.Provider+"/"+entry.Model] = tier
+			}
+		}
+
 		for _, provider := range cfg.Providers {
 			for _, model := range provider.Models.List {
-				attr := provider.Models.Attributes[model]
+				tier := modelToTier[provider.ID+"/"+model]
 				strict := "false"
 				if strictJSON[provider.ID+"/"+model] || provider.Capabilities.StructuredOutputs == "json_schema_strict" {
 					strict = "true"
@@ -145,7 +153,7 @@ func RegisterModelInfo(cfg types.AppConfig) {
 				ModelInfo.WithLabelValues(
 					provider.ID,
 					model,
-					string(attr.Tier),
+					string(tier),
 					strict,
 				).Set(1)
 			}

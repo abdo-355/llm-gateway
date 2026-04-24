@@ -144,30 +144,46 @@ func (r *Router) GenerateCandidates() []types.RoutingCandidate {
 func (r *Router) GenerateCandidatesForTier(tier types.Tier) []types.RoutingCandidate {
 	var candidates []types.RoutingCandidate
 
-	for _, provider := range r.config.Providers {
-		for _, model := range provider.Models.List {
-			attr, ok := provider.Models.Attributes[model]
-			if !ok {
-				logger.Warn().
-					Str("type", "router").
-					Str("event", "tier.attributes_missing").
-					Str("provider", provider.ID).
-					Str("model", model).
-					Msg("Model attributes missing for configured model")
-				continue
-			}
-			if attr.Tier != tier {
-				continue
-			}
+	tierConfig := config.GetTierConfig(tier)
+	if tierConfig == nil {
+		return candidates
+	}
 
-			isCertified := r.isCertifiedForStrictSchema(provider.ID, model)
-			candidates = append(candidates, types.RoutingCandidate{
-				Provider:                   provider,
-				Model:                      model,
-				IsCertifiedForStrictSchema: isCertified,
-				ScoreBreakdown:             make(map[string]float64),
-			})
+	providerMap := make(map[string]types.ProviderConfig)
+	for _, p := range r.config.Providers {
+		providerMap[p.ID] = p
+	}
+
+	for _, entry := range tierConfig.Entries {
+		provider, ok := providerMap[entry.Provider]
+		if !ok {
+			logger.Warn().
+				Str("type", "router").
+				Str("event", "tier.provider_missing").
+				Str("provider", entry.Provider).
+				Msg("Provider not found for tier entry")
+			continue
 		}
+
+		found := slices.Contains(provider.Models.List, entry.Model)
+		if !found {
+			logger.Warn().
+				Str("type", "router").
+				Str("event", "tier.model_missing").
+				Str("provider", entry.Provider).
+				Str("model", entry.Model).
+				Msg("Model not in provider allowlist")
+			continue
+		}
+
+		isCertified := r.isCertifiedForStrictSchema(provider.ID, entry.Model)
+		candidates = append(candidates, types.RoutingCandidate{
+			Provider:                   provider,
+			Model:                      entry.Model,
+			IsCertifiedForStrictSchema: isCertified,
+			Score:                      entry.Weight,
+			ScoreBreakdown:             make(map[string]float64),
+		})
 	}
 
 	return candidates

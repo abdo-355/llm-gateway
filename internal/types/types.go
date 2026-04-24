@@ -366,28 +366,29 @@ type ProviderAuth struct {
 type Tier string
 
 const (
-	TierLite      Tier = "lite"
-	TierDefault   Tier = "default"
-	TierStrong    Tier = "strong"
-	TierFrontier  Tier = "frontier"
-	TierDeepThink Tier = "deep-think"
+	TierDefault Tier = "default"
+	TierPro     Tier = "pro"
+	TierMax     Tier = "max"
 )
 
 func (t Tier) IsValid() bool {
 	switch t {
-	case TierLite, TierDefault, TierStrong, TierFrontier, TierDeepThink:
+	case TierDefault, TierPro, TierMax:
 		return true
 	}
 	return false
 }
 
-type ModelAttributes struct {
-	Tier Tier `json:"tier"`
+type TierEntry struct {
+	Provider string  `json:"provider"`
+	Model    string  `json:"model"`
+	Weight   float64 `json:"weight"`
 }
 
 type TierConfig struct {
-	Tier Tier     `json:"tier"`
-	SLO  *TierSLO `json:"slo,omitempty"`
+	Tier    Tier        `json:"tier"`
+	Entries []TierEntry `json:"entries"`
+	SLO     *TierSLO    `json:"slo,omitempty"`
 }
 
 type TierSLO struct {
@@ -400,7 +401,6 @@ type ProviderModels struct {
 	List         []string                     `json:"list"`
 	Limits       map[string]ModelLimits       `json:"limits,omitempty"`
 	Capabilities map[string]ModelCapabilities `json:"capabilities,omitempty"`
-	Attributes   map[string]ModelAttributes   `json:"attributes,omitempty"`
 }
 
 type ProviderCapabilities struct {

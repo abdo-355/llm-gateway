@@ -238,12 +238,12 @@ func TestCompletions_TierResolution(t *testing.T) {
 	router := &mockRouter{
 		generateCandidatesForTierFn: func(tier types.Tier) []types.RoutingCandidate {
 			tierCalled = true
-			assert.Equal(t, types.TierLite, tier)
+			assert.Equal(t, types.TierDefault, tier)
 			return []types.RoutingCandidate{{Provider: types.ProviderConfig{ID: "groq"}, Model: "llama-3.1-8b-instant", Score: 1.0}}
 		},
 	}
 
-	body := `{"model":"lite","messages":[{"role":"user","content":"Hi"}]}`
+	body := `{"model":"default","messages":[{"role":"user","content":"Hi"}]}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -251,7 +251,7 @@ func TestCompletions_TierResolution(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, tierCalled, "should route through GenerateCandidatesForTier")
-	assert.Equal(t, "lite", w.Header().Get("X-Gateway-Tier"))
+	assert.Equal(t, "default", w.Header().Get("X-Gateway-Tier"))
 }
 
 func TestCompletions_FiltersRequestedNativeModel(t *testing.T) {
@@ -321,13 +321,13 @@ func TestCompletions_PropagatesRouteContextToRequest(t *testing.T) {
 	handler := NewCompletionsHandler(&mockRouter{})
 	r.POST("/v1/chat/completions", handler.Handle)
 
-	body := `{"model":"lite","messages":[{"role":"user","content":"Hi"}],"router":{"strategy":"balanced"}}`
+	body := `{"model":"default","messages":[{"role":"user","content":"Hi"}],"router":{"strategy":"balanced"}}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "lite", tier)
+	assert.Equal(t, "default", tier)
 	assert.Equal(t, "balanced", strategy)
 }

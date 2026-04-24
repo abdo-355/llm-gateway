@@ -9,6 +9,7 @@ func GetProviders() []types.ProviderConfig {
 		getMistralConfig(),
 		getVertexConfig(),
 		getGeminiConfig(),
+		getNIMConfig(),
 	}
 }
 
@@ -123,19 +124,6 @@ func getGroqConfig() types.ProviderConfig {
 				"groq/compound":      {Tools: boolPtr(false)},
 				"groq/compound-mini": {Tools: boolPtr(false)},
 			},
-			Attributes: map[string]types.ModelAttributes{
-				"allam-2-7b":                                attrs(types.TierLite),
-				"groq/compound":                             attrs(types.TierStrong),
-				"groq/compound-mini":                        attrs(types.TierDefault),
-				"llama-3.1-8b-instant":                      attrs(types.TierLite),
-				"llama-3.3-70b-versatile":                   attrs(types.TierStrong),
-				"meta-llama/llama-4-scout-17b-16e-instruct": attrs(types.TierStrong),
-				"moonshotai/kimi-k2-instruct":               attrs(types.TierDeepThink),
-				"moonshotai/kimi-k2-instruct-0905":          attrs(types.TierDeepThink),
-				"openai/gpt-oss-120b":                       attrs(types.TierFrontier),
-				"openai/gpt-oss-20b":                        attrs(types.TierStrong),
-				"qwen/qwen3-32b":                            attrs(types.TierDefault),
-			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -195,10 +183,6 @@ func getCerebrasConfig() types.ProviderConfig {
 					Tph: &tph1000000,
 					Tpd: &tpd1000000,
 				},
-			},
-			Attributes: map[string]types.ModelAttributes{
-				"llama3.1-8b":                    attrs(types.TierLite),
-				"qwen-3-235b-a22b-instruct-2507": attrs(types.TierDeepThink),
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -274,22 +258,6 @@ func getMistralConfig() types.ProviderConfig {
 				"open-mistral-nemo":     {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 				"pixtral-large-2411":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 			},
-			Attributes: map[string]types.ModelAttributes{
-				"magistral-medium-2509": attrs(types.TierDeepThink),
-				"magistral-small-2509":  attrs(types.TierFrontier),
-				"ministral-14b-2512":    attrs(types.TierStrong),
-				"ministral-3b-2512":     attrs(types.TierLite),
-				"ministral-8b-2512":     attrs(types.TierDefault),
-				"mistral-large-2411":    attrs(types.TierFrontier),
-				"mistral-large-2512":    attrs(types.TierFrontier),
-				"mistral-medium-2505":   attrs(types.TierStrong),
-				"mistral-medium-2508":   attrs(types.TierStrong),
-				"mistral-saba-2502":     attrs(types.TierDefault),
-				"mistral-small-2506":    attrs(types.TierDefault),
-				"mistral-small-2603":    attrs(types.TierDefault),
-				"open-mistral-nemo":     attrs(types.TierDefault),
-				"pixtral-large-2411":    attrs(types.TierFrontier),
-			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -334,10 +302,6 @@ func getVertexConfig() types.ProviderConfig {
 				"google/gemini-3-flash-preview": {
 					Rpm: &rpm60,
 				},
-			},
-			Attributes: map[string]types.ModelAttributes{
-				"google/gemini-3.1-pro-preview": attrs(types.TierFrontier),
-				"google/gemini-3-flash-preview": attrs(types.TierStrong),
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -443,18 +407,6 @@ func getGeminiConfig() types.ProviderConfig {
 					Tpm: &tpm250000,
 				},
 			},
-			Attributes: map[string]types.ModelAttributes{
-				"gemma-3-1b-it":                 attrs(types.TierLite),
-				"gemma-3-4b-it":                 attrs(types.TierLite),
-				"gemma-3-12b-it":                attrs(types.TierDefault),
-				"gemma-3-27b-it":                attrs(types.TierStrong),
-				"gemma-4-26b-a4b-it":            attrs(types.TierStrong),
-				"gemma-4-31b-it":                attrs(types.TierStrong),
-				"gemini-2.5-flash":              attrs(types.TierStrong),
-				"gemini-2.5-flash-lite":         attrs(types.TierDefault),
-				"gemini-3-flash-preview":        attrs(types.TierStrong),
-				"gemini-3.1-flash-lite-preview": attrs(types.TierDefault),
-			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -496,9 +448,69 @@ func LoadConfig() types.AppConfig {
 	}
 }
 
-func attrs(tier types.Tier) types.ModelAttributes {
-	return types.ModelAttributes{
-		Tier: tier,
+func getNIMConfig() types.ProviderConfig {
+	rpm15 := 15
+	rpm30 := 30
+	rpd500 := 500
+	rpd14400 := 14400
+	tpm250000 := 250000
+	tpm500000 := 500000
+
+	return types.ProviderConfig{
+		ID:      "nim",
+		BaseURL: "https://integrate.api.nvidia.com/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "NIM_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"nvidia/llama-3.1-nemotron-70b-instruct",
+				"nvidia/llama-3.2-90b-instruct",
+				"nvidia/llama-3.2-11b-vision-instruct",
+				"nvidia/nemotron-4-340b-instruct",
+			},
+			Limits: map[string]types.ModelLimits{
+				"nvidia/llama-3.1-nemotron-70b-instruct": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm500000,
+				},
+				"nvidia/llama-3.2-90b-instruct": {
+					Rpm: &rpm15,
+					Rpd: &rpd500,
+					Tpm: &tpm250000,
+				},
+				"nvidia/llama-3.2-11b-vision-instruct": {
+					Rpm: &rpm30,
+					Rpd: &rpd14400,
+					Tpm: &tpm250000,
+				},
+				"nvidia/nemotron-4-340b-instruct": {
+					Rpm: &rpm15,
+					Rpd: &rpd500,
+					Tpm: &tpm250000,
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "model_dependent",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
 	}
 }
 
