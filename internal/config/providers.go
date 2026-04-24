@@ -451,6 +451,7 @@ func LoadConfig() types.AppConfig {
 func getNIMConfig() types.ProviderConfig {
 	rpm15 := 15
 	rpm30 := 30
+	rpm40 := 40
 	rpd500 := 500
 	rpd14400 := 14400
 	tpm250000 := 250000
@@ -509,7 +510,9 @@ func getNIMConfig() types.ProviderConfig {
 			MultipleChoices:     false,
 			ToolSchema:          "json_schema",
 		},
-		Limits:       types.ProviderLimits{},
+		Limits: types.ProviderLimits{
+			Rpm: &rpm40,
+		},
 		ProviderType: "openai",
 	}
 }
