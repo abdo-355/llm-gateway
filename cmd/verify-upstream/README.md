@@ -51,6 +51,9 @@ Loads `.env` file automatically. Requires provider API keys:
 - `CEREBRAS_API_KEY` - Cerebras provider
 - `MISTRAL_API_KEY` - Mistral provider
 - `GEMINI_API_KEY` - Google Gemini API
+- `NIM_API_KEY` - NVIDIA NIM provider
+- `OLLAMA_API_KEY` - Ollama provider
+- `KILO_API_KEY` - Kilo provider (optional)
 - `GOOGLE_VERTEX_PROJECT_ID` - GCP project for Vertex tests
 
 Optional:

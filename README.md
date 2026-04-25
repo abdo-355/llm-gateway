@@ -28,6 +28,9 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **Groq** - Fast inference for Llama models
 - **Cerebras** - High-throughput Llama and Qwen models
 - **Mistral** - Mistral, Ministral, and Pixtral models
+- **NVIDIA NIM** - High-performance LLMs via NVIDIA's API
+- **Ollama** - Self-hosted and cloud Ollama models
+- **Kilo** - Diverse models via Kilo's gateway
 - **Google Vertex AI** - Gemini models (via Vertex AI)
 - **Google Gemini** - Gemini models (via Gemini API)
 
@@ -60,11 +63,9 @@ The gateway implements OpenAI's chat completions API. Your existing code calling
 
 ### Tier-Based Models
 Select relative capability tiers directly:
-- `lite` - Lowest-latency and lowest-cost options
 - `default` - Balanced quality, speed, and cost
-- `strong` - Higher capability for more complex tasks
-- `frontier` - Highest general capability models
-- `deep-think` - Deliberative/high-reasoning models
+- `pro` - Higher capability for more complex tasks
+- `max` - Highest general capability models
 
 ---
 
@@ -105,8 +106,9 @@ Select relative capability tiers directly:
               ┌─────────────────────────┐
               │   LLM Providers         │
               │   (Groq/Cerebras/       │
-              │    Mistral/Vertex/      │
-              │    Gemini)              │
+              │    Mistral/NIM/         │
+              │    Ollama/Kilo/         │
+              │    Vertex/Gemini)       │
               └─────────────────────────┘
 ```
 
@@ -266,6 +268,9 @@ Failures include the exact reason when available, for example:
 | `CEREBRAS_API_KEY` | No | Cerebras API key |
 | `MISTRAL_API_KEY` | No | Mistral API key |
 | `GEMINI_API_KEY` | No | Google Gemini API key |
+| `NIM_API_KEY` | No | NVIDIA NIM API key |
+| `OLLAMA_API_KEY` | No | Ollama API key |
+| `KILO_API_KEY` | No | Kilo API key (optional for free models) |
 | `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI (uses ADC for auth) |
 
 | Variable | Default | Description |
@@ -284,11 +289,9 @@ The public `model` selector maps to relative capability tiers:
 
 | Tier | Use Case |
 |------|----------|
-| `lite` | Fast, low-cost responses |
 | `default` | General purpose responses |
-| `strong` | More complex tasks |
-| `frontier` | Highest-capability general workloads |
-| `deep-think` | Long-horizon reasoning tasks |
+| `pro` | More complex tasks |
+| `max` | Highest-capability general workloads |
 
 Tiers are configured in `internal/config/tiers.go`, and per-provider model metadata is configured in `internal/config/providers.go`.
 
