@@ -598,6 +598,28 @@ func getOllamaConfig() types.ProviderConfig {
 				"qwen3-vl:235b",
 			},
 			Limits: map[string]types.ModelLimits{}, // using provider default
+			Capabilities: map[string]types.ModelCapabilities{
+				// Models empirically verified to support tool calling
+				"devstral-2:123b":        {Tools: boolPtr(true)},
+				"devstral-small-2:24b":   {Tools: boolPtr(true)},
+				"gemini-3-flash-preview": {Tools: boolPtr(true)},
+				"gemma4:31b":             {Tools: boolPtr(true)},
+				"gpt-oss:120b":           {Tools: boolPtr(true)},
+				"gpt-oss:20b":            {Tools: boolPtr(true)},
+				"minimax-m2":             {Tools: boolPtr(true)},
+				"minimax-m2.5":           {Tools: boolPtr(true)},
+				"minimax-m2.7":           {Tools: boolPtr(true)},
+				"ministral-3:14b":        {Tools: boolPtr(true)},
+				"ministral-3:3b":         {Tools: boolPtr(true)},
+				"ministral-3:8b":         {Tools: boolPtr(true)},
+				"mistral-large-3:675b":   {Tools: boolPtr(true)},
+				"nemotron-3-nano:30b":    {Tools: boolPtr(true)},
+				"nemotron-3-super":       {Tools: boolPtr(true)},
+				"qwen3-coder-next":       {Tools: boolPtr(true)},
+				"qwen3-coder:480b":       {Tools: boolPtr(true)},
+				"qwen3-vl:235b":          {Tools: boolPtr(true)},
+				"qwen3-vl:235b-instruct": {Tools: boolPtr(true)},
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
