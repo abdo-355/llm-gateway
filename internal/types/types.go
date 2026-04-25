@@ -361,6 +361,7 @@ type ProviderAuth struct {
 	Type       string `json:"type"`                 // none, bearer, header
 	Env        string `json:"env"`                  // environment variable name
 	HeaderName string `json:"headerName,omitempty"` // for header auth type
+	Optional   bool   `json:"optional,omitempty"`   // if true, missing env var doesn't disable provider
 }
 
 type Tier string

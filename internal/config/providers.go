@@ -10,6 +10,8 @@ func GetProviders() []types.ProviderConfig {
 		getVertexConfig(),
 		getGeminiConfig(),
 		getNIMConfig(),
+		getKiloConfig(),
+		getOllamaConfig(),
 	}
 }
 
@@ -495,6 +497,125 @@ func getNIMConfig() types.ProviderConfig {
 		},
 		Limits: types.ProviderLimits{
 			Rpm: &rpm40,
+		},
+		ProviderType: "openai",
+	}
+}
+
+func getKiloConfig() types.ProviderConfig {
+	rph200 := 200
+
+	return types.ProviderConfig{
+		ID:      "kilo",
+		BaseURL: "https://api.kilo.ai/api/gateway",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "KILO_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"kilo-auto/free",
+				"stepfun/step-3.5-flash:free",
+				"inclusionai/ling-2.6-flash:free",
+				"openrouter/free",
+				"tencent/hy3-preview:free",
+				"x-ai/grok-code-fast-1:optimized:free",
+				"nvidia/nemotron-3-super-120b-a12b:free",
+				"inclusionai/ling-2.6-1t:free",
+				"baidu/qianfan-ocr-fast:free",
+			},
+			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits: types.ProviderLimits{
+			Rph: &rph200,
+		},
+		ProviderType: "openai",
+	}
+}
+
+func getOllamaConfig() types.ProviderConfig {
+	rpm20 := 20
+
+	return types.ProviderConfig{
+		ID:      "ollama",
+		BaseURL: "https://ollama.com/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "OLLAMA_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"qwen3-next:80b",
+				"devstral-small-2:24b",
+				"gemma4:31b",
+				"gemma3:27b",
+				"gemma3:12b",
+				"nemotron-3-nano:30b",
+				"gpt-oss:20b",
+				"gemma3:4b",
+				"ministral-3:14b",
+				"ministral-3:8b",
+				"ministral-3:3b",
+				"rnj-1:8b",
+				"deepseek-v3.2",
+				"qwen3-coder:480b",
+				"qwen3-coder-next",
+				"devstral-2:123b",
+				"minimax-m2.5",
+				"nemotron-3-super",
+				"cogito-2.1:671b",
+				"deepseek-v3.1:671b",
+				"gpt-oss:120b",
+				"gemini-3-flash-preview",
+				"glm-4.7",
+				"glm-4.6",
+				"minimax-m2.1",
+				"minimax-m2",
+				"minimax-m2.7",
+				"qwen3.5:397b",
+				"mistral-large-3:675b",
+				"kimi-k2-thinking",
+				"kimi-k2:1t",
+				"qwen3-vl:235b-instruct",
+				"qwen3-vl:235b",
+			},
+			Limits: map[string]types.ModelLimits{}, // using provider default
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits: types.ProviderLimits{
+			Rpm: &rpm20,
 		},
 		ProviderType: "openai",
 	}

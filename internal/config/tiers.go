@@ -21,6 +21,27 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "moonshotai/kimi-k2-instruct", Weight: 0.8},
 			{Provider: "nim", Model: "moonshotai/kimi-k2-instruct-0905", Weight: 0.8},
 			{Provider: "nim", Model: "moonshotai/kimi-k2-thinking", Weight: 0.8},
+
+			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.8},
+			{Provider: "ollama", Model: "devstral-small-2:24b", Weight: 0.8},
+			{Provider: "ollama", Model: "gemma4:31b", Weight: 0.8},
+			{Provider: "ollama", Model: "gemma3:27b", Weight: 0.8},
+			{Provider: "ollama", Model: "gemma3:12b", Weight: 0.8},
+			{Provider: "ollama", Model: "nemotron-3-nano:30b", Weight: 0.8},
+			{Provider: "ollama", Model: "gpt-oss:20b", Weight: 0.8},
+
+			{Provider: "kilo", Model: "kilo-auto/free", Weight: 0.8},
+			{Provider: "kilo", Model: "stepfun/step-3.5-flash:free", Weight: 0.8},
+			{Provider: "kilo", Model: "inclusionai/ling-2.6-flash:free", Weight: 0.8},
+
+			{Provider: "ollama", Model: "gemma3:4b", Weight: 0.7},
+			{Provider: "ollama", Model: "ministral-3:14b", Weight: 0.7},
+			{Provider: "ollama", Model: "ministral-3:8b", Weight: 0.7},
+			{Provider: "ollama", Model: "ministral-3:3b", Weight: 0.7},
+			{Provider: "ollama", Model: "rnj-1:8b", Weight: 0.7},
+
+			{Provider: "kilo", Model: "openrouter/free", Weight: 0.7},
+			{Provider: "kilo", Model: "tencent/hy3-preview:free", Weight: 0.7},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -41,6 +62,26 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.8},
 			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.1-terminus", Weight: 0.8},
 			{Provider: "nim", Model: "openai/gpt-oss-120b", Weight: 0.8},
+
+			{Provider: "ollama", Model: "deepseek-v3.2", Weight: 0.9},
+			{Provider: "ollama", Model: "qwen3-coder:480b", Weight: 0.9},
+			{Provider: "ollama", Model: "qwen3-coder-next", Weight: 0.9},
+			{Provider: "ollama", Model: "devstral-2:123b", Weight: 0.9},
+			{Provider: "ollama", Model: "minimax-m2.5", Weight: 0.9},
+			{Provider: "ollama", Model: "nemotron-3-super", Weight: 0.9},
+			{Provider: "ollama", Model: "cogito-2.1:671b", Weight: 0.9},
+
+			{Provider: "ollama", Model: "deepseek-v3.1:671b", Weight: 0.8},
+			{Provider: "ollama", Model: "gpt-oss:120b", Weight: 0.8},
+			{Provider: "ollama", Model: "gemini-3-flash-preview", Weight: 0.8},
+			{Provider: "ollama", Model: "glm-4.7", Weight: 0.8},
+			{Provider: "ollama", Model: "glm-4.6", Weight: 0.8},
+			{Provider: "ollama", Model: "minimax-m2.1", Weight: 0.8},
+			{Provider: "ollama", Model: "minimax-m2", Weight: 0.8},
+
+			{Provider: "kilo", Model: "x-ai/grok-code-fast-1:optimized:free", Weight: 0.8},
+			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.8},
+			{Provider: "kilo", Model: "inclusionai/ling-2.6-1t:free", Weight: 0.8},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),
@@ -56,6 +97,13 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "moonshotai/kimi-k2.5", Weight: 0.9},
 			{Provider: "nim", Model: "z-ai/glm5", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.8},
+
+			{Provider: "ollama", Model: "minimax-m2.7", Weight: 0.9},
+
+			{Provider: "ollama", Model: "qwen3.5:397b", Weight: 0.8},
+			{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
+			{Provider: "ollama", Model: "kimi-k2-thinking", Weight: 0.8},
+			{Provider: "ollama", Model: "kimi-k2:1t", Weight: 0.8},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(60000),

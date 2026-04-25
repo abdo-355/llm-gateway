@@ -876,7 +876,7 @@ func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
 	case "adc":
 		return config.GetEnv().GoogleVertexProjectID != "" && IsVertexAuthAvailable()
 	case "bearer", "header":
-		if provider.Auth.Env == "" {
+		if provider.Auth.Env == "" || provider.Auth.Optional {
 			return true
 		}
 		return r.resolveProviderAPIKey(provider.Auth) != ""
