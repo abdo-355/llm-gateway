@@ -852,12 +852,18 @@ func modelRPMLimit(combo Combo) int {
 	if combo.Limits.Rpm != nil && *combo.Limits.Rpm > 0 {
 		return *combo.Limits.Rpm
 	}
+	if combo.Limits.Rph != nil && *combo.Limits.Rph > 0 {
+		return *combo.Limits.Rph / 60
+	}
 	return 0
 }
 
 func providerRPMLimit(combo Combo) int {
 	if combo.Provider.Limits.Rpm != nil && *combo.Provider.Limits.Rpm > 0 {
 		return *combo.Provider.Limits.Rpm
+	}
+	if combo.Provider.Limits.Rph != nil && *combo.Provider.Limits.Rph > 0 {
+		return *combo.Provider.Limits.Rph / 60
 	}
 	return 0
 }
