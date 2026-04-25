@@ -117,6 +117,9 @@ func resolveAPIKey(ctx context.Context, provider types.ProviderConfig) (string, 
 		}
 		value := strings.TrimSpace(os.Getenv(provider.Auth.Env))
 		if value == "" {
+			if provider.Auth.Optional {
+				return "", nil
+			}
 			return "", fmt.Errorf("auth_missing: %s is empty", provider.Auth.Env)
 		}
 		return value, nil
