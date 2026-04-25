@@ -133,9 +133,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "tools",
-			Fields:     []string{"tools", "tool_choice", "parallel_tool_calls"},
-			Applicable: func(combo Combo) bool { return combo.Provider.Capabilities.Tools },
+			Name:   "tools",
+			Fields: []string{"tools", "tool_choice", "parallel_tool_calls"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
