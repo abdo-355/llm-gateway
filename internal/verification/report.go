@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -35,12 +36,16 @@ func PrintReport(w io.Writer, report *Report) {
 	fmt.Fprintf(w, "Passed: %d\n", passed)
 	fmt.Fprintf(w, "Failed: %d\n", failed)
 	fmt.Fprintf(w, "Skipped: %d\n", skipped)
-	fmt.Fprintf(w, "Total Retries: %d\n\n", totalRetries)
+	fmt.Fprintf(w, "Total Retries: %d\n", totalRetries)
+	fmt.Fprintf(w, "Attempt Logs: %d\n", len(report.AttemptLogs))
+	fmt.Fprintf(w, "Model Outcomes: %d\n\n", len(report.ModelOutcomes))
 
 	printProviderSummary(w, report)
 	printFeatureSummary(w, report)
+	printModelOutcomes(w, report)
 	printSkipped(w, report)
 	printFailures(w, report)
+	printAttemptLogs(w, report)
 }
 
 func printProviderSummary(w io.Writer, report *Report) {
@@ -77,19 +82,20 @@ func printFailures(w io.Writer, report *Report) {
 
 	fmt.Fprintf(w, "Failures\n")
 	if len(failures) == 0 {
-		fmt.Fprintf(w, "None\n")
+		fmt.Fprintf(w, "None\n\n")
 		return
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPROBE\tHTTP\tLATENCY\tTOKENS\tFAILURE\tretries")
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tHTTP\tLATENCY\tTOKENS\tFAILURE\tretries")
 	for _, result := range failures {
 		_, _ = fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\tretries=%d\n",
+			"%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\tretries=%d\n",
 			result.Provider,
 			result.Model,
 			result.Endpoint,
+			emptyDash(result.Phase),
 			result.Probe,
 			result.HTTPStatus,
 			result.Latency.Round(time.Millisecond),
@@ -99,6 +105,7 @@ func printFailures(w io.Writer, report *Report) {
 		)
 	}
 	_ = tw.Flush()
+	fmt.Fprintln(w)
 }
 
 func printSkipped(w io.Writer, report *Report) {
@@ -116,14 +123,15 @@ func printSkipped(w io.Writer, report *Report) {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPROBE\tHTTP\tFAILURE")
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tHTTP\tFAILURE")
 	for _, result := range skips {
 		_, _ = fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%d\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%d\t%s\n",
 			result.Provider,
 			result.Model,
 			result.Endpoint,
+			emptyDash(result.Phase),
 			result.Probe,
 			result.HTTPStatus,
 			result.Failure,
@@ -192,11 +200,79 @@ func featureSummaries(report *Report) []featureSummary {
 	return summaries
 }
 
+func printModelOutcomes(w io.Writer, report *Report) {
+	fmt.Fprintf(w, "Model Outcomes\n")
+	if len(report.ModelOutcomes) == 0 {
+		fmt.Fprintf(w, "None\n\n")
+		return
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tFINAL_STATUS\tDEFERRED\tRECOVERED\tRECOVERY_ATTEMPTED\tRECOVERY_SUCCEEDED\tTRANSIENT_FAILURES\tPASSED\tFAILED\tSKIPPED\tREMAINING")
+	for _, outcome := range report.ModelOutcomes {
+		_, _ = fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%t\t%t\t%t\t%t\t%d\t%d\t%d\t%d\t%s\n",
+			outcome.Provider,
+			outcome.Model,
+			outcome.FinalStatus,
+			outcome.Deferred,
+			outcome.Recovered,
+			outcome.RecoveryAttempted,
+			outcome.RecoverySucceeded,
+			outcome.TransientFailures,
+			outcome.CompletedProbes,
+			outcome.FailedProbes,
+			outcome.SkippedProbes,
+			emptyDash(joinStrings(outcome.RemainingProbeNames)),
+		)
+	}
+	_ = tw.Flush()
+	fmt.Fprintln(w)
+}
+
+func printAttemptLogs(w io.Writer, report *Report) {
+	fmt.Fprintf(w, "Attempt Logs\n")
+	if len(report.AttemptLogs) == 0 {
+		fmt.Fprintf(w, "None\n")
+		return
+	}
+
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tPHASE\tPROBE\tATTEMPT\tSTARTED\tENDED\tLATENCY\tHTTP\tTOKENS\tSTATUS\tFAILURE")
+	for _, log := range report.AttemptLogs {
+		_, _ = fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
+			log.Provider,
+			log.Model,
+			emptyDash(log.Phase),
+			log.Probe,
+			log.Attempt,
+			log.StartedAt.Format(time.RFC3339),
+			log.EndedAt.Format(time.RFC3339),
+			log.Latency.Round(time.Millisecond),
+			log.HTTPStatus,
+			emptyDash(log.TokensUsed),
+			log.Status,
+			emptyDash(log.Failure),
+		)
+	}
+	_ = tw.Flush()
+}
+
 func emptyDash(value string) string {
 	if value == "" {
 		return "-"
 	}
 	return value
+}
+
+func joinStrings(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return strings.Join(values, ",")
 }
 
 func shouldPrintSkip(result ProbeResult) bool {

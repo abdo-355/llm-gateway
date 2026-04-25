@@ -14,8 +14,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "mistralai/devstral-2-123b-instruct-2512", Weight: 0.9},
 			{Provider: "nim", Model: "mistralai/mistral-large-3-675b-instruct-2512", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-instruct", Weight: 0.9},
-			{Provider: "groq", Model: "moonshotai/kimi-k2-instruct", Weight: 0.8},
-			{Provider: "groq", Model: "moonshotai/kimi-k2-instruct-0905", Weight: 0.8},
+
 			{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.8},
 			{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.8},
 			{Provider: "nim", Model: "mistralai/mistral-medium-3-instruct", Weight: 0.8},
@@ -34,7 +33,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.2", Weight: 1.0},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.5", Weight: 1.0},
 			{Provider: "vertex", Model: "google/gemini-3-flash-preview", Weight: 1.0},
-			{Provider: "gemini", Model: "gemma-4-31b-it", Weight: 0.9},
+			{Provider: "gemini", Model: "gemma-4-26b-a4b-it", Weight: 0.9},
 			{Provider: "nim", Model: "google/gemma-4-31b-it", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.9},
 			{Provider: "nim", Model: "stepfun-ai/step-3.5-flash", Weight: 0.9},
@@ -42,7 +41,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.8},
 			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.1-terminus", Weight: 0.8},
 			{Provider: "nim", Model: "openai/gpt-oss-120b", Weight: 0.8},
-			{Provider: "gemini", Model: "gemma-4-26b-a4b-it", Weight: 0.8},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),

@@ -86,20 +86,7 @@ func BuildProbes(cfg Config) []Probe {
 				return r.runJSONProbe(combo, "field_acceptance", []string{"temperature", "top_p", "max_completion_tokens", "presence_penalty", "frequency_penalty", "stop", "seed", "n", "user", "metadata"}, req, validateNonEmptyChatMessage)
 			},
 		},
-		{
-			Name:   "logprobs",
-			Fields: []string{"logprobs", "top_logprobs"},
-			Run: func(r *Runner, combo Combo) ProbeResult {
-				req := types.ChatCompletionRequest{
-					Model:       combo.Model,
-					Messages:    basicMessages("Reply with OK only."),
-					Logprobs:    boolPtr(true),
-					TopLogprobs: intPtr(1),
-					MaxTokens:   probeTokenPtr(cfg, 8),
-				}
-				return r.runJSONProbe(combo, "logprobs", []string{"logprobs", "top_logprobs"}, req, validateLogprobs)
-			},
-		},
+
 		{
 			Name:       "stream",
 			Fields:     []string{"stream", "stream_options.include_usage"},
@@ -253,16 +240,6 @@ func validateNonEmptyChatMessage(resp *types.ChatCompletionResponse) error {
 	choice := resp.Choices[0]
 	if choice.Message.Content == nil || strings.TrimSpace(*choice.Message.Content) == "" {
 		return fmt.Errorf("assistant message content was empty")
-	}
-	return nil
-}
-
-func validateLogprobs(resp *types.ChatCompletionResponse) error {
-	if resp == nil || len(resp.Choices) == 0 {
-		return fmt.Errorf("no chat choices returned")
-	}
-	if resp.Choices[0].Logprobs == nil {
-		return fmt.Errorf("logprobs were not returned")
 	}
 	return nil
 }

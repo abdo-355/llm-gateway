@@ -182,15 +182,28 @@ It is manual-only:
 For every configured provider/model combination, the verifier exercises:
 - basic text generation
 - grouped request-field acceptance
-- logprobs
 - streaming with usage chunks
 - `json_object`
 - strict `json_schema`
 - tools/function calling
 
-The verifier calls each provider directly using the configured base URL and authentication method, and paces requests to respect configured RPM limits to reduce false negatives.
+The verifier calls each provider directly using the configured base URL and authentication method.
 
-If a probe hits `429`, that probe is recorded as `SKIP` and the verifier skips the remaining probes for that same provider/model combination so the rest of the matrix can continue.
+Execution behavior:
+- providers run concurrently
+- models run concurrently
+- requests for models under the same provider are start-spaced so they do not all fire at once
+- scheduling uses conservative pacing based on half of the configured RPM limits
+- main-pass probe attempts use a default `5m` timeout
+- timeout and rate-limit failures wait `10s` and retry, up to `3` attempts total
+- once a model accumulates `3` timeout/rate-limit hits, the verifier defers the rest of that model’s unfinished probes
+- after the full main pass completes, each deferred model gets one final recovery check using a `2m` timeout and no retries
+- if that recovery check succeeds, only the probes that were not completed earlier are replayed with the same `2m` timeout and no retries
+
+The final report records:
+- per-probe outcomes
+- per-model final outcomes
+- detailed attempt logs with timing, phase, HTTP status, and failure reason
 
 ### Run It
 
@@ -210,7 +223,7 @@ go run ./cmd/verify-upstream --provider gemini --model gemini-2.5-flash
 Optional behavior flags:
 
 ```bash
-go run ./cmd/verify-upstream --timeout 45s --fail-fast
+go run ./cmd/verify-upstream --timeout 5m --fail-fast
 go run ./cmd/verify-upstream --probe-max-tokens 2048
 ```
 

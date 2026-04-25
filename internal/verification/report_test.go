@@ -124,17 +124,32 @@ func TestRunSkipsRemainingProbesAfterRateLimit(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, report.Results, 7)
+
 	assert.Equal(t, "basic_text", report.Results[0].Probe)
-	assert.Equal(t, "SKIP", report.Results[0].Status)
+	assert.Equal(t, "FAIL", report.Results[0].Status)
 	assert.Equal(t, 429, report.Results[0].HTTPStatus)
 	assert.Equal(t, "rate_limited: retry_after=60 limit_type=rpm", report.Results[0].Failure)
-	for _, result := range report.Results[1:] {
+	assert.Equal(t, 3, report.Results[0].Attempts)
+	assert.Equal(t, 3, report.Results[0].TransientHits)
+
+	for _, result := range report.Results[1:6] {
 		assert.Equal(t, "SKIP", result.Status)
-		assert.Equal(t, 429, result.HTTPStatus)
-		assert.Equal(t, "rate_limited: retry_after=60 limit_type=rpm", result.Failure)
+		assert.Equal(t, "deferred_after_transient_failures", result.Failure)
 	}
-	assert.Equal(t, 1, client.callCount)
+
+	assert.Equal(t, "final_recovery_check", report.Results[6].Probe)
+	assert.Equal(t, "FAIL", report.Results[6].Status)
+	assert.Equal(t, 429, report.Results[6].HTTPStatus)
+	assert.Equal(t, "recovery", report.Results[6].Phase)
+
+	assert.Equal(t, 4, client.callCount)
 	assert.Equal(t, 0, client.streamCount)
+	assert.Len(t, report.ModelOutcomes, 1)
+	assert.Equal(t, "deferred_after_recovery", report.ModelOutcomes[0].FinalStatus)
+	assert.True(t, report.ModelOutcomes[0].Deferred)
+	assert.True(t, report.ModelOutcomes[0].RecoveryAttempted)
+	assert.False(t, report.ModelOutcomes[0].RecoverySucceeded)
+	assert.Len(t, report.AttemptLogs, 4)
 }
 
 func TestRunPreservesNonRateLimitFailures(t *testing.T) {
@@ -150,10 +165,15 @@ func TestRunPreservesNonRateLimitFailures(t *testing.T) {
 	}, client)
 
 	assert.NoError(t, err)
-	assert.NotEmpty(t, report.Results)
+	assert.Len(t, report.Results, 6)
 	assert.Equal(t, "FAIL", report.Results[0].Status)
 	assert.Equal(t, 500, report.Results[0].HTTPStatus)
 	assert.Equal(t, "provider_error: status=500 message=boom", report.Results[0].Failure)
+	assert.Equal(t, "main", report.Results[0].Phase)
+	assert.Equal(t, "SKIP", report.Results[3].Status)
+	assert.Equal(t, "not applicable for configured provider capabilities", report.Results[3].Failure)
+	assert.False(t, report.ModelOutcomes[0].Deferred)
+	assert.Equal(t, "completed", report.ModelOutcomes[0].FinalStatus)
 	assert.GreaterOrEqual(t, client.callCount, 1)
 	assert.GreaterOrEqual(t, client.streamCount, 1)
 }

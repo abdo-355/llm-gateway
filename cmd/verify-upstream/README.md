@@ -24,14 +24,12 @@ go run cmd/verify-upstream/main.go -model "groq/llama-3.3-70b"
 # Override token budget for probes
 go run cmd/verify-upstream/main.go -probe-max-tokens 2048
 
-# Override request timeout
+# Override main-pass request timeout (recovery/replay still use 2m)
 go run cmd/verify-upstream/main.go -timeout 60s
 
 # Stop on first failure
 go run cmd/verify-upstream/main.go -fail-fast
 
-# Verbose output
-go run cmd/verify-upstream/main.go -v
 ```
 
 ## Flags
@@ -41,9 +39,9 @@ go run cmd/verify-upstream/main.go -v
 | `-provider` | single provider ID | all configured |
 | `-model` | single model ID (provider/model format) | all in matrix |
 | `-probe-max-tokens` | max_tokens for probe requests | 1024 |
-| `-timeout` | per-request timeout | 30s |
+| `-timeout` | main-pass per-attempt timeout | 5m |
+| `-retries` | max attempts for timeout/rate-limited probes in the main pass | 3 |
 | `-fail-fast` | stop on first failure | false |
-| `-v` | verbose output | false |
 
 ## Environment
 
@@ -80,5 +78,13 @@ Reports each probe with:
 - Probes bypass the gateway entirely - tests raw provider endpoints
 - Uses minimal prompts (single word or short sentence) to reduce noise
 - Successful 200 with empty visible content = fail (treated as provider issue)
-- Structured output (JSON/tools) tested separately from basic text generation
-- `429` responses are recorded as `SKIP`, and remaining probes for that same provider/model are skipped for the rest of the run
+- Structured output (JSON/tools) is tested separately from basic text generation
+- Providers and models are scheduled concurrently
+- Requests for the same provider are started with at least a 1-second gap while still allowing overlap in flight
+- The scheduler uses half of the configured RPM values as a safety margin
+- Main-pass probe attempts retry only on timeout or rate limit
+- Main-pass probe attempts use a 10-second retry delay and at most 3 attempts total
+- If a model accumulates 3 timeout/rate-limit hits during the main pass, it is marked deferred and its remaining probes are skipped
+- After the main pass, each deferred model gets one 2-minute recovery check with no retries
+- If that recovery check succeeds, only the probes that were not completed are replayed, also with a 2-minute timeout and no retries
+- The final report includes per-probe results, per-model outcomes, and detailed per-attempt logs

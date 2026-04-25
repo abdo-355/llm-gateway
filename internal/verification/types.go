@@ -44,23 +44,62 @@ type Probe struct {
 }
 
 type ProbeResult struct {
+	Provider      string
+	Model         string
+	Endpoint      string
+	Probe         string
+	Fields        []string
+	Status        string
+	Retries       int
+	Latency       time.Duration
+	HTTPStatus    int
+	TokensUsed    string
+	Failure       string
+	Phase         string
+	StartedAt     time.Time
+	EndedAt       time.Time
+	Attempts      int
+	TransientHits int
+}
+
+type AttemptLog struct {
 	Provider   string
 	Model      string
 	Endpoint   string
 	Probe      string
-	Fields     []string
-	Status     string
-	Retries    int
+	Phase      string
+	Attempt    int
+	StartedAt  time.Time
+	EndedAt    time.Time
 	Latency    time.Duration
 	HTTPStatus int
 	TokensUsed string
+	Status     string
 	Failure    string
 }
 
+type ModelOutcome struct {
+	Provider            string
+	Model               string
+	Endpoint            string
+	FinalStatus         string
+	Deferred            bool
+	Recovered           bool
+	RecoveryAttempted   bool
+	RecoverySucceeded   bool
+	TransientFailures   int
+	CompletedProbes     int
+	FailedProbes        int
+	SkippedProbes       int
+	RemainingProbeNames []string
+}
+
 type Report struct {
-	StartedAt time.Time
-	EndedAt   time.Time
-	Results   []ProbeResult
+	StartedAt     time.Time
+	EndedAt       time.Time
+	Results       []ProbeResult
+	AttemptLogs   []AttemptLog
+	ModelOutcomes []ModelOutcome
 }
 
 type providerSummary struct {
