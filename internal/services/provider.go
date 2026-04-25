@@ -172,9 +172,11 @@ func (s *ProviderService) StreamProviderChannel(
 func (s *ProviderService) setAuth(ctx context.Context, req *http.Request, apiKey string, auth types.ProviderAuth) error {
 	switch auth.Type {
 	case "bearer":
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+		if apiKey != "" {
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+		}
 	case "header":
-		if auth.HeaderName != "" {
+		if auth.HeaderName != "" && apiKey != "" {
 			req.Header.Set(auth.HeaderName, apiKey)
 		}
 	case "adc":
@@ -319,6 +321,12 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "mistral"
 	case "GEMINI_API_KEY":
 		return "gemini"
+	case "NIM_API_KEY":
+		return "nim"
+	case "OLLAMA_API_KEY":
+		return "ollama"
+	case "KILO_API_KEY":
+		return "kilo"
 	}
 
 	if auth.Type == "adc" || providerType == "vertex" {
@@ -336,6 +344,12 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "gemini"
 	case strings.Contains(baseURL, "aiplatform.googleapis.com"):
 		return "vertex"
+	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
+		return "nim"
+	case strings.Contains(baseURL, "api.kilo.ai"):
+		return "kilo"
+	case strings.Contains(baseURL, "ollama.com"):
+		return "ollama"
 	default:
 		return ""
 	}
