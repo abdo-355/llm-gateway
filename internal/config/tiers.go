@@ -79,7 +79,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "minimax-m2.1", Weight: 0.8},
 			{Provider: "ollama", Model: "minimax-m2", Weight: 0.8},
 
-			{Provider: "kilo", Model: "x-ai/grok-code-fast-1:optimized:free", Weight: 0.8},
 			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.8},
 			{Provider: "kilo", Model: "inclusionai/ling-2.6-1t:free", Weight: 0.8},
 		},

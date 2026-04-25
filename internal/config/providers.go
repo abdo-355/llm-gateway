@@ -521,12 +521,19 @@ func getKiloConfig() types.ProviderConfig {
 				"inclusionai/ling-2.6-flash:free",
 				"openrouter/free",
 				"tencent/hy3-preview:free",
-				"x-ai/grok-code-fast-1:optimized:free",
 				"nvidia/nemotron-3-super-120b-a12b:free",
 				"inclusionai/ling-2.6-1t:free",
 				"baidu/qianfan-ocr-fast:free",
 			},
 			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
+			Capabilities: map[string]types.ModelCapabilities{
+				// Models empirically verified to support tool calling
+				"inclusionai/ling-2.6-1t:free":           {Tools: boolPtr(true)},
+				"inclusionai/ling-2.6-flash:free":        {Tools: boolPtr(true)},
+				"kilo-auto/free":                         {Tools: boolPtr(true)},
+				"nvidia/nemotron-3-super-120b-a12b:free": {Tools: boolPtr(true)},
+				"openrouter/free":                        {Tools: boolPtr(true)},
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
