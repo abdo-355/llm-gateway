@@ -123,8 +123,26 @@ func writeExecutionError(c *gin.Context, err error) {
 	switch gatewayErr.Code {
 	case "RATE_LIMITED":
 		status = http.StatusTooManyRequests
+	case "QUOTA_EXHAUSTED":
+		status = http.StatusTooManyRequests
 	case "NO_ELIGIBLE_PROVIDER":
 		status = http.StatusUnprocessableEntity
+	case "ALL_ATTEMPTS_FAILED":
+		status = http.StatusBadGateway
+	case "TIMEOUT":
+		status = http.StatusGatewayTimeout
+	case "PROVIDER_OVERLOADED":
+		status = http.StatusServiceUnavailable
+	case "CIRCUIT_BREAKER_OPEN":
+		status = http.StatusServiceUnavailable
+	case "NETWORK_ERROR":
+		status = http.StatusBadGateway
+	case "PARSE_ERROR", "EMPTY_RESPONSE":
+		status = http.StatusBadGateway
+	case "PAYMENT_REQUIRED":
+		status = http.StatusPaymentRequired
+	case "VALIDATION_ERROR":
+		status = http.StatusBadRequest
 	}
 
 	c.JSON(status, gin.H{"error": gatewayErr})
@@ -163,6 +181,19 @@ func writeSSEChunk(c *gin.Context, chunk *types.SSEChunk) error {
 }
 
 func writeSSEError(c *gin.Context, err *types.GatewayError) {
+	// First emit an OpenAI-compatible error chunk with finish_reason: "error"
+	errorChunk := types.SSEChunk{
+		Object: "chat.completion.chunk",
+		Choices: []types.DeltaChoice{{
+			Index:        0,
+			Delta:        types.DeltaMessage{},
+			FinishReason: ptrString("error"),
+		}},
+	}
+	chunkJSON, _ := json.Marshal(errorChunk)
+	fmt.Fprintf(c.Writer, "data: %s\n\n", chunkJSON)
+
+	// Then emit the gateway error details as a separate event
 	errJSON, _ := json.Marshal(err)
 	fmt.Fprintf(c.Writer, "data: %s\n\n", errJSON)
 	c.Writer.Flush()
@@ -171,6 +202,10 @@ func writeSSEError(c *gin.Context, err *types.GatewayError) {
 func writeSSEDone(c *gin.Context) {
 	fmt.Fprintf(c.Writer, "data: [DONE]\n\n")
 	c.Writer.Flush()
+}
+
+func ptrString(s string) *string {
+	return &s
 }
 
 func filterCandidatesByModel(candidates []types.RoutingCandidate, model string) []types.RoutingCandidate {
