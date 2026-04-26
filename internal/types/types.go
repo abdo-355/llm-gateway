@@ -343,8 +343,59 @@ type FallbackConfig struct {
 }
 
 type TraceConfig struct {
-	RequestID *string  `json:"request_id,omitempty"`
+	RequestID *string `json:"request_id,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
+}
+
+// FailureAction represents the action to take after a failure
+type FailureAction string
+
+const (
+	ActionRetry              FailureAction = "retry"
+	ActionRetryWithBackoff   FailureAction = "retry_with_backoff"
+	ActionFailover           FailureAction = "failover"
+	ActionFailoverWithBackoff FailureAction = "failover_with_backoff"
+	ActionAbort              FailureAction = "abort"
+	ActionCooldown           FailureAction = "cooldown"
+)
+
+// FailureCategory categorizes the type of failure
+type FailureCategory string
+
+const (
+	CategoryNetwork         FailureCategory = "network"
+	CategoryTimeout         FailureCategory = "timeout"
+	CategoryRateLimit       FailureCategory = "rate_limit"
+	CategoryProvider5xx     FailureCategory = "provider_5xx"
+	CategoryProvider4xx     FailureCategory = "provider_4xx"
+	CategoryParse           FailureCategory = "parse"
+	CategoryEmpty           FailureCategory = "empty_response"
+	CategoryCircuitBreaker  FailureCategory = "circuit_breaker"
+	CategoryQuota           FailureCategory = "quota"
+	CategoryPayment         FailureCategory = "payment"
+	CategoryValidation      FailureCategory = "validation"
+	CategoryUnknown         FailureCategory = "unknown"
+)
+
+// FailureContext provides additional context for failure decisions
+type FailureContext struct {
+	AttemptIndex      int
+	MaxAttempts       int
+	ProviderID        string
+	Model             string
+	HasRemainingBudget bool
+}
+
+// FailureDecision is the result of failure classification
+type FailureDecision struct {
+	Action              FailureAction
+	Category            FailureCategory
+	Reason              string
+	ShouldRecordFailure bool
+	ShouldRecordSuccess bool
+	BackoffMs           int
+	CooldownSeconds     int
+	IsRetryable         bool
 }
 
 type ProviderConfig struct {
