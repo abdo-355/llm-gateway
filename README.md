@@ -532,3 +532,101 @@ LOG_LEVEL=debug go run ./cmd/gateway
 
 - Check [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for routing details
 - View logs with `docker-compose logs -f`
+
+---
+
+## Vertex AI in Coolify
+
+This section covers deploying the gateway with Google Vertex AI support in Coolify (outside GCP).
+
+### Prerequisites
+
+1. A Google Cloud Platform (GCP) project with Vertex AI API enabled
+2. A service account with Vertex AI permissions (roles/aiplatform.user)
+3. A service account key (JSON) downloaded from GCP
+
+### Creating a Service Account
+
+1. Go to GCP Console > IAM & Admin > Service Accounts
+2. Create a new service account (e.g., `llm-gateway`)
+3. Grant role: **Vertex AI User** (or broader if needed)
+4. Create a key (JSON) and save it securely
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GATEWAY_API_KEY` | Yes | Your API key |
+| `GOOGLE_CLOUD_PROJECT` | Yes* | GCP project ID (*required for Vertex) |
+| `GOOGLE_CLOUD_LOCATION` | No | Region (default: `global`) |
+| `GCP_SA_KEY_JSON` | Yes* | Service account JSON (*required for non-GCP deployment) |
+| `REDIS_URL` | Yes* | Redis connection URL |
+| Provider API keys | No | At least one provider key required |
+
+### Coolify Configuration
+
+In Coolify, set these environment variables:
+
+```
+GATEWAY_API_KEY=[your-32+-char-key]
+GOOGLE_CLOUD_PROJECT=[your-gcp-project-id]
+GOOGLE_CLOUD_LOCATION=global
+GCP_SA_KEY_JSON=[paste full JSON here]
+REDIS_URL=redis://[host]:6379
+```
+
+**Important:** When setting `GCP_SA_KEY_JSON`:
+- Use the "Multiline" option if available in Coolify
+- Or paste the raw JSON with actual newlines (not escaped `\n`)
+- Do NOT wrap in quotes
+
+### Verifying Configuration
+
+After deployment, check the health endpoint:
+
+```bash
+curl http://[your-host]/health | jq
+```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "vertex_configured": true,
+  "vertex_project": "your-gcp-project-id"
+}
+```
+
+If `vertex_configured` is `false`, check:
+1. `GOOGLE_CLOUD_PROJECT` is set correctly
+2. `GCP_SA_KEY_JSON` contains valid JSON
+3. Service account has Vertex AI permissions
+
+### Testing Vertex API
+
+Make a test request:
+
+```bash
+curl -X POST http://[your-host]/v1/chat/completions \
+  -H "Authorization: Bearer $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "pro",
+    "messages": [{"role": "user", "content": "Say hello in 3 words"}]
+  }'
+```
+
+The `pro` tier includes Vertex models by default.
+
+### Troubleshooting
+
+**401 Unauthorized:**
+- Check service account key is valid and not expired
+
+**403 Forbidden:**
+- Service account lacks Vertex AI permissions
+- Vertex AI API not enabled in GCP project
+
+**503 Service Unavailable:**
+- Vertex provider might be unhealthy
+- Check provider status at `/health` endpoint

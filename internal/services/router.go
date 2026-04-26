@@ -394,7 +394,14 @@ func (r *Router) CompilePlan(
 		// Build the base URL, replacing placeholders for Vertex
 		baseURL := candidate.Provider.BaseURL
 		if candidate.Provider.ID == "vertex" {
-			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", config.GetEnv().GoogleVertexProjectID)
+			env := config.GetEnv()
+			projectID := env.GoogleCloudProject
+			if projectID == "" {
+				projectID = env.GoogleVertexProjectID
+			}
+			location := env.GoogleCloudLocation
+			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", projectID)
+			baseURL = strings.ReplaceAll(baseURL, "LOCATION_ID", location)
 		}
 
 		attempts = append(attempts, types.RoutingAttempt{
@@ -874,7 +881,12 @@ func (r *Router) ShouldRetry(err error, plan types.RoutingPlan, attemptIndex int
 func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
 	switch provider.Auth.Type {
 	case "adc":
-		return config.GetEnv().GoogleVertexProjectID != "" && IsVertexAuthAvailable()
+		env := config.GetEnv()
+		projectID := env.GoogleCloudProject
+		if projectID == "" {
+			projectID = env.GoogleVertexProjectID
+		}
+		return projectID != "" && IsVertexAuthAvailable()
 	case "bearer", "header":
 		if provider.Auth.Env == "" || provider.Auth.Optional {
 			return true

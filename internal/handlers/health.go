@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -33,9 +34,16 @@ func (h *HealthHandler) Handle(c *gin.Context) {
 		}
 	}
 
+	vertexProject := config.GetEnv().GoogleCloudProject
+	if vertexProject == "" {
+		vertexProject = config.GetEnv().GoogleVertexProjectID
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":    status,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"models":    metrics,
+		"status":           status,
+		"timestamp":       time.Now().UTC().Format(time.RFC3339),
+		"models":          metrics,
+		"vertex_configured": config.IsVertexAuthConfigured(),
+		"vertex_project":  vertexProject,
 	})
 }

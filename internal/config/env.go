@@ -22,6 +22,8 @@ type EnvConfig struct {
 	OllamaAPIKey   string
 	KiloAPIKey     string
 
+	GoogleCloudProject   string
+	GoogleCloudLocation string
 	GoogleVertexProjectID string
 
 	RedisURL       string
@@ -79,8 +81,13 @@ func LoadEnv() (*EnvConfig, error) {
 		return nil, fmt.Errorf("METRICS_PORT must be between 1 and 65535")
 	}
 
+	googleCloudProject := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if googleCloudProject == "" {
+		googleCloudProject = os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
+	}
+
 	return &EnvConfig{
-		Environment:           environment,
+		Environment:             environment,
 		Port:                  port,
 		MetricsPort:           metricsPort,
 		LogLevel:              getEnvString("LOG_LEVEL", "info"),
@@ -92,6 +99,8 @@ func LoadEnv() (*EnvConfig, error) {
 		NimAPIKey:             os.Getenv("NIM_API_KEY"),
 		OllamaAPIKey:          os.Getenv("OLLAMA_API_KEY"),
 		KiloAPIKey:            os.Getenv("KILO_API_KEY"),
+		GoogleCloudProject:   googleCloudProject,
+		GoogleCloudLocation:  getEnvString("GOOGLE_CLOUD_LOCATION", "global"),
 		GoogleVertexProjectID: os.Getenv("GOOGLE_VERTEX_PROJECT_ID"),
 		RedisURL:              getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:        getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),

@@ -160,10 +160,18 @@ func probeTokenPtr(cfg Config, fallback int) *int {
 func resolveEndpoint(provider types.ProviderConfig) string {
 	baseURL := provider.BaseURL
 	if provider.ID == "vertex" {
-		projectID := strings.TrimSpace(os.Getenv("GOOGLE_VERTEX_PROJECT_ID"))
+		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if projectID == "" {
+			projectID = os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
+		}
 		if projectID != "" {
 			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", projectID)
 		}
+		location := os.Getenv("GOOGLE_CLOUD_LOCATION")
+		if location == "" {
+			location = "global"
+		}
+		baseURL = strings.ReplaceAll(baseURL, "LOCATION_ID", location)
 	}
 	return strings.TrimRight(baseURL, "/") + "/chat/completions"
 }

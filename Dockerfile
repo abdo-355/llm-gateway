@@ -35,6 +35,15 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/gateway .
 
+# Copy startup script
+COPY --from=builder /app/scripts/startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
+# Create secrets directory with restrictive permissions
+RUN mkdir -p /app/secrets && \
+    chown -R appuser:appgroup /app/secrets && \
+    chmod 700 /app/secrets
+
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app
 
@@ -51,5 +60,5 @@ EXPOSE 9090
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget --quiet --tries=1 --spider http://localhost:${PORT:-8080}/health || exit 1
 
-# Run the binary
-ENTRYPOINT ["./gateway"]
+# Run the startup script
+ENTRYPOINT ["/app/startup.sh"]
