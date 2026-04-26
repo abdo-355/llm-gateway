@@ -60,7 +60,7 @@ Optional:
 - `ENV` - environment name (development/production)
 - `LOG_LEVEL` - debug, info, warn, error (default: info)
 
-Vertex requires valid GCP credentials (`gcloud auth application-default-login` or `GOOGLE_APPLICATION_CREDENTIALS`).
+Vertex requires a valid `GOOGLE_VERTEX_API_KEY` OAuth token and `GOOGLE_VERTEX_PROJECT_ID`.
 
 ## Exit Codes
 

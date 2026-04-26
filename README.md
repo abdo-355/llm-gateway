@@ -248,8 +248,7 @@ Notes:
 
 Failures include the exact reason when available, for example:
 - missing provider auth envs like `GEMINI_API_KEY`
-- missing `GOOGLE_VERTEX_PROJECT_ID`
-- Vertex ADC initialization failures
+- missing `GOOGLE_VERTEX_PROJECT_ID` or `GOOGLE_VERTEX_API_KEY`
 - provider HTTP status and error message
 - invalid JSON output when structured output was requested
 - missing tool calls when tools were required
@@ -271,7 +270,8 @@ Failures include the exact reason when available, for example:
 | `NIM_API_KEY` | No | NVIDIA NIM API key |
 | `OLLAMA_API_KEY` | No | Ollama API key |
 | `KILO_API_KEY` | No | Kilo API key (optional for free models) |
-| `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI (uses ADC for auth) |
+| `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI |
+| `GOOGLE_VERTEX_API_KEY` | No | Google Vertex AI OAuth token |
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -557,9 +557,8 @@ This section covers deploying the gateway with Google Vertex AI support in Cooli
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GATEWAY_API_KEY` | Yes | Your API key |
-| `GOOGLE_CLOUD_PROJECT` | Yes* | GCP project ID (*required for Vertex) |
-| `GOOGLE_CLOUD_LOCATION` | No | Region (default: `global`) |
-| `GCP_SA_KEY_JSON` | Yes* | Service account JSON (*required for non-GCP deployment) |
+| `GOOGLE_VERTEX_PROJECT_ID` | Yes* | GCP project ID (*required for Vertex) |
+| `GOOGLE_VERTEX_API_KEY` | Yes* | OAuth token for Vertex AI |
 | `REDIS_URL` | Yes* | Redis connection URL |
 | Provider API keys | No | At least one provider key required |
 
@@ -569,16 +568,10 @@ In Coolify, set these environment variables:
 
 ```
 GATEWAY_API_KEY=[your-32+-char-key]
-GOOGLE_CLOUD_PROJECT=[your-gcp-project-id]
-GOOGLE_CLOUD_LOCATION=global
-GCP_SA_KEY_JSON=[paste full JSON here]
+GOOGLE_VERTEX_PROJECT_ID=[your-gcp-project-id]
+GOOGLE_VERTEX_API_KEY=[your-oauth-token]
 REDIS_URL=redis://[host]:6379
 ```
-
-**Important:** When setting `GCP_SA_KEY_JSON`:
-- Use the "Multiline" option if available in Coolify
-- Or paste the raw JSON with actual newlines (not escaped `\n`)
-- Do NOT wrap in quotes
 
 ### Verifying Configuration
 
@@ -591,16 +584,9 @@ curl http://[your-host]/health | jq
 Expected response:
 ```json
 {
-  "status": "healthy",
-  "vertex_configured": true,
-  "vertex_project": "your-gcp-project-id"
+  "status": "healthy"
 }
 ```
-
-If `vertex_configured` is `false`, check:
-1. `GOOGLE_CLOUD_PROJECT` is set correctly
-2. `GCP_SA_KEY_JSON` contains valid JSON
-3. Service account has Vertex AI permissions
 
 ### Testing Vertex API
 
