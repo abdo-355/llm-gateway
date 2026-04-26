@@ -866,6 +866,15 @@ func (r *Router) ShouldRetry(err error, plan types.RoutingPlan, attemptIndex int
 		return false
 	case *errors.ValidationError:
 		return false
+	case *errors.NetworkError:
+		// Network errors are usually transient, so retry
+		return true
+	case *errors.EmptyResponseError:
+		// Empty responses can be transient
+		return true
+	case *errors.ParseError:
+		// Parse errors are usually not retryable (same bad response)
+		return false
 	default:
 		return false
 	}

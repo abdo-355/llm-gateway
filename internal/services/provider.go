@@ -95,7 +95,7 @@ func (s *ProviderService) CallProvider(
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, errors.NewTimeoutError("Request timeout", "request")
 		}
-		return nil, err
+		return nil, wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
 	}
 	defer resp.Body.Close()
 
@@ -139,15 +139,24 @@ func (s *ProviderService) StreamProviderChannel(
 			return
 		}
 
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
-			} else {
-				errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_FAILED", Message: err.Error()}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
+		} else {
+			wrappedErr := wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
+			errChan <- &types.GatewayError{
+				Type:    "network_error",
+				Code:    "NETWORK_ERROR",
+				Message: wrappedErr.Error(),
+				Details: map[string]any{
+					"network_type": classifyNetworkError(err),
+					"provider":     detectProvider(baseURL, providerType, auth),
+				},
 			}
-			return
 		}
+		return
+	}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -191,8 +200,8 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 	switch e := err.(type) {
 	case *errors.RateLimitError:
 		return &types.GatewayError{
-			Type:    "rate_limit_error",
-			Code:    "RATE_LIMITED",
+			Type: "rate_limit_error",
+			Code: "RATE_LIMITED",
 			Message: e.Message,
 			Details: map[string]any{
 				"retry_after": e.RetryAfter,
@@ -206,10 +215,44 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		return &types.GatewayError{Type: "validation_error", Code: "VALIDATION_ERROR", Message: e.Message}
 	case *errors.TimeoutError:
 		return &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: e.Message}
+	case *errors.NetworkError:
+		return &types.GatewayError{
+			Type: "network_error",
+			Code: "NETWORK_ERROR",
+			Message: e.Message,
+			Details: map[string]any{
+				"network_type": e.NetworkType,
+				"provider":     e.ProviderID,
+				"base_url":     e.BaseURL,
+			},
+		}
+	case *errors.ParseError:
+		return &types.GatewayError{
+			Type: "parse_error",
+			Code: "PARSE_ERROR",
+			Message: e.Message,
+			Details: map[string]any{
+				"parse_type":  e.ParseType,
+				"provider":    e.ProviderID,
+				"model":       e.Model,
+				"raw_content": truncateString(e.RawContent, 200),
+			},
+		}
+	case *errors.EmptyResponseError:
+		return &types.GatewayError{
+			Type: "empty_response_error",
+			Code: "EMPTY_RESPONSE",
+			Message: e.Message,
+			Details: map[string]any{
+				"provider":    e.ProviderID,
+				"model":       e.Model,
+				"status_code": e.StatusCode,
+			},
+		}
 	case *errors.ProviderError:
 		return &types.GatewayError{
-			Type:    "provider_error",
-			Code:    "PROVIDER_ERROR",
+			Type: "provider_error",
+			Code: "PROVIDER_ERROR",
 			Message: e.Message,
 			Details: map[string]any{"headers": e.Headers, "status_code": e.StatusCode},
 		}
@@ -349,6 +392,56 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	default:
 		return ""
 	}
+}
+
+// classifyNetworkError determines the type of network error
+func classifyNetworkError(err error) string {
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "timeout") {
+		return "timeout"
+	}
+	if strings.Contains(errStr, "connection") {
+		return "connection"
+	}
+	if strings.Contains(errStr, "dns") {
+		return "dns"
+	}
+	if strings.Contains(errStr, "tls") {
+		return "tls"
+	}
+	return "unknown"
+}
+
+// wrapNetworkError wraps a network error with provider context
+func wrapNetworkError(err error, providerID, baseURL string) error {
+	if err == nil {
+		return nil
+	}
+	
+	// Don't wrap if already a network error
+	if _, ok := err.(*errors.NetworkError); ok {
+		return err
+	}
+	
+	networkType := classifyNetworkError(err)
+	return errors.NewNetworkError(
+		fmt.Sprintf("Network error calling %s", baseURL),
+		networkType,
+		providerID,
+		baseURL,
+		err,
+	)
+}
+
+// truncateString truncates a string to maxLen characters
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 0 {
+		return ""
+	}
+	return s[:maxLen] + "..."
 }
 
 func (s *ProviderService) shouldLogRawProviderResponse(provider, model string) bool {
@@ -558,9 +651,21 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	}
 	s.logRawProviderResponseBody(provider, model, resp.StatusCode, body)
 
+	// Check for empty response body on successful requests
+	if resp.StatusCode == http.StatusOK && len(bytes.TrimSpace(body)) == 0 {
+		return nil, errors.NewEmptyResponseError(provider, model, resp.StatusCode)
+	}
+
 	var response types.ChatCompletionResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, err
+		return nil, errors.NewParseError(
+			fmt.Sprintf("Failed to parse response from %s/%s", provider, model),
+			"json",
+			provider,
+			model,
+			truncateString(string(body), 500),
+			err,
+		)
 	}
 
 	return &response, nil

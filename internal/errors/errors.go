@@ -159,3 +159,89 @@ func NewSchemaValidationError(field, message string) *SchemaValidationError {
 func (e *SchemaValidationError) Error() string {
 	return e.Message
 }
+
+// NetworkError represents network-level failures (connection, DNS, TLS, etc.)
+type NetworkError struct {
+	ProviderError
+	NetworkType   string // connection, timeout, dns, tls, unknown
+	ProviderID    string
+	BaseURL       string
+	OriginalError error
+}
+
+// NewNetworkError creates a new NetworkError with classification
+func NewNetworkError(message, networkType, providerID, baseURL string, original error) *NetworkError {
+	return &NetworkError{
+		ProviderError: ProviderError{
+			Message:     message,
+			StatusCode:  502,
+			IsRetryable: true, // Network errors are usually transient
+		},
+		NetworkType:   networkType,
+		ProviderID:    providerID,
+		BaseURL:       baseURL,
+		OriginalError: original,
+	}
+}
+
+func (e *NetworkError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Message, e.OriginalError)
+}
+
+func (e *NetworkError) Unwrap() error {
+	return e.OriginalError
+}
+
+// ParseError represents response parsing failures (JSON, SSE, etc.)
+type ParseError struct {
+	ProviderError
+	ParseType   string // json, sse, header
+	RawContent  string // Truncated raw content that failed to parse
+	ProviderID  string
+	Model       string
+}
+
+// NewParseError creates a new ParseError with context
+func NewParseError(message, parseType, providerID, model, rawContent string, original error) *ParseError {
+	return &ParseError{
+		ProviderError: ProviderError{
+			Message:     message,
+			StatusCode:  502,
+			IsRetryable: false, // Parse errors usually mean bad response, not retryable
+		},
+		ParseType:  parseType,
+		RawContent: rawContent,
+		ProviderID: providerID,
+		Model:      model,
+	}
+}
+
+func (e *ParseError) Error() string {
+	return e.Message
+}
+
+// EmptyResponseError represents empty or missing response body
+type EmptyResponseError struct {
+	ProviderError
+	ProviderID string
+	Model      string
+	StatusCode int
+}
+
+// NewEmptyResponseError creates a new EmptyResponseError
+func NewEmptyResponseError(providerID, model string, statusCode int) *EmptyResponseError {
+	return &EmptyResponseError{
+		ProviderError: ProviderError{
+			Message:     fmt.Sprintf("Provider %s returned empty response body", providerID),
+			StatusCode:  statusCode,
+			IsRetryable: true, // Empty responses can be transient
+		},
+		ProviderID: providerID,
+		Model:      model,
+		StatusCode: statusCode,
+	}
+}
+
+func (e *EmptyResponseError) Error() string {
+	return e.Message
+}
