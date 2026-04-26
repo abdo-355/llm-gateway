@@ -39,6 +39,9 @@ func New(ctx context.Context) (*App, error) {
 	providerSvc := services.NewProviderService()
 	routerSvc := services.NewRouter(quotaSvc, healthSvc, providerSvc)
 
+	cooldownSvc := services.NewCooldownService(redisClient, db.GetRedisKey("cooldown"), config.LoadCooldownConfig())
+	routerSvc.SetCooldownService(cooldownSvc)
+
 	handlers := &Handlers{
 		Completions: handlers.NewCompletionsHandler(routerSvc),
 		Responses:   handlers.NewResponsesHandler(routerSvc),

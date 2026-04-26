@@ -23,6 +23,7 @@ type Router struct {
 	providerService ProviderCaller
 	classifier      FailureClassifier
 	backoffStrategy BackoffStrategy
+	cooldownService *CooldownService
 }
 
 func NewRouter(
@@ -39,6 +40,7 @@ func NewRouter(
 		providerService: providerSvc,
 		classifier:      NewDefaultFailureClassifier(),
 		backoffStrategy: DefaultBackoffStrategy(),
+		cooldownService: nil,
 	}
 }
 
@@ -56,7 +58,13 @@ func NewRouterWithConfig(
 		providerService: providerSvc,
 		classifier:      NewDefaultFailureClassifier(),
 		backoffStrategy: DefaultBackoffStrategy(),
+		cooldownService: nil,
 	}
+}
+
+// SetCooldownService sets the cooldown service (called after construction)
+func (r *Router) SetCooldownService(cs *CooldownService) {
+	r.cooldownService = cs
 }
 
 // DeriveRequirements normalizes the raw request fields (response_format, stream, tools, tool_choice)
@@ -291,11 +299,19 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
-		// Check circuit breaker
-		if !r.healthService.CanExecute(ctx, provider.ID, model) {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
-			continue
-		}
+	// Check circuit breaker
+	if !r.healthService.CanExecute(ctx, provider.ID, model) {
+		filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
+		continue
+	}
+
+	// Check cooldown
+	if r.cooldownService != nil && r.cooldownService.IsOnCooldown(ctx, provider.ID, model) {
+		reason := r.cooldownService.GetCooldownReason(ctx, provider.ID, model)
+		remaining := r.cooldownService.GetCooldownRemaining(ctx, provider.ID, model)
+		filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
+		continue
+	}
 
 		// Check per-model quota
 		modelLimits := provider.Models.Limits[model]
@@ -549,8 +565,6 @@ func (r *Router) Execute(
 			}, nil
 		}
 
-	r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
-
 	if previousProvider != "" {
 		metrics.FailoverEventsTotal.WithLabelValues(
 			previousProvider, attempt.ProviderID, tier,
@@ -567,6 +581,10 @@ func (r *Router) Execute(
 		HasRemainingBudget: true,
 	}
 	decision := r.classifier.Classify(err, failureCtx)
+
+	if decision.ShouldRecordFailure {
+		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+	}
 
 	var status string
 	var errorType string
@@ -647,14 +665,13 @@ func (r *Router) Execute(
 			}
 		}
 	case types.ActionCooldown:
-		if decision.CooldownSeconds > 0 {
-			logger.Info().
-				Str("type", "router").
-				Str("event", "attempt.cooldown").
-				Str("request_id", requestID).
-				Str("provider", attempt.ProviderID).
-				Int("cooldown_seconds", decision.CooldownSeconds).
-				Msg("Provider on cooldown")
+		if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+			reason := r.failureCategoryToCooldownReason(decision.Category)
+			retryAfter := 0
+			if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
+				retryAfter = rateLimitErr.RetryAfter
+			}
+			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
 		}
 	}
 
@@ -779,8 +796,6 @@ func (r *Router) ExecuteStream(
 				return
 			}
 
-	r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
-
 	if previousProvider != "" {
 		metrics.FailoverEventsTotal.WithLabelValues(
 			previousProvider, attempt.ProviderID, tier,
@@ -798,6 +813,10 @@ func (r *Router) ExecuteStream(
 		HasRemainingBudget: true,
 	}
 	decision := r.classifier.Classify(typedErr, failureCtx)
+
+	if decision.ShouldRecordFailure {
+		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+	}
 
 	var status string
 	var errorType string
@@ -851,6 +870,15 @@ func (r *Router) ExecuteStream(
 				errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
 				return
 			}
+		}
+	case types.ActionCooldown:
+		if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+			reason := r.failureCategoryToCooldownReason(decision.Category)
+			retryAfter := 0
+			if rateLimitErr, ok := typedErr.(*errors.RateLimitError); ok {
+				retryAfter = rateLimitErr.RetryAfter
+			}
+			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
 		}
 	}
 		}
@@ -1159,4 +1187,19 @@ func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {
 		}
 	}
 	return false
+}
+
+func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory) CooldownReason {
+	switch category {
+	case types.CategoryRateLimit:
+		return CooldownRateLimit
+	case types.CategoryQuota:
+		return CooldownQuota
+	case types.CategoryPayment:
+		return CooldownBilling
+	case types.CategoryProvider5xx:
+		return CooldownOverload
+	default:
+		return CooldownDefault
+	}
 }

@@ -71,6 +71,7 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		decision.Reason = "transient network/timeout error"
 		
 	case types.CategoryRateLimit:
+		decision.ShouldRecordFailure = false
 		if ctx.AttemptIndex < ctx.MaxAttempts-1 {
 			decision.Action = types.ActionFailover
 			decision.Reason = "rate limited, trying different provider"
@@ -100,6 +101,7 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		decision.Reason = "circuit breaker open, failover"
 		
 	case types.CategoryQuota:
+		decision.ShouldRecordFailure = false
 		decision.Action = types.ActionFailover
 		decision.Reason = "quota exceeded, trying different provider"
 		
