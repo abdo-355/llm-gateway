@@ -17,8 +17,9 @@ func (e *ProviderError) Error() string {
 // RateLimitError represents a rate limit error (429)
 type RateLimitError struct {
 	ProviderError
-	RetryAfter int    // seconds until reset
-	LimitType  string // rpm, tpm, daily
+	RetryAfter    int    // seconds until reset
+	LimitType     string // rpm, tpm, rpd, resource_exhausted
+	LimitSubtype  string // rate_limit, quota_exhausted, overload
 }
 
 func NewRateLimitError(message string, retryAfter int, limitType string) *RateLimitError {
@@ -28,13 +29,28 @@ func NewRateLimitError(message string, retryAfter int, limitType string) *RateLi
 			StatusCode:  429,
 			IsRetryable: true,
 		},
-		RetryAfter: retryAfter,
-		LimitType:  limitType,
+		RetryAfter:   retryAfter,
+		LimitType:    limitType,
+		LimitSubtype: "rate_limit",
+	}
+}
+
+func NewRateLimitErrorWithSubtype(message string, retryAfter int, limitType, limitSubtype string, headers map[string]string) *RateLimitError {
+	return &RateLimitError{
+		ProviderError: ProviderError{
+			Message:     message,
+			StatusCode:  429,
+			IsRetryable: limitSubtype != "quota_exhausted",
+			Headers:     headers,
+		},
+		RetryAfter:   retryAfter,
+		LimitType:    limitType,
+		LimitSubtype: limitSubtype,
 	}
 }
 
 func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("%s (retry after: %ds, limit type: %s)", e.Message, e.RetryAfter, e.LimitType)
+	return fmt.Sprintf("%s (retry after: %ds, limit type: %s, subtype: %s)", e.Message, e.RetryAfter, e.LimitType, e.LimitSubtype)
 }
 
 type CircuitBreakerError struct {

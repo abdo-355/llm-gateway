@@ -1092,15 +1092,22 @@ func (r *Router) resolveProviderAPIKey(auth types.ProviderAuth) string {
 func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *types.GatewayError {
 	switch e := err.(type) {
 	case *errors.RateLimitError:
+		code := "RATE_LIMITED"
+		if e.LimitSubtype == "quota_exhausted" {
+			code = "QUOTA_EXHAUSTED"
+		} else if e.LimitSubtype == "overload" {
+			code = "PROVIDER_OVERLOADED"
+		}
 		return &types.GatewayError{
-			Type:    "rate_limit_error",
-			Code:    "RATE_LIMITED",
+			Type: "rate_limit_error",
+			Code: code,
 			Message: e.Error(),
 			Details: map[string]any{
-				"retry_after": e.RetryAfter,
-				"limit_type":  e.LimitType,
-				"headers":     e.Headers,
-				"attempts":    attempts,
+				"retry_after":   e.RetryAfter,
+				"limit_type":    e.LimitType,
+				"limit_subtype": e.LimitSubtype,
+				"headers":       e.Headers,
+				"attempts":      attempts,
 			},
 		}
 	case *errors.CircuitBreakerError:

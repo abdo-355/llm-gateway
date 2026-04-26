@@ -72,13 +72,24 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		
 	case types.CategoryRateLimit:
 		decision.ShouldRecordFailure = false
-		if ctx.AttemptIndex < ctx.MaxAttempts-1 {
+		subtype := c.extractRateLimitSubtype(err)
+		switch subtype {
+		case "quota_exhausted":
 			decision.Action = types.ActionFailover
-			decision.Reason = "rate limited, trying different provider"
-		} else {
-			decision.Action = types.ActionCooldown
-			decision.CooldownSeconds = c.extractRetryAfter(err)
-			decision.Reason = "all providers rate limited, applying cooldown"
+			decision.IsRetryable = false
+			decision.Reason = "quota/billing exhausted, trying different provider"
+		case "overload":
+			decision.Action = types.ActionFailover
+			decision.Reason = "provider overloaded, trying different provider"
+		default:
+			if ctx.AttemptIndex < ctx.MaxAttempts-1 {
+				decision.Action = types.ActionFailover
+				decision.Reason = "rate limited, trying different provider"
+			} else {
+				decision.Action = types.ActionCooldown
+				decision.CooldownSeconds = c.extractRetryAfter(err)
+				decision.Reason = "all providers rate limited, applying cooldown"
+			}
 		}
 		
 	case types.CategoryProvider5xx:
@@ -156,5 +167,13 @@ func (c *DefaultFailureClassifier) extractRetryAfter(err error) int {
 	if rateErr, ok := err.(*errors.RateLimitError); ok {
 		return rateErr.RetryAfter
 	}
-	return 60 // default 60 seconds
+	return 60
+}
+
+// extractRateLimitSubtype extracts the limit subtype from a rate limit error
+func (c *DefaultFailureClassifier) extractRateLimitSubtype(err error) string {
+	if rateErr, ok := err.(*errors.RateLimitError); ok {
+		return rateErr.LimitSubtype
+	}
+	return "rate_limit"
 }

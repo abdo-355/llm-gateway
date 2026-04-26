@@ -199,14 +199,21 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 
 	switch e := err.(type) {
 	case *errors.RateLimitError:
+		code := "RATE_LIMITED"
+		if e.LimitSubtype == "quota_exhausted" {
+			code = "QUOTA_EXHAUSTED"
+		} else if e.LimitSubtype == "overload" {
+			code = "PROVIDER_OVERLOADED"
+		}
 		return &types.GatewayError{
 			Type: "rate_limit_error",
-			Code: "RATE_LIMITED",
+			Code: code,
 			Message: e.Message,
 			Details: map[string]any{
-				"retry_after": e.RetryAfter,
-				"limit_type":  e.LimitType,
-				"headers":     e.Headers,
+				"retry_after":    e.RetryAfter,
+				"limit_type":     e.LimitType,
+				"limit_subtype":  e.LimitSubtype,
+				"headers":        e.Headers,
 			},
 		}
 	case *errors.PaymentRequiredError:
@@ -605,12 +612,11 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	headers := flattenHeaders(resp.Header)
 	if resp.StatusCode == http.StatusTooManyRequests {
 		body, _ := io.ReadAll(resp.Body)
-		retryAfter, limitType := parseRateLimitDetails(provider, resp.Header, body)
-		return nil, &errors.RateLimitError{
-			ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 429, IsRetryable: true, Headers: headers},
-			RetryAfter:    retryAfter,
-			LimitType:     limitType,
-		}
+		retryAfter, limitType, limitSubtype := parseRateLimitDetails(provider, resp.Header, body)
+		return nil, errors.NewRateLimitErrorWithSubtype(
+			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
+			retryAfter, limitType, limitSubtype, headers,
+		)
 	}
 
 	if resp.StatusCode == http.StatusPaymentRequired {
@@ -678,12 +684,11 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, prov
 
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
-		retryAfter, limitType := parseRateLimitDetails(provider, resp.Header, body)
-		return &errors.RateLimitError{
-			ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 429, IsRetryable: true, Headers: headers},
-			RetryAfter:    retryAfter,
-			LimitType:     limitType,
-		}
+		retryAfter, limitType, limitSubtype := parseRateLimitDetails(provider, resp.Header, body)
+		return errors.NewRateLimitErrorWithSubtype(
+			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
+			retryAfter, limitType, limitSubtype, headers,
+		)
 	case http.StatusPaymentRequired:
 		return &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	default:
@@ -713,7 +718,7 @@ func flattenHeaders(headers http.Header) map[string]string {
 	return flat
 }
 
-func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string) {
+func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string, string) {
 	retryAfter := 60
 	if value := headers.Get("Retry-After"); value != "" {
 		if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
@@ -721,31 +726,53 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		}
 	}
 
+	bodyUpper := strings.ToUpper(string(body))
+	limitSubtype := "rate_limit"
+
 	switch provider {
 	case "groq":
 		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
-			return retryAfter, "rpd"
+			return retryAfter, "rpd", limitSubtype
 		}
 		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
-			return retryAfter, "tpm"
+			return retryAfter, "tpm", limitSubtype
 		}
 	case "cerebras":
 		if headers.Get("X-RateLimit-Limit-Requests-Minute") != "" {
-			return retryAfter, "rpm"
+			return retryAfter, "rpm", limitSubtype
 		}
 		if headers.Get("X-RateLimit-Limit-Tokens-Minute") != "" {
-			return retryAfter, "tpm"
+			return retryAfter, "tpm", limitSubtype
 		}
 		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
-			return retryAfter, "rpd"
+			return retryAfter, "rpd", limitSubtype
 		}
 	case "vertex", "gemini":
-		if strings.Contains(strings.ToUpper(string(body)), "RESOURCE_EXHAUSTED") {
-			return retryAfter, "resource_exhausted"
+		if strings.Contains(bodyUpper, "RESOURCE_EXHAUSTED") {
+			if strings.Contains(bodyUpper, "QUOTA") || strings.Contains(bodyUpper, "MONTHLY") {
+				return retryAfter, "resource_exhausted", "quota_exhausted"
+			}
+			return retryAfter, "resource_exhausted", "overload"
 		}
 	}
 
-	return retryAfter, "rpm"
+	// Parse body for quota/billing exhaustion signals across all providers
+	if strings.Contains(bodyUpper, "QUOTA_EXCEEDED") ||
+		strings.Contains(bodyUpper, "MONTHLY") ||
+		strings.Contains(bodyUpper, "BILLING") ||
+		strings.Contains(bodyUpper, "INSUFFICIENT_QUOTA") ||
+		strings.Contains(bodyUpper, "CREDITS") {
+		return retryAfter, "quota", "quota_exhausted"
+	}
+
+	// Detect overload signals
+	if strings.Contains(bodyUpper, "OVERLOAD") ||
+		strings.Contains(bodyUpper, "SLOW_DOWN") ||
+		strings.Contains(bodyUpper, "CAPACITY") {
+		return retryAfter, "rpm", "overload"
+	}
+
+	return retryAfter, "rpm", limitSubtype
 }
 
 func normalizeProviderErrorMessage(provider string, statusCode int, body []byte) string {
