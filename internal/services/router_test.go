@@ -658,7 +658,7 @@ func TestExecute(t *testing.T) {
 		require.Error(t, err)
 		gatewayErr, ok := err.(*types.GatewayError)
 		require.True(t, ok)
-		assert.Equal(t, "PROVIDER_ERROR", gatewayErr.Code)
+		assert.Equal(t, "ALL_ATTEMPTS_FAILED", gatewayErr.Code)
 	})
 
 	t.Run("non-retryable error stops immediately", func(t *testing.T) {
