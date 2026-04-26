@@ -282,9 +282,10 @@ func getVertexConfig() types.ProviderConfig {
 
 	return types.ProviderConfig{
 		ID:      "vertex",
-		BaseURL: "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/LOCATION_ID/endpoints/openapi",
+		BaseURL: "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/endpoints/openapi",
 		Auth: types.ProviderAuth{
-			Type: "adc",
+			Type: "bearer",
+			Env:  "GOOGLE_VERTEX_API_KEY",
 		},
 		Models: types.ProviderModels{
 			Mode: "allowlist",

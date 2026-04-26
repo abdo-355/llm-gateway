@@ -179,12 +179,6 @@ func (s *ProviderService) setAuth(ctx context.Context, req *http.Request, apiKey
 		if auth.HeaderName != "" && apiKey != "" {
 			req.Header.Set(auth.HeaderName, apiKey)
 		}
-	case "adc":
-		token, err := GetVertexToken(ctx)
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
 	return nil
 }
@@ -327,9 +321,11 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "ollama"
 	case "KILO_API_KEY":
 		return "kilo"
+	case "GOOGLE_VERTEX_API_KEY":
+		return "vertex"
 	}
 
-	if auth.Type == "adc" || providerType == "vertex" {
+	if providerType == "vertex" {
 		return "vertex"
 	}
 

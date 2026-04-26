@@ -183,7 +183,7 @@ func TestPrepareRequest_VertexRejectsRecursiveSchema(t *testing.T) {
 		},
 	}
 
-	_, err := svc.prepareRequest(req, "google/gemini-3.1-pro-preview", "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/endpoints/openapi", "vertex", types.ProviderAuth{Type: "adc"})
+	_, err := svc.prepareRequest(req, "google/gemini-3.1-pro-preview", "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/endpoints/openapi", "vertex", types.ProviderAuth{Type: "bearer", Env: "GOOGLE_VERTEX_API_KEY"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "recursive")
 }

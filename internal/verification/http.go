@@ -8,7 +8,6 @@ import (
 	"time"
 
 	gatewayerrors "github.com/abdo-355/llm-gateway/internal/errors"
-	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
@@ -123,18 +122,6 @@ func resolveAPIKey(ctx context.Context, provider types.ProviderConfig) (string, 
 			return "", fmt.Errorf("auth_missing: %s is empty", provider.Auth.Env)
 		}
 		return value, nil
-	case "adc":
-		projectEnv := os.Getenv("GOOGLE_CLOUD_PROJECT")
-		if projectEnv == "" {
-			projectEnv = os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
-		}
-		if strings.TrimSpace(projectEnv) == "" {
-			return "", fmt.Errorf("auth_missing: GOOGLE_CLOUD_PROJECT (or GOOGLE_VERTEX_PROJECT_ID) is empty")
-		}
-		if err := services.InitVertexAuth(ctx); err != nil {
-			return "", fmt.Errorf("auth_failed: vertex ADC initialization failed: %v", err)
-		}
-		return "", nil
 	default:
 		return "", nil
 	}
@@ -143,18 +130,10 @@ func resolveAPIKey(ctx context.Context, provider types.ProviderConfig) (string, 
 func resolvedBaseURL(provider types.ProviderConfig) string {
 	baseURL := provider.BaseURL
 	if provider.ID == "vertex" {
-		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-		if projectID == "" {
-			projectID = os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
-		}
+		projectID := os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
 		if projectID != "" {
 			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", projectID)
 		}
-		location := os.Getenv("GOOGLE_CLOUD_LOCATION")
-		if location == "" {
-			location = "global"
-		}
-		baseURL = strings.ReplaceAll(baseURL, "LOCATION_ID", location)
 	}
 	return baseURL
 }

@@ -32,14 +32,6 @@ func New(ctx context.Context) (*App, error) {
 	env := config.GetEnv()
 	logger.Init("llm-gateway", env.Environment, env.LogLevel)
 
-	if err := config.InitGCPCredentials(); err != nil {
-		logger.Warn().Err(err).Msg("GCP credentials bootstrap failed")
-	}
-
-	if err := services.InitVertexAuth(ctx); err != nil {
-		logger.Warn().Err(err).Msg("Vertex auth initialization failed")
-	}
-
 	redisClient := db.NewRedisClient()
 
 	quotaSvc := services.NewQuotaService(redisClient, db.GetRedisKey("quota"))
