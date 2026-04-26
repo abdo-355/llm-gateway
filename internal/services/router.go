@@ -472,6 +472,7 @@ func (r *Router) Execute(
 
 	var previousProvider string
 	var hadFailure bool
+	var attemptChain []map[string]any
 
 	for i, attempt := range plan.Attempts {
 		if plan.HardTimeoutMs != nil {
@@ -586,6 +587,19 @@ func (r *Router) Execute(
 		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
 	}
 
+	metrics.FailureClassifiedTotal.WithLabelValues(
+		attempt.ProviderID, attempt.Model,
+		string(decision.Category), string(decision.Action),
+	).Inc()
+
+	attemptChain = append(attemptChain, map[string]any{
+		"provider":       attempt.ProviderID,
+		"model":          attempt.Model,
+		"failure_kind":   string(decision.Category),
+		"failure_action": string(decision.Action),
+		"failure_reason": decision.Reason,
+	})
+
 	var status string
 	var errorType string
 	switch decision.Category {
@@ -643,6 +657,7 @@ func (r *Router) Execute(
 	case types.ActionRetry, types.ActionRetryWithBackoff:
 		if decision.BackoffMs > 0 {
 			backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+			metrics.BackoffSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(backoffDuration.Seconds())
 			logger.Info().
 				Str("type", "router").
 				Str("event", "attempt.backoff").
@@ -688,6 +703,9 @@ func (r *Router) Execute(
 		Type:    "gateway_error",
 		Code:    "ALL_ATTEMPTS_FAILED",
 		Message: "All provider attempts failed",
+		Details: map[string]any{
+			"attempts": attemptChain,
+		},
 	}
 }
 

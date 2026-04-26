@@ -127,6 +127,24 @@ var (
 	}, []string{"provider", "model", "tier", "strategy"})
 )
 
+var (
+	BackoffSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "gateway_backoff_seconds",
+		Help:    "Backoff duration before retry in seconds.",
+		Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10},
+	}, []string{"provider", "model"})
+
+	CooldownAppliedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_cooldown_applied_total",
+		Help: "Total number of cooldowns applied to providers.",
+	}, []string{"provider", "model", "reason"})
+
+	FailureClassifiedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_failure_classified_total",
+		Help: "Total number of failures classified by category and action.",
+	}, []string{"provider", "model", "category", "action"})
+)
+
 func RegisterModelInfo(cfg types.AppConfig) {
 	registerModelInfoOnce.Do(func() {
 		strictJSON := map[string]bool{}
