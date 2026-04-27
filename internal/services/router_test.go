@@ -465,6 +465,46 @@ func TestScoreCandidates(t *testing.T) {
 		scored := r.ScoreCandidates(ctx, candidates, nil)
 		assert.Equal(t, "model-3", scored[0].Model)
 	})
+
+	t.Run("applies success ratio as extra score component", func(t *testing.T) {
+		r, _, mockHealth, _ := newTestRouter(t)
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "provider-a", "model-1").Return(services.HealthMetrics{
+			HealthScore:  1.0,
+			SuccessCount: 0,
+			FailureCount: 0, // defaults ratio to 1.0 (1/1 behavior)
+		})
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "provider-b", "model-3").Return(services.HealthMetrics{
+			HealthScore:  1.0,
+			SuccessCount: 1,
+			FailureCount: 3, // ratio 0.25
+		})
+
+		candidates := []types.RoutingCandidate{
+			{Provider: testConfig().Providers[0], Model: "model-1", ScoreBreakdown: map[string]float64{}},
+			{Provider: testConfig().Providers[1], Model: "model-3", ScoreBreakdown: map[string]float64{}},
+		}
+
+		scored := r.ScoreCandidates(ctx, candidates, nil)
+		assert.Equal(t, "model-1", scored[0].Model)
+		assert.InDelta(t, 1.0, scored[0].ScoreBreakdown["success_ratio"], 0.0001)
+		assert.InDelta(t, 0.25, scored[1].ScoreBreakdown["success_ratio"], 0.0001)
+	})
+
+	t.Run("combines success ratio with existing score formula", func(t *testing.T) {
+		r, _, mockHealth, _ := newTestRouter(t)
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "provider-a", "model-1").Return(services.HealthMetrics{
+			HealthScore:  0.6,
+			SuccessCount: 3,
+			FailureCount: 1, // ratio 0.75
+		})
+
+		candidates := []types.RoutingCandidate{
+			{Provider: testConfig().Providers[0], Model: "model-1", ScoreBreakdown: map[string]float64{}},
+		}
+
+		scored := r.ScoreCandidates(ctx, candidates, nil)
+		assert.InDelta(t, 1.55, scored[0].Score, 0.0001) // 1.0*0.5 + 0.6*0.5 + 0.75
+	})
 }
 
 // --- CompilePlan ---

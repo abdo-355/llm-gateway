@@ -138,6 +138,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 		scored := r.ScoreCandidates(ctx, candidates, nil)
 		assert.Len(t, scored, 1)
 		assert.Equal(t, "model-1", scored[0].Model)
+		assert.InDelta(t, 1.0, scored[0].ScoreBreakdown["success_ratio"], 0.0001)
 	})
 
 	t.Run("preference bonus decreases by rank", func(t *testing.T) {

@@ -312,12 +312,12 @@ if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, e
 
 ## Stage 4: Score Candidates
 
-**Purpose**: Rank remaining candidates by preference and health.
+**Purpose**: Rank remaining candidates by preference, health, and observed success ratio.
 
 ### Scoring Formula
 
 ```go
-score = (baseScore * 0.5) + (healthScore * 0.5) + logicalModelWeight
+score = (baseScore * 0.5) + (healthScore * 0.5) + successRatio + logicalModelWeight
 ```
 
 **Preference Bonus:**
@@ -342,6 +342,17 @@ if hints != nil && hints.Providers != nil {
 metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
 healthScore := metrics.HealthScore // 0.0 to 1.0
 candidate.ScoreBreakdown["health_score"] = healthScore
+```
+
+**Success Ratio Score:**
+
+```go
+totalRequests := metrics.SuccessCount + metrics.FailureCount
+successRatio := 1.0 // default to 1/1 when there is no history
+if totalRequests > 0 {
+    successRatio = float64(metrics.SuccessCount) / float64(totalRequests)
+}
+candidate.ScoreBreakdown["success_ratio"] = successRatio
 ```
 
 **Sorting:**

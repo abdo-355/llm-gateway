@@ -355,10 +355,12 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 		// Health score
 		metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
 		healthScore := metrics.HealthScore
+		successRatioScore := calculateSuccessRatioScore(metrics.SuccessCount, metrics.FailureCount)
 		candidate.ScoreBreakdown["health_score"] = healthScore
+		candidate.ScoreBreakdown["success_ratio"] = successRatioScore
 
 		// Combine scores
-		candidate.Score = baseScore*0.5 + healthScore*0.5 + candidate.Score
+		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score
 	}
 
 	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
@@ -372,6 +374,14 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 	})
 
 	return candidates
+}
+
+func calculateSuccessRatioScore(successCount, failureCount int) float64 {
+	total := successCount + failureCount
+	if total <= 0 {
+		return 1.0
+	}
+	return float64(successCount) / float64(total)
 }
 
 // Stage 5: Compile Plan
