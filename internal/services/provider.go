@@ -300,12 +300,6 @@ func validateRequestForProvider(request types.ChatCompletionRequest, provider st
 		}
 	}
 
-	if provider == "vertex" && request.ResponseFormat.Type == "json_schema" && request.ResponseFormat.JSONSchema != nil {
-		if schemaContainsRecursiveRef(request.ResponseFormat.JSONSchema.Schema) {
-			return fmt.Errorf("vertex does not support recursive json_schema references")
-		}
-	}
-
 	return nil
 }
 
@@ -326,11 +320,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 		}
 		request.Seed = nil
 		request.User = ""
-	case "gemini", "vertex":
-		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
-			request.MaxTokens = request.MaxCompletionTokens
-		}
-		request.MaxCompletionTokens = nil
 	}
 
 	switch provider {
@@ -340,16 +329,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 		request.PresencePenalty = nil
 	case "cerebras":
 		request.Metadata = nil
-	case "gemini":
-		request.Metadata = nil
-		request.Seed = nil
-		request.RandomSeed = nil
-		request.User = ""
-		request.FrequencyPenalty = nil
-		request.PresencePenalty = nil
-	case "vertex":
-		request.Metadata = nil
-		request.User = ""
 	}
 
 	return request
@@ -363,20 +342,12 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case "MISTRAL_API_KEY":
 		return "mistral"
-	case "GEMINI_API_KEY":
-		return "gemini"
 	case "NIM_API_KEY":
 		return "nim"
 	case "OLLAMA_API_KEY":
 		return "ollama"
 	case "KILO_API_KEY":
 		return "kilo"
-	case "GOOGLE_VERTEX_API_KEY":
-		return "vertex"
-	}
-
-	if providerType == "vertex" {
-		return "vertex"
 	}
 
 	switch {
@@ -386,10 +357,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case strings.Contains(baseURL, "api.mistral.ai"):
 		return "mistral"
-	case strings.Contains(baseURL, "generativelanguage.googleapis.com"):
-		return "gemini"
-	case strings.Contains(baseURL, "aiplatform.googleapis.com"):
-		return "vertex"
 	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
 		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
@@ -747,13 +714,6 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
 			return retryAfter, "rpd", limitSubtype
 		}
-	case "vertex", "gemini":
-		if strings.Contains(bodyUpper, "RESOURCE_EXHAUSTED") {
-			if strings.Contains(bodyUpper, "QUOTA") || strings.Contains(bodyUpper, "MONTHLY") {
-				return retryAfter, "resource_exhausted", "quota_exhausted"
-			}
-			return retryAfter, "resource_exhausted", "overload"
-		}
 	}
 
 	// Parse body for quota/billing exhaustion signals across all providers
@@ -815,15 +775,6 @@ func extractProviderErrorMessage(provider string, body []byte) string {
 		case map[string]any:
 			if detail, ok := msg["detail"]; ok {
 				return fmt.Sprintf("%v", detail)
-			}
-		}
-	}
-
-	var googleArray []map[string]any
-	if err := json.Unmarshal(trimmed, &googleArray); err == nil && len(googleArray) > 0 {
-		if errObj, ok := googleArray[0]["error"].(map[string]any); ok {
-			if message, ok := errObj["message"].(string); ok {
-				return message
 			}
 		}
 	}

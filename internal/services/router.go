@@ -413,16 +413,10 @@ func (r *Router) CompilePlan(
 		candidate := candidates[i]
 		apiKey := r.resolveProviderAPIKey(candidate.Provider.Auth)
 
-		// Build the base URL, replacing placeholders for Vertex
-		baseURL := candidate.Provider.BaseURL
-		if candidate.Provider.ID == "vertex" {
-			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", config.GetEnv().GoogleVertexProjectID)
-		}
-
 		attempts = append(attempts, types.RoutingAttempt{
 			ProviderID:   candidate.Provider.ID,
 			Model:        candidate.Model,
-			BaseURL:      baseURL,
+			BaseURL:      candidate.Provider.BaseURL,
 			APIKey:       apiKey,
 			Score:        candidate.Score,
 			TimeoutMs:    timeoutMs,
