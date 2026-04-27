@@ -17,13 +17,9 @@ type EnvConfig struct {
 	GroqAPIKey     string
 	CerebrasAPIKey string
 	MistralAPIKey  string
-	GeminiAPIKey string
-	NimAPIKey string
-	OllamaAPIKey string
-	KiloAPIKey string
-	GoogleVertexAPIKey string
-
-	GoogleVertexProjectID string
+	NimAPIKey      string
+	OllamaAPIKey   string
+	KiloAPIKey     string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -88,14 +84,11 @@ func LoadEnv() (*EnvConfig, error) {
 		GatewayAPIKey: gatewayKey,
 		GroqAPIKey: os.Getenv("GROQ_API_KEY"),
 		CerebrasAPIKey: os.Getenv("CEREBRAS_API_KEY"),
-		MistralAPIKey: os.Getenv("MISTRAL_API_KEY"),
-		GeminiAPIKey: os.Getenv("GEMINI_API_KEY"),
-		NimAPIKey: os.Getenv("NIM_API_KEY"),
-		OllamaAPIKey: os.Getenv("OLLAMA_API_KEY"),
-		KiloAPIKey: os.Getenv("KILO_API_KEY"),
-		GoogleVertexAPIKey: os.Getenv("GOOGLE_VERTEX_API_KEY"),
-		GoogleVertexProjectID: os.Getenv("GOOGLE_VERTEX_PROJECT_ID"),
-		RedisURL: getEnvString("REDIS_URL", "redis://localhost:6379"),
+		MistralAPIKey:  os.Getenv("MISTRAL_API_KEY"),
+		NimAPIKey:      os.Getenv("NIM_API_KEY"),
+		OllamaAPIKey:   os.Getenv("OLLAMA_API_KEY"),
+		KiloAPIKey:     os.Getenv("KILO_API_KEY"),
+		RedisURL:       getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:        getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
 		RateLimitGlobal:       rateLimitGlobal,
 		RateLimitPerIP:        rateLimitPerIP,
