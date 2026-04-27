@@ -23,7 +23,6 @@ func init() {
 	os.Setenv("GROQ_API_KEY", "test-groq-key")
 	os.Setenv("CEREBRAS_API_KEY", "test-cerebras-key")
 	os.Setenv("MISTRAL_API_KEY", "test-mistral-key")
-	os.Setenv("GEMINI_API_KEY", "test-gemini-key")
 }
 
 func testConfig() types.AppConfig {
