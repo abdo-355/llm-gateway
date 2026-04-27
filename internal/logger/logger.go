@@ -48,18 +48,32 @@ func parseLevel(level string) zerolog.Level {
 	}
 }
 
+var noopLogger = zerolog.Nop()
+
 func Info() *zerolog.Event {
+	if log == nil {
+		return noopLogger.Info()
+	}
 	return log.Info()
 }
 
 func Error() *zerolog.Event {
+	if log == nil {
+		return noopLogger.Error()
+	}
 	return log.Error()
 }
 
 func Debug() *zerolog.Event {
+	if log == nil {
+		return noopLogger.Debug()
+	}
 	return log.Debug()
 }
 
 func Warn() *zerolog.Event {
+	if log == nil {
+		return noopLogger.Warn()
+	}
 	return log.Warn()
 }

@@ -432,7 +432,7 @@ func getNIMConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               true,
-			StructuredOutputs:   "model_dependent",
+			StructuredOutputs:   "json_schema_strict",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,
@@ -511,7 +511,7 @@ func getOllamaConfig() types.ProviderConfig {
 
 	return types.ProviderConfig{
 		ID:      "ollama",
-		BaseURL: "https://ollama.com/v1",
+		BaseURL: "https://ollama.com",
 		Auth: types.ProviderAuth{
 			Type: "bearer",
 			Env:  "OLLAMA_API_KEY",
@@ -580,7 +580,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               false,
-			StructuredOutputs:   "none",
+			StructuredOutputs:   "json_schema",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,
@@ -595,7 +595,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Limits: types.ProviderLimits{
 			Rpm: &rpm20,
 		},
-		ProviderType: "openai",
+		ProviderType: "ollama",
 	}
 }
 

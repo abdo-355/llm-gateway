@@ -69,6 +69,10 @@ func (s *ProviderService) CallProvider(
 	providerType string,
 	auth types.ProviderAuth,
 ) (*types.ChatCompletionResponse, error) {
+	if providerType == "ollama" {
+		return s.callOllamaProvider(baseURL, apiKey, model, request, ctx, auth)
+	}
+
 	reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
 	if err != nil {
 		return nil, err
@@ -111,6 +115,10 @@ func (s *ProviderService) StreamProviderChannel(
 	providerType string,
 	auth types.ProviderAuth,
 ) types.StreamResult {
+	if providerType == "ollama" {
+		return s.callOllamaStreamProvider(baseURL, apiKey, model, request, ctx, auth)
+	}
+
 	chunks := make(chan *types.SSEChunk)
 	errChan := make(chan *types.GatewayError, 1)
 
