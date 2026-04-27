@@ -31,7 +31,6 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **NVIDIA NIM** - High-performance LLMs via NVIDIA's API
 - **Ollama** - Self-hosted and cloud Ollama models
 - **Kilo** - Diverse models via Kilo's gateway
-- **Google Vertex AI** - Gemini models (via Vertex AI)
 - **Google Gemini** - Gemini models (via Gemini API)
 
 ---
@@ -108,7 +107,7 @@ Select relative capability tiers directly:
               │   (Groq/Cerebras/       │
               │    Mistral/NIM/         │
               │    Ollama/Kilo/         │
-              │    Vertex/Gemini)       │
+              │    Gemini)              │
               └─────────────────────────┘
 ```
 
@@ -235,7 +234,7 @@ When a provider returns `200 OK` but the visible content is empty, you can log t
 
 ```bash
 LOG_RAW_PROVIDER_RESPONSES=1 \
-LOG_RAW_PROVIDER_RESPONSE_FILTERS=gemini,vertex,mistral/magistral-* \
+LOG_RAW_PROVIDER_RESPONSE_FILTERS=gemini,mistral/magistral-* \
 go run ./cmd/verify-upstream --provider gemini
 ```
 
@@ -248,7 +247,6 @@ Notes:
 
 Failures include the exact reason when available, for example:
 - missing provider auth envs like `GEMINI_API_KEY`
-- missing `GOOGLE_VERTEX_PROJECT_ID` or `GOOGLE_VERTEX_API_KEY`
 - provider HTTP status and error message
 - invalid JSON output when structured output was requested
 - missing tool calls when tools were required
@@ -270,8 +268,6 @@ Failures include the exact reason when available, for example:
 | `NIM_API_KEY` | No | NVIDIA NIM API key |
 | `OLLAMA_API_KEY` | No | Ollama API key |
 | `KILO_API_KEY` | No | Kilo API key (optional for free models) |
-| `GOOGLE_VERTEX_PROJECT_ID` | No | Google Cloud project ID for Vertex AI |
-| `GOOGLE_VERTEX_API_KEY` | No | Google Vertex AI OAuth token |
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -532,87 +528,3 @@ LOG_LEVEL=debug go run ./cmd/gateway
 
 - Check [ROUTING_LOGIC.md](./ROUTING_LOGIC.md) for routing details
 - View logs with `docker-compose logs -f`
-
----
-
-## Vertex AI in Coolify
-
-This section covers deploying the gateway with Google Vertex AI support in Coolify (outside GCP).
-
-### Prerequisites
-
-1. A Google Cloud Platform (GCP) project with Vertex AI API enabled
-2. A service account with Vertex AI permissions (roles/aiplatform.user)
-3. A service account key (JSON) downloaded from GCP
-
-### Creating a Service Account
-
-1. Go to GCP Console > IAM & Admin > Service Accounts
-2. Create a new service account (e.g., `llm-gateway`)
-3. Grant role: **Vertex AI User** (or broader if needed)
-4. Create a key (JSON) and save it securely
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GATEWAY_API_KEY` | Yes | Your API key |
-| `GOOGLE_VERTEX_PROJECT_ID` | Yes* | GCP project ID (*required for Vertex) |
-| `GOOGLE_VERTEX_API_KEY` | Yes* | OAuth token for Vertex AI |
-| `REDIS_URL` | Yes* | Redis connection URL |
-| Provider API keys | No | At least one provider key required |
-
-### Coolify Configuration
-
-In Coolify, set these environment variables:
-
-```
-GATEWAY_API_KEY=[your-32+-char-key]
-GOOGLE_VERTEX_PROJECT_ID=[your-gcp-project-id]
-GOOGLE_VERTEX_API_KEY=[your-oauth-token]
-REDIS_URL=redis://[host]:6379
-```
-
-### Verifying Configuration
-
-After deployment, check the health endpoint:
-
-```bash
-curl http://[your-host]/health | jq
-```
-
-Expected response:
-```json
-{
-  "status": "healthy"
-}
-```
-
-### Testing Vertex API
-
-Make a test request:
-
-```bash
-curl -X POST http://[your-host]/v1/chat/completions \
-  -H "Authorization: Bearer $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "pro",
-    "messages": [{"role": "user", "content": "Say hello in 3 words"}]
-  }'
-```
-
-The `pro` tier includes Vertex models by default.
-
-### Troubleshooting
-
-**401 Unauthorized:**
-- Check service account key is valid and not expired
-
-**403 Forbidden:**
-- Service account lacks Vertex AI permissions
-- Vertex AI API not enabled in GCP project
-
-**503 Service Unavailable:**
-- Vertex provider might be unhealthy
-- Check provider status at `/health` endpoint

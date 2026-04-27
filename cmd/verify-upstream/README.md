@@ -54,13 +54,10 @@ Loads `.env` file automatically. Requires provider API keys:
 - `NIM_API_KEY` - NVIDIA NIM provider
 - `OLLAMA_API_KEY` - Ollama provider
 - `KILO_API_KEY` - Kilo provider (optional)
-- `GOOGLE_VERTEX_PROJECT_ID` - GCP project for Vertex tests
 
 Optional:
 - `ENV` - environment name (development/production)
 - `LOG_LEVEL` - debug, info, warn, error (default: info)
-
-Vertex requires a valid `GOOGLE_VERTEX_API_KEY` OAuth token and `GOOGLE_VERTEX_PROJECT_ID`.
 
 ## Exit Codes
 

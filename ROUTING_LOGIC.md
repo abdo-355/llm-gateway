@@ -87,7 +87,7 @@ type RoutingAttempt struct {
     APIKey       string
     Score        float64
     TimeoutMs    int
-    ProviderType string // "openai" or "vertex"
+    ProviderType string // "openai"
     Auth         ProviderAuth
 }
 ```
@@ -409,7 +409,6 @@ for i := 0; i < maxAttempts && i < len(candidates); i++ {
     case "NIM_API_KEY":          apiKey = config.GetEnv().NimAPIKey
     case "OLLAMA_API_KEY":       apiKey = config.GetEnv().OllamaAPIKey
     case "KILO_API_KEY":         apiKey = config.GetEnv().KiloAPIKey
-    case "GOOGLE_VERTEX_API_KEY": apiKey = config.GetEnv().GoogleVertexProjectID // Simplified representation
     }
 
     attempts = append(attempts, RoutingAttempt{

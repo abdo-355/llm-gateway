@@ -18,7 +18,7 @@ This document contains PromQL queries for building a comprehensive LLM Gateway d
 - `balanced` - Balanced routing
 
 ### Providers
-- `groq`, `mistral`, `cerebras`, `gemini`, `vertex`
+- `groq`, `mistral`, `cerebras`, `gemini`
 
 ### Directions
 - `prompt` - Input tokens
