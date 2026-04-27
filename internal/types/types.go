@@ -405,7 +405,7 @@ type ProviderConfig struct {
 	Models       ProviderModels       `json:"models"`
 	Capabilities ProviderCapabilities `json:"capabilities"`
 	Limits       ProviderLimits       `json:"limits"`
-	ProviderType string               `json:"providerType,omitempty"` // openai, vertex (defaults to openai)
+	ProviderType string               `json:"providerType,omitempty"` // openai (defaults to openai)
 }
 
 type ProviderAuth struct {

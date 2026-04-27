@@ -129,14 +129,7 @@ func resolveAPIKey(ctx context.Context, provider types.ProviderConfig) (string, 
 }
 
 func resolvedBaseURL(provider types.ProviderConfig) string {
-	baseURL := provider.BaseURL
-	if provider.ID == "vertex" {
-		projectID := os.Getenv("GOOGLE_VERTEX_PROJECT_ID")
-		if projectID != "" {
-			baseURL = strings.ReplaceAll(baseURL, "PROJECT_ID", projectID)
-		}
-	}
-	return baseURL
+	return provider.BaseURL
 }
 
 func providerType(provider types.ProviderConfig) string {
