@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
+	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
@@ -57,6 +58,17 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 
 	eligible, filtered := p.router.FilterCandidates(ctx, candidates, requirements, req, hints)
 	if len(eligible) == 0 {
+		env := config.GetEnv()
+		if env.Environment != "production" {
+			logger.Debug().
+				Str("event", "routing.no_eligible_provider").
+				Str("model", model).
+				Interface("requirements", requirements).
+				Interface("response_format", req.ResponseFormat).
+				Interface("filtered_providers", filtered).
+				Int("candidate_count", len(candidates)).
+				Msg("No eligible provider found - debug details")
+		}
 		return nil, &types.GatewayError{
 			Type:    "gateway_error",
 			Code:    "NO_ELIGIBLE_PROVIDER",

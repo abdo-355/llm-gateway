@@ -87,9 +87,8 @@ func BuildProbes(cfg Config) []Probe {
 		},
 
 		{
-			Name:       "stream",
-			Fields:     []string{"stream", "stream_options.include_usage"},
-			Applicable: func(combo Combo) bool { return combo.Provider.Capabilities.Streaming },
+			Name:   "stream",
+			Fields: []string{"stream", "stream_options.include_usage"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:    combo.Model,
@@ -104,9 +103,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "json_object",
-			Fields:     []string{"response_format.type=json_object"},
-			Applicable: supportsJSONOutput,
+			Name:   "json_object",
+			Fields: []string{"response_format.type=json_object"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -118,9 +116,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "json_schema_strict",
-			Fields:     []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
-			Applicable: supportsStrictJSON,
+			Name:   "json_schema_strict",
+			Fields: []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -129,6 +126,33 @@ func BuildProbes(cfg Config) []Probe {
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
 				return r.runJSONProbe(combo, "json_schema_strict", []string{"response_format.type=json_schema", "response_format.json_schema.strict"}, req, validateStrictJSONChat)
+			},
+		},
+		{
+			Name:   "logprobs",
+			Fields: []string{"logprobs", "top_logprobs"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:       combo.Model,
+					Messages:    basicMessages("Say hello."),
+					Logprobs:    boolPtr(true),
+					TopLogprobs: intPtr(5),
+					MaxTokens:   probeTokenPtr(cfg, 8),
+				}
+				return r.runJSONProbe(combo, "logprobs", []string{"logprobs", "top_logprobs"}, req, validateLogprobs)
+			},
+		},
+		{
+			Name:   "multiple_choices",
+			Fields: []string{"n"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:     combo.Model,
+					Messages:  basicMessages("Say hello."),
+					N:         intPtr(2),
+					MaxTokens: probeTokenPtr(cfg, 8),
+				}
+				return r.runJSONProbe(combo, "multiple_choices", []string{"n"}, req, validateMultipleChoices)
 			},
 		},
 		{
@@ -256,6 +280,34 @@ func validateToolCallChat(resp *types.ChatCompletionResponse) error {
 	}
 	if len(resp.Choices[0].Message.ToolCalls) == 0 {
 		return fmt.Errorf("no tool call returned")
+	}
+	return nil
+}
+
+func validateLogprobs(resp *types.ChatCompletionResponse) error {
+	if err := validateNonEmptyChatMessage(resp); err != nil {
+		return err
+	}
+	if resp.Choices[0].Logprobs == nil {
+		return fmt.Errorf("logprobs field missing in response")
+	}
+	if len(resp.Choices[0].Logprobs.Content) == 0 {
+		return fmt.Errorf("logprobs content was empty")
+	}
+	return nil
+}
+
+func validateMultipleChoices(resp *types.ChatCompletionResponse) error {
+	if resp == nil || len(resp.Choices) == 0 {
+		return fmt.Errorf("no chat choices returned")
+	}
+	if len(resp.Choices) < 2 {
+		return fmt.Errorf("expected at least 2 choices, got %d", len(resp.Choices))
+	}
+	for i, choice := range resp.Choices {
+		if choice.Message.Content == nil || strings.TrimSpace(*choice.Message.Content) == "" {
+			return fmt.Errorf("choice %d assistant message content was empty", i)
+		}
 	}
 	return nil
 }
