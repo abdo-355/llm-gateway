@@ -7,6 +7,7 @@ func GetProviders() []types.ProviderConfig {
 		getGroqConfig(),
 		getCerebrasConfig(),
 		getMistralConfig(),
+		getGeminiConfig(),
 		getNIMConfig(),
 		getKiloConfig(),
 		getOllamaConfig(),
@@ -275,6 +276,78 @@ func getMistralConfig() types.ProviderConfig {
 	}
 }
 
+func getGeminiConfig() types.ProviderConfig {
+	rpm5 := 5
+	rpm10 := 10
+	rpm15 := 15
+	rpd20 := 20
+	rpd1500 := 1500
+	rpd500 := 500
+	tpm250000 := 250000
+
+	return types.ProviderConfig{
+		ID:      "gemini",
+		BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "GEMINI_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"gemma-4-26b-a4b-it",
+				"gemini-2.5-flash",
+				"gemini-2.5-flash-lite",
+				"gemini-3-flash-preview",
+				"gemini-3.1-flash-lite-preview",
+			},
+			Limits: map[string]types.ModelLimits{
+				"gemma-4-26b-a4b-it": {
+					Rpm: &rpm15,
+					Rpd: &rpd1500,
+				},
+				"gemini-2.5-flash": {
+					Rpm: &rpm5,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"gemini-2.5-flash-lite": {
+					Rpm: &rpm10,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"gemini-3-flash-preview": {
+					Rpm: &rpm5,
+					Rpd: &rpd20,
+					Tpm: &tpm250000,
+				},
+				"gemini-3.1-flash-lite-preview": {
+					Rpm: &rpm15,
+					Rpd: &rpd500,
+					Tpm: &tpm250000,
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     true,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
 func GetCertifications() []types.Certification {
 	return []types.Certification{
 		// Mistral models with strict JSON certification
@@ -448,8 +521,12 @@ func getOllamaConfig() types.ProviderConfig {
 			List: []string{
 				"qwen3-next:80b",
 				"devstral-small-2:24b",
+				"gemma4:31b",
+				"gemma3:27b",
+				"gemma3:12b",
 				"nemotron-3-nano:30b",
 				"gpt-oss:20b",
+				"gemma3:4b",
 				"ministral-3:14b",
 				"ministral-3:8b",
 				"ministral-3:3b",
@@ -463,6 +540,7 @@ func getOllamaConfig() types.ProviderConfig {
 				"cogito-2.1:671b",
 				"deepseek-v3.1:671b",
 				"gpt-oss:120b",
+				"gemini-3-flash-preview",
 				"glm-4.7",
 				"glm-4.6",
 				"minimax-m2.1",
@@ -480,6 +558,8 @@ func getOllamaConfig() types.ProviderConfig {
 				// Models empirically verified to support tool calling
 				"devstral-2:123b":        {Tools: boolPtr(true)},
 				"devstral-small-2:24b":   {Tools: boolPtr(true)},
+				"gemini-3-flash-preview": {Tools: boolPtr(true)},
+				"gemma4:31b":             {Tools: boolPtr(true)},
 				"gpt-oss:120b":           {Tools: boolPtr(true)},
 				"gpt-oss:20b":            {Tools: boolPtr(true)},
 				"minimax-m2":             {Tools: boolPtr(true)},

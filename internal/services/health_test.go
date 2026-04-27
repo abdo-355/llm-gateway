@@ -152,7 +152,7 @@ func TestHealthRecordFailure(t *testing.T) {
 		svc := NewHealthService(client, "")
 		ctx := testContext()
 
-		for i := 0; i < 4; i++ {
+		for i := 0; i < 2; i++ {
 			svc.RecordFailure(ctx, testProvider, testModel)
 		}
 
@@ -164,7 +164,7 @@ func TestHealthRecordFailure(t *testing.T) {
 		svc := NewHealthService(client, "")
 		ctx := testContext()
 
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 3; i++ {
 			svc.RecordFailure(ctx, testProvider, testModel)
 		}
 

@@ -139,24 +139,24 @@ func (s *ProviderService) StreamProviderChannel(
 			return
 		}
 
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
-		} else {
-			wrappedErr := wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
-			errChan <- &types.GatewayError{
-				Type:    "network_error",
-				Code:    "NETWORK_ERROR",
-				Message: wrappedErr.Error(),
-				Details: map[string]any{
-					"network_type": classifyNetworkError(err),
-					"provider":     detectProvider(baseURL, providerType, auth),
-				},
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
+			} else {
+				wrappedErr := wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
+				errChan <- &types.GatewayError{
+					Type:    "network_error",
+					Code:    "NETWORK_ERROR",
+					Message: wrappedErr.Error(),
+					Details: map[string]any{
+						"network_type": classifyNetworkError(err),
+						"provider":     detectProvider(baseURL, providerType, auth),
+					},
+				}
 			}
+			return
 		}
-		return
-	}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
@@ -206,14 +206,14 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 			code = "PROVIDER_OVERLOADED"
 		}
 		return &types.GatewayError{
-			Type: "rate_limit_error",
-			Code: code,
+			Type:    "rate_limit_error",
+			Code:    code,
 			Message: e.Message,
 			Details: map[string]any{
-				"retry_after":    e.RetryAfter,
-				"limit_type":     e.LimitType,
-				"limit_subtype":  e.LimitSubtype,
-				"headers":        e.Headers,
+				"retry_after":   e.RetryAfter,
+				"limit_type":    e.LimitType,
+				"limit_subtype": e.LimitSubtype,
+				"headers":       e.Headers,
 			},
 		}
 	case *errors.PaymentRequiredError:
@@ -224,8 +224,8 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		return &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: e.Message}
 	case *errors.NetworkError:
 		return &types.GatewayError{
-			Type: "network_error",
-			Code: "NETWORK_ERROR",
+			Type:    "network_error",
+			Code:    "NETWORK_ERROR",
 			Message: e.Message,
 			Details: map[string]any{
 				"network_type": e.NetworkType,
@@ -235,8 +235,8 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		}
 	case *errors.ParseError:
 		return &types.GatewayError{
-			Type: "parse_error",
-			Code: "PARSE_ERROR",
+			Type:    "parse_error",
+			Code:    "PARSE_ERROR",
 			Message: e.Message,
 			Details: map[string]any{
 				"parse_type":  e.ParseType,
@@ -247,8 +247,8 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		}
 	case *errors.EmptyResponseError:
 		return &types.GatewayError{
-			Type: "empty_response_error",
-			Code: "EMPTY_RESPONSE",
+			Type:    "empty_response_error",
+			Code:    "EMPTY_RESPONSE",
 			Message: e.Message,
 			Details: map[string]any{
 				"provider":    e.ProviderID,
@@ -258,8 +258,8 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		}
 	case *errors.ProviderError:
 		return &types.GatewayError{
-			Type: "provider_error",
-			Code: "PROVIDER_ERROR",
+			Type:    "provider_error",
+			Code:    "PROVIDER_ERROR",
 			Message: e.Message,
 			Details: map[string]any{"headers": e.Headers, "status_code": e.StatusCode},
 		}
@@ -310,6 +310,11 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 			request.MaxCompletionTokens = request.MaxTokens
 		}
 		request.MaxTokens = nil
+	case "gemini":
+		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
+			request.MaxTokens = request.MaxCompletionTokens
+		}
+		request.MaxCompletionTokens = nil
 	case "mistral":
 		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
 			request.MaxTokens = request.MaxCompletionTokens
@@ -329,6 +334,13 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 		request.PresencePenalty = nil
 	case "cerebras":
 		request.Metadata = nil
+	case "gemini":
+		request.Metadata = nil
+		request.Seed = nil
+		request.RandomSeed = nil
+		request.User = ""
+		request.FrequencyPenalty = nil
+		request.PresencePenalty = nil
 	}
 
 	return request
@@ -342,6 +354,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case "MISTRAL_API_KEY":
 		return "mistral"
+	case "GEMINI_API_KEY":
+		return "gemini"
 	case "NIM_API_KEY":
 		return "nim"
 	case "OLLAMA_API_KEY":
@@ -357,6 +371,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case strings.Contains(baseURL, "api.mistral.ai"):
 		return "mistral"
+	case strings.Contains(baseURL, "generativelanguage.googleapis.com"):
+		return "gemini"
 	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
 		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
@@ -391,12 +407,12 @@ func wrapNetworkError(err error, providerID, baseURL string) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	// Don't wrap if already a network error
 	if _, ok := err.(*errors.NetworkError); ok {
 		return err
 	}
-	
+
 	networkType := classifyNetworkError(err)
 	return errors.NewNetworkError(
 		fmt.Sprintf("Network error calling %s", baseURL),
@@ -713,6 +729,13 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		}
 		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
 			return retryAfter, "rpd", limitSubtype
+		}
+	case "gemini":
+		if strings.Contains(bodyUpper, "RESOURCE_EXHAUSTED") {
+			if strings.Contains(bodyUpper, "QUOTA") || strings.Contains(bodyUpper, "MONTHLY") {
+				return retryAfter, "resource_exhausted", "quota_exhausted"
+			}
+			return retryAfter, "resource_exhausted", "overload"
 		}
 	}
 

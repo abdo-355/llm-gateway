@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
@@ -299,19 +298,19 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
-	// Check circuit breaker
-	if !r.healthService.CanExecute(ctx, provider.ID, model) {
-		filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
-		continue
-	}
+		// Check circuit breaker
+		if !r.healthService.CanExecute(ctx, provider.ID, model) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
+			continue
+		}
 
-	// Check cooldown
-	if r.cooldownService != nil && r.cooldownService.IsOnCooldown(ctx, provider.ID, model) {
-		reason := r.cooldownService.GetCooldownReason(ctx, provider.ID, model)
-		remaining := r.cooldownService.GetCooldownRemaining(ctx, provider.ID, model)
-		filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
-		continue
-	}
+		// Check cooldown
+		if r.cooldownService != nil && r.cooldownService.IsOnCooldown(ctx, provider.ID, model) {
+			reason := r.cooldownService.GetCooldownReason(ctx, provider.ID, model)
+			remaining := r.cooldownService.GetCooldownRemaining(ctx, provider.ID, model)
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
+			continue
+		}
 
 		// Check per-model quota
 		modelLimits := provider.Models.Limits[model]
@@ -560,133 +559,133 @@ func (r *Router) Execute(
 			}, nil
 		}
 
-	if previousProvider != "" {
-		metrics.FailoverEventsTotal.WithLabelValues(
-			previousProvider, attempt.ProviderID, tier,
+		if previousProvider != "" {
+			metrics.FailoverEventsTotal.WithLabelValues(
+				previousProvider, attempt.ProviderID, tier,
+			).Inc()
+		}
+		previousProvider = attempt.ProviderID
+		hadFailure = true
+
+		failureCtx := types.FailureContext{
+			AttemptIndex:       i,
+			MaxAttempts:        plan.MaxAttempts,
+			ProviderID:         attempt.ProviderID,
+			Model:              attempt.Model,
+			HasRemainingBudget: true,
+		}
+		decision := r.classifier.Classify(err, failureCtx)
+
+		if decision.ShouldRecordFailure {
+			r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+		}
+
+		metrics.FailureClassifiedTotal.WithLabelValues(
+			attempt.ProviderID, attempt.Model,
+			string(decision.Category), string(decision.Action),
 		).Inc()
-	}
-	previousProvider = attempt.ProviderID
-	hadFailure = true
 
-	failureCtx := types.FailureContext{
-		AttemptIndex:      i,
-		MaxAttempts:       plan.MaxAttempts,
-		ProviderID:        attempt.ProviderID,
-		Model:             attempt.Model,
-		HasRemainingBudget: true,
-	}
-	decision := r.classifier.Classify(err, failureCtx)
+		attemptChain = append(attemptChain, map[string]any{
+			"provider":       attempt.ProviderID,
+			"model":          attempt.Model,
+			"failure_kind":   string(decision.Category),
+			"failure_action": string(decision.Action),
+			"failure_reason": decision.Reason,
+		})
 
-	if decision.ShouldRecordFailure {
-		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
-	}
+		var status string
+		var errorType string
+		switch decision.Category {
+		case types.CategoryRateLimit:
+			status = "rate_limited"
+			errorType = "rate_limit"
+		case types.CategoryTimeout:
+			status = "timeout"
+			errorType = "timeout"
+		case types.CategoryCircuitBreaker:
+			status = "circuit_breaker"
+			errorType = "circuit_breaker"
+		case types.CategoryQuota:
+			status = "quota_exceeded"
+			errorType = "quota_exceeded"
+		case types.CategoryPayment:
+			status = "payment_required"
+			errorType = "payment_required"
+		case types.CategoryValidation:
+			status = "validation"
+			errorType = "validation"
+		case types.CategoryNetwork:
+			status = "network_error"
+			errorType = "network"
+		case types.CategoryParse:
+			status = "parse_error"
+			errorType = "parse"
+		case types.CategoryEmpty:
+			status = "empty_response"
+			errorType = "empty_response"
+		default:
+			status = "error"
+			errorType = "unknown"
+		}
+		metrics.ProviderRequestsTotal.WithLabelValues(
+			attempt.ProviderID, attempt.Model, status,
+			tier, strategy, errorType,
+		).Inc()
 
-	metrics.FailureClassifiedTotal.WithLabelValues(
-		attempt.ProviderID, attempt.Model,
-		string(decision.Category), string(decision.Action),
-	).Inc()
+		logger.Warn().
+			Str("type", "router").
+			Str("event", "attempt.failed").
+			Str("request_id", requestID).
+			Str("provider", attempt.ProviderID).
+			Str("model", attempt.Model).
+			Str("failure_category", string(decision.Category)).
+			Str("failure_action", string(decision.Action)).
+			Str("failure_reason", decision.Reason).
+			Err(err).
+			Msg("Provider attempt failed")
 
-	attemptChain = append(attemptChain, map[string]any{
-		"provider":       attempt.ProviderID,
-		"model":          attempt.Model,
-		"failure_kind":   string(decision.Category),
-		"failure_action": string(decision.Action),
-		"failure_reason": decision.Reason,
-	})
-
-	var status string
-	var errorType string
-	switch decision.Category {
-	case types.CategoryRateLimit:
-		status = "rate_limited"
-		errorType = "rate_limit"
-	case types.CategoryTimeout:
-		status = "timeout"
-		errorType = "timeout"
-	case types.CategoryCircuitBreaker:
-		status = "circuit_breaker"
-		errorType = "circuit_breaker"
-	case types.CategoryQuota:
-		status = "quota_exceeded"
-		errorType = "quota_exceeded"
-	case types.CategoryPayment:
-		status = "payment_required"
-		errorType = "payment_required"
-	case types.CategoryValidation:
-		status = "validation"
-		errorType = "validation"
-	case types.CategoryNetwork:
-		status = "network_error"
-		errorType = "network"
-	case types.CategoryParse:
-		status = "parse_error"
-		errorType = "parse"
-	case types.CategoryEmpty:
-		status = "empty_response"
-		errorType = "empty_response"
-	default:
-		status = "error"
-		errorType = "unknown"
-	}
-	metrics.ProviderRequestsTotal.WithLabelValues(
-		attempt.ProviderID, attempt.Model, status,
-		tier, strategy, errorType,
-	).Inc()
-
-	logger.Warn().
-		Str("type", "router").
-		Str("event", "attempt.failed").
-		Str("request_id", requestID).
-		Str("provider", attempt.ProviderID).
-		Str("model", attempt.Model).
-		Str("failure_category", string(decision.Category)).
-		Str("failure_action", string(decision.Action)).
-		Str("failure_reason", decision.Reason).
-		Err(err).
-		Msg("Provider attempt failed")
-
-	switch decision.Action {
-	case types.ActionAbort:
-		return nil, r.CreateGatewayError(err, i+1, requestID)
-	case types.ActionRetry, types.ActionRetryWithBackoff:
-		if decision.BackoffMs > 0 {
-			backoffDuration := r.backoffStrategy.CalculateBackoff(i)
-			metrics.BackoffSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(backoffDuration.Seconds())
-			logger.Info().
-				Str("type", "router").
-				Str("event", "attempt.backoff").
-				Str("request_id", requestID).
-				Dur("backoff", backoffDuration).
-				Msg("Applying backoff before retry")
-			select {
-			case <-time.After(backoffDuration):
-			case <-ctx.Done():
-				return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
+		switch decision.Action {
+		case types.ActionAbort:
+			return nil, r.CreateGatewayError(err, i+1, requestID)
+		case types.ActionRetry, types.ActionRetryWithBackoff:
+			if decision.BackoffMs > 0 {
+				backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+				metrics.BackoffSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(backoffDuration.Seconds())
+				logger.Info().
+					Str("type", "router").
+					Str("event", "attempt.backoff").
+					Str("request_id", requestID).
+					Dur("backoff", backoffDuration).
+					Msg("Applying backoff before retry")
+				select {
+				case <-time.After(backoffDuration):
+				case <-ctx.Done():
+					return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
+				}
+			}
+		case types.ActionFailover, types.ActionFailoverWithBackoff:
+			if decision.BackoffMs > 0 {
+				backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+				select {
+				case <-time.After(backoffDuration):
+				case <-ctx.Done():
+					return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
+				}
+			}
+		case types.ActionCooldown:
+			if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+				reason := r.failureCategoryToCooldownReason(decision.Category)
+				retryAfter := 0
+				if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
+					retryAfter = rateLimitErr.RetryAfter
+				}
+				r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
 			}
 		}
-	case types.ActionFailover, types.ActionFailoverWithBackoff:
-		if decision.BackoffMs > 0 {
-			backoffDuration := r.backoffStrategy.CalculateBackoff(i)
-			select {
-			case <-time.After(backoffDuration):
-			case <-ctx.Done():
-				return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
-			}
-		}
-	case types.ActionCooldown:
-		if decision.CooldownSeconds > 0 && r.cooldownService != nil {
-			reason := r.failureCategoryToCooldownReason(decision.Category)
-			retryAfter := 0
-			if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-				retryAfter = rateLimitErr.RetryAfter
-			}
-			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
-		}
-	}
 
-	if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-		r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
-	}
+		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
+			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
+		}
 	}
 
 	metrics.RoutingAttemptsTotal.WithLabelValues(
@@ -808,91 +807,91 @@ func (r *Router) ExecuteStream(
 				return
 			}
 
-	if previousProvider != "" {
-		metrics.FailoverEventsTotal.WithLabelValues(
-			previousProvider, attempt.ProviderID, tier,
-		).Inc()
-	}
-	previousProvider = attempt.ProviderID
-	hadFailure = true
+			if previousProvider != "" {
+				metrics.FailoverEventsTotal.WithLabelValues(
+					previousProvider, attempt.ProviderID, tier,
+				).Inc()
+			}
+			previousProvider = attempt.ProviderID
+			hadFailure = true
 
-	typedErr := r.gatewayErrorToTypedError(err)
-	failureCtx := types.FailureContext{
-		AttemptIndex:      i,
-		MaxAttempts:       plan.MaxAttempts,
-		ProviderID:        attempt.ProviderID,
-		Model:             attempt.Model,
-		HasRemainingBudget: true,
-	}
-	decision := r.classifier.Classify(typedErr, failureCtx)
+			typedErr := r.gatewayErrorToTypedError(err)
+			failureCtx := types.FailureContext{
+				AttemptIndex:       i,
+				MaxAttempts:        plan.MaxAttempts,
+				ProviderID:         attempt.ProviderID,
+				Model:              attempt.Model,
+				HasRemainingBudget: true,
+			}
+			decision := r.classifier.Classify(typedErr, failureCtx)
 
-	if decision.ShouldRecordFailure {
-		r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
-	}
+			if decision.ShouldRecordFailure {
+				r.healthService.RecordFailure(ctx, attempt.ProviderID, attempt.Model)
+			}
 
-	var status string
-	var errorType string
-	switch decision.Category {
-	case types.CategoryRateLimit:
-		status = "rate_limited"
-		errorType = "rate_limit"
-	case types.CategoryTimeout:
-		status = "timeout"
-		errorType = "timeout"
-	default:
-		status = "error"
-		errorType = "unknown"
-	}
-	metrics.ProviderRequestsTotal.WithLabelValues(
-		attempt.ProviderID, attempt.Model, status,
-		tier, strategy, errorType,
-	).Inc()
-	ttfbRecorded = false
+			var status string
+			var errorType string
+			switch decision.Category {
+			case types.CategoryRateLimit:
+				status = "rate_limited"
+				errorType = "rate_limit"
+			case types.CategoryTimeout:
+				status = "timeout"
+				errorType = "timeout"
+			default:
+				status = "error"
+				errorType = "unknown"
+			}
+			metrics.ProviderRequestsTotal.WithLabelValues(
+				attempt.ProviderID, attempt.Model, status,
+				tier, strategy, errorType,
+			).Inc()
+			ttfbRecorded = false
 
-	if err.Code == "RATE_LIMITED" {
-		r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(r.gatewayErrorToTypedError(err).(*errors.RateLimitError)))
-	}
+			if err.Code == "RATE_LIMITED" {
+				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(r.gatewayErrorToTypedError(err).(*errors.RateLimitError)))
+			}
 
-	// Don't retry if we already sent chunks to the client
-	if chunksSent {
-		errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
-		return
-	}
-
-	switch decision.Action {
-	case types.ActionAbort:
-		errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
-		return
-	case types.ActionRetry, types.ActionRetryWithBackoff:
-		if decision.BackoffMs > 0 {
-			backoffDuration := r.backoffStrategy.CalculateBackoff(i)
-			select {
-			case <-time.After(backoffDuration):
-			case <-ctx.Done():
-				errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+			// Don't retry if we already sent chunks to the client
+			if chunksSent {
+				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
 				return
 			}
-		}
-	case types.ActionFailover, types.ActionFailoverWithBackoff:
-		if decision.BackoffMs > 0 {
-			backoffDuration := r.backoffStrategy.CalculateBackoff(i)
-			select {
-			case <-time.After(backoffDuration):
-			case <-ctx.Done():
-				errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+
+			switch decision.Action {
+			case types.ActionAbort:
+				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
 				return
+			case types.ActionRetry, types.ActionRetryWithBackoff:
+				if decision.BackoffMs > 0 {
+					backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+					select {
+					case <-time.After(backoffDuration):
+					case <-ctx.Done():
+						errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+						return
+					}
+				}
+			case types.ActionFailover, types.ActionFailoverWithBackoff:
+				if decision.BackoffMs > 0 {
+					backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+					select {
+					case <-time.After(backoffDuration):
+					case <-ctx.Done():
+						errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+						return
+					}
+				}
+			case types.ActionCooldown:
+				if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+					reason := r.failureCategoryToCooldownReason(decision.Category)
+					retryAfter := 0
+					if rateLimitErr, ok := typedErr.(*errors.RateLimitError); ok {
+						retryAfter = rateLimitErr.RetryAfter
+					}
+					r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
+				}
 			}
-		}
-	case types.ActionCooldown:
-		if decision.CooldownSeconds > 0 && r.cooldownService != nil {
-			reason := r.failureCategoryToCooldownReason(decision.Category)
-			retryAfter := 0
-			if rateLimitErr, ok := typedErr.(*errors.RateLimitError); ok {
-				retryAfter = rateLimitErr.RetryAfter
-			}
-			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
-		}
-	}
 		}
 
 		errChan <- &types.GatewayError{
@@ -1111,8 +1110,8 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 			code = "PROVIDER_OVERLOADED"
 		}
 		return &types.GatewayError{
-			Type: "rate_limit_error",
-			Code: code,
+			Type:    "rate_limit_error",
+			Code:    code,
 			Message: e.Error(),
 			Details: map[string]any{
 				"retry_after":   e.RetryAfter,
