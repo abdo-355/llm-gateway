@@ -46,6 +46,21 @@ var (
 		Help: "Total number of tokens processed by LLM providers.",
 	}, []string{"provider", "model", "direction", "tier", "strategy"})
 
+	ProviderNeuronsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_provider_neurons_total",
+		Help: "Total Cloudflare neuron usage computed from provider responses.",
+	}, []string{"provider", "model", "tier", "strategy"})
+
+	ProviderEstimatedCostUSDTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gateway_provider_estimated_cost_usd_total",
+		Help: "Estimated provider spend in USD based on metered usage.",
+	}, []string{"provider", "model", "tier", "strategy"})
+
+	ProviderDailyBudgetRemaining = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gateway_provider_daily_budget_remaining",
+		Help: "Remaining daily free-tier budget for providers with provider-side daily quotas.",
+	}, []string{"provider"})
+
 	RoutingAttemptsTotal = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "gateway_routing_attempts_total",
 		Help:    "Number of routing attempts per request.",

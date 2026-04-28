@@ -147,6 +147,41 @@ func TestPrepareRequest_OpenCodeShaping(t *testing.T) {
 	assert.NotContains(t, payload, "max_completion_tokens")
 }
 
+func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
+	t.Setenv(cloudflareAccountIDEnv, "acct-123")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/accounts/acct-123/ai/run/@cf/openai/gpt-oss-20b", r.URL.Path)
+		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"success": true,
+			"result": {
+				"response": "Cloudflare native reply",
+				"usage": {
+					"prompt_tokens": 31,
+					"completion_tokens": 555,
+					"total_tokens": 586,
+					"prompt_tokens_details": {"cached_tokens": 6}
+				}
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}, MaxCompletionTokens: ptrInt(160)}
+
+	resp, err := svc.CallProvider(srv.URL, "test-key", "@cf/openai/gpt-oss-20b", req, 10000, context.Background(), cloudflareProviderType, types.ProviderAuth{Type: "bearer", Env: cloudflareAPITokenEnv})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.NotNil(t, resp.Choices[0].Message.Content)
+	assert.Equal(t, "Cloudflare native reply", *resp.Choices[0].Message.Content)
+	assert.Equal(t, 586, resp.Usage.TotalTokens)
+	require.NotNil(t, resp.Usage.PromptTokensDetails)
+	assert.Equal(t, 6, resp.Usage.PromptTokensDetails.CachedTokens)
+}
+
 func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{

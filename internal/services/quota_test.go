@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"testing"
+	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/types"
@@ -245,6 +246,42 @@ func TestQuotaRecordModelUsage(t *testing.T) {
 	assert.Equal(t, 150, status.Tph, "TPH should be 150")
 	assert.Equal(t, 150, status.Tpd, "TPD should be 150")
 	assert.Equal(t, 150, status.Tpmu, "TPMU should be 150")
+}
+
+func TestCloudflareRecordNeuronUsage(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	stats, err := svc.RecordCloudflareNeuronUsage(ctx, "@cf/moonshotai/kimi-k2.5", &types.Usage{
+		PromptTokens:     31,
+		CompletionTokens: 555,
+		TotalTokens:      586,
+		PromptTokensDetails: &types.PromptTokensDetails{
+			CachedTokens: 6,
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 6, stats.CachedInputTokens)
+	assert.Equal(t, 25, stats.NonCachedInputTokens)
+	assert.Equal(t, 153, stats.Neurons)
+	assert.InDelta(t, 0.001683, stats.EstimatedUSDIfPaid, 0.000001)
+	assert.Equal(t, 9847, stats.RemainingDailyNeurons)
+	assert.Equal(t, 9847, svc.GetCloudflareRemainingDailyNeurons(ctx))
+}
+
+func TestCloudflareCheckDailyNeuronBudget(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+	keys := svc.buildCloudflareNeuronKeys("", time.Now().UTC())
+	require.NoError(t, client.Set(ctx, keys.ProviderDaily, 9800, 25*time.Hour).Err())
+
+	err := svc.CheckCloudflareDailyNeuronBudget(ctx, "@cf/openai/gpt-oss-20b", 250)
+	require.Error(t, err)
+	var quotaErr *errors.ModelQuotaExceededError
+	require.ErrorAs(t, err, &quotaErr)
+	assert.Equal(t, "daily_neurons", quotaErr.LimitType)
 }
 
 func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {

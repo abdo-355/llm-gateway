@@ -212,6 +212,8 @@ func (r *Router) FilterCandidates(
 ) ([]types.RoutingCandidate, map[string]string) {
 	var eligible []types.RoutingCandidate
 	filtered := make(map[string]string)
+	estimatedTokens := r.quotaService.EstimateTokens(req)
+	cloudflareBudget, hasCloudflareBudget := r.quotaService.(CloudflareBudgetManager)
 
 	for _, candidate := range candidates {
 		provider := candidate.Provider
@@ -314,7 +316,18 @@ func (r *Router) FilterCandidates(
 
 		// Check per-model quota
 		modelLimits := provider.Models.Limits[model]
-		estimatedTokens := r.quotaService.EstimateTokens(req)
+
+		if provider.ID == cloudflareProviderID && hasCloudflareBudget {
+			estimatedNeurons := cloudflareBudget.EstimateCloudflareRequestNeurons(model, req)
+			if err := cloudflareBudget.CheckCloudflareDailyNeuronBudget(ctx, model, estimatedNeurons); err != nil {
+				if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
+					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
+				} else {
+					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "cloudflare_budget_check_failed"
+				}
+				continue
+			}
+		}
 
 		if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, estimatedTokens); err != nil {
 			if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
@@ -515,12 +528,35 @@ func (r *Router) Execute(
 			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
 			tokensUsed := 0
+			var cloudflareStats *CloudflareUsageStats
 			if resp.Usage != nil {
 				tokensUsed = resp.Usage.TotalTokens
 			} else {
 				tokensUsed = r.quotaService.EstimateTokens(req)
 			}
 			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+			if attempt.ProviderID == cloudflareProviderID {
+				if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok && resp.Usage != nil {
+					stats, quotaErr := budgetMgr.RecordCloudflareNeuronUsage(ctx, attempt.Model, resp.Usage)
+					if quotaErr != nil {
+						logger.Warn().
+							Str("type", "router").
+							Str("event", "cloudflare.neuron_record_failed").
+							Str("request_id", requestID).
+							Str("model", attempt.Model).
+							Err(quotaErr).
+							Msg("Failed to record Cloudflare neuron usage")
+					} else {
+						cloudflareStats = &stats
+						metrics.ProviderNeuronsTotal.WithLabelValues(
+							attempt.ProviderID, attempt.Model, tier, strategy,
+						).Add(float64(stats.Neurons))
+						metrics.ProviderEstimatedCostUSDTotal.WithLabelValues(
+							attempt.ProviderID, attempt.Model, tier, strategy,
+						).Add(stats.EstimatedUSDIfPaid)
+					}
+				}
+			}
 
 			if hadFailure {
 				metrics.RetrySuccessTotal.WithLabelValues(tier).Inc()
@@ -549,7 +585,7 @@ func (r *Router) Execute(
 				tier, strategy,
 			).Observe(float64(i + 1))
 
-			logger.Info().
+			logEvent := logger.Info().
 				Str("type", "router").
 				Str("event", "attempt.success").
 				Str("request_id", requestID).
@@ -557,8 +593,16 @@ func (r *Router) Execute(
 				Str("model", attempt.Model).
 				Int64("latency_ms", latencyMs).
 				Int("tokens", tokensUsed).
-				Int("attempts", i+1).
-				Msg("Request completed")
+				Int("attempts", i+1)
+			if cloudflareStats != nil {
+				logEvent = logEvent.
+					Int("cloudflare_cached_input_tokens", cloudflareStats.CachedInputTokens).
+					Int("cloudflare_non_cached_input_tokens", cloudflareStats.NonCachedInputTokens).
+					Int("cloudflare_neurons", cloudflareStats.Neurons).
+					Float64("cloudflare_estimated_usd_if_paid", cloudflareStats.EstimatedUSDIfPaid).
+					Int("cloudflare_remaining_daily_neurons", cloudflareStats.RemainingDailyNeurons)
+			}
+			logEvent.Msg("Request completed")
 
 			return &types.ExecutionResult{
 				Response:   *resp,
@@ -1022,6 +1066,10 @@ func (r *Router) ShouldRetry(err error, plan types.RoutingPlan, attemptIndex int
 }
 
 func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
+	if provider.ProviderType == cloudflareProviderType && os.Getenv(cloudflareAccountIDEnv) == "" {
+		return false
+	}
+
 	switch provider.Auth.Type {
 	case "bearer", "header":
 		if provider.Auth.Env == "" || provider.Auth.Optional {

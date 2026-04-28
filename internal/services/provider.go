@@ -92,6 +92,9 @@ func (s *ProviderService) CallProvider(
 	if providerType == "ollama" {
 		return s.callOllamaProvider(baseURL, apiKey, model, request, ctx, auth)
 	}
+	if providerType == cloudflareProviderType {
+		return s.callCloudflareProvider(baseURL, apiKey, model, request, ctx, auth)
+	}
 
 	reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
 	if err != nil {
@@ -137,6 +140,14 @@ func (s *ProviderService) StreamProviderChannel(
 ) types.StreamResult {
 	if providerType == "ollama" {
 		return s.callOllamaStreamProvider(baseURL, apiKey, model, request, ctx, auth)
+	}
+	if providerType == cloudflareProviderType {
+		chunks := make(chan *types.SSEChunk)
+		errChan := make(chan *types.GatewayError, 1)
+		close(chunks)
+		errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAMING_NOT_SUPPORTED", Message: "Cloudflare Workers AI native endpoint does not support streaming in this gateway"}
+		close(errChan)
+		return types.StreamResult{Chunks: chunks, Err: errChan}
 	}
 
 	chunks := make(chan *types.SSEChunk)
@@ -380,6 +391,10 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 }
 
 func detectProvider(baseURL, providerType string, auth types.ProviderAuth) string {
+	if providerType == cloudflareProviderType {
+		return cloudflareProviderID
+	}
+
 	switch auth.Env {
 	case "GROQ_API_KEY":
 		return "groq"
@@ -397,6 +412,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "kilo"
 	case "OPENCODE_ZEN_API_KEY":
 		return "opencode"
+	case cloudflareAPITokenEnv:
+		return cloudflareProviderID
 	}
 
 	switch {
@@ -414,6 +431,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "kilo"
 	case strings.Contains(baseURL, "opencode.ai"):
 		return "opencode"
+	case strings.Contains(baseURL, "api.cloudflare.com"):
+		return cloudflareProviderID
 	case strings.Contains(baseURL, "ollama.com"):
 		return "ollama"
 	default:
@@ -683,6 +702,9 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	}
 
 	var response types.ChatCompletionResponse
+	if provider == cloudflareProviderID {
+		return parseCloudflareRunResponse(body, model)
+	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, errors.NewParseError(
 			fmt.Sprintf("Failed to parse response from %s/%s", provider, model),
@@ -824,10 +846,16 @@ func extractProviderErrorMessage(provider string, body []byte) string {
 		Type    string `json:"type"`
 		Code    any    `json:"code"`
 		Object  string `json:"object"`
+		Errors  []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
 	}
 	if err := json.Unmarshal(trimmed, &wrapped); err == nil {
 		if wrapped.Error.Message != "" {
 			return wrapped.Error.Message
+		}
+		if len(wrapped.Errors) > 0 && wrapped.Errors[0].Message != "" {
+			return wrapped.Errors[0].Message
 		}
 		switch msg := wrapped.Message.(type) {
 		case string:

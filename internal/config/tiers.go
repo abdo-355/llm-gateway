@@ -42,6 +42,21 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "kilo", Model: "openrouter/free", Weight: 0.7},
 			{Provider: "kilo", Model: "tencent/hy3-preview:free", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/openai/gpt-oss-20b", Weight: 0.8},
+			{Provider: "cloudflare", Model: "@cf/qwen/qwen3-30b-a3b-fp8", Weight: 0.8},
+			{Provider: "cloudflare", Model: "@cf/zai-org/glm-4.7-flash", Weight: 0.8},
+
+			{Provider: "cloudflare", Model: "@cf/qwen/qwen2.5-coder-32b-instruct", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/qwen/qwq-32b", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-4-scout-17b-16e-instruct", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/mistralai/mistral-small-3.1-24b-instruct", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/google/gemma-3-12b-it", Weight: 0.7},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", Weight: 0.7},
+
+			{Provider: "cloudflare", Model: "@cf/ibm-granite/granite-4.0-h-micro", Weight: 0.6},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-3b-instruct", Weight: 0.5},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-1b-instruct", Weight: 0.5},
 
 			{Provider: "opencode", Model: "big-pickle", Weight: 0.6},
 			{Provider: "opencode", Model: "ling-2.6-flash-free", Weight: 0.6},
@@ -83,6 +98,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.8},
 			{Provider: "kilo", Model: "inclusionai/ling-2.6-1t:free", Weight: 0.8},
+			{Provider: "cloudflare", Model: "@cf/google/gemma-4-26b-a4b-it", Weight: 0.8},
+			{Provider: "cloudflare", Model: "@cf/openai/gpt-oss-120b", Weight: 0.8},
+			{Provider: "cloudflare", Model: "@cf/nvidia/nemotron-3-120b-a12b", Weight: 0.8},
 
 			{Provider: "opencode", Model: "minimax-m2.5-free", Weight: 0.7},
 			{Provider: "opencode", Model: "nemotron-3-super-free", Weight: 0.7},
@@ -96,8 +114,10 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Tier: types.TierMax,
 		Entries: []types.TierEntry{
 			{Provider: "nim", Model: "z-ai/glm-5.1", Weight: 1.0},
+			{Provider: "cloudflare", Model: "@cf/moonshotai/kimi-k2.6", Weight: 0.9},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.9},
 			{Provider: "nim", Model: "moonshotai/kimi-k2.5", Weight: 0.9},
+			{Provider: "cloudflare", Model: "@cf/moonshotai/kimi-k2.5", Weight: 0.8},
 			{Provider: "nim", Model: "z-ai/glm5", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.8},
 

@@ -2,6 +2,7 @@ package services_test
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"testing"
 
@@ -17,6 +18,40 @@ import (
 func intPtr(i int) *int       { return &i }
 func strPtr(s string) *string { return &s }
 func boolPtr(b bool) *bool    { return &b }
+
+type cloudflareQuotaStub struct {
+	estimateTokens           int
+	estimatedCloudflareUnits int
+	cloudflareErr            error
+}
+
+func (s *cloudflareQuotaStub) EstimateTokens(req types.ChatCompletionRequest) int {
+	return s.estimateTokens
+}
+
+func (s *cloudflareQuotaStub) CheckModelQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
+	return nil
+}
+
+func (s *cloudflareQuotaStub) RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error {
+	return nil
+}
+
+func (s *cloudflareQuotaStub) HandleProviderRateLimit(ctx context.Context, providerID, model string, resp *http.Response) services.RateLimitInfo {
+	return services.RateLimitInfo{}
+}
+
+func (s *cloudflareQuotaStub) EstimateCloudflareRequestNeurons(model string, req types.ChatCompletionRequest) int {
+	return s.estimatedCloudflareUnits
+}
+
+func (s *cloudflareQuotaStub) CheckCloudflareDailyNeuronBudget(ctx context.Context, model string, estimatedNeurons int) error {
+	return s.cloudflareErr
+}
+
+func (s *cloudflareQuotaStub) RecordCloudflareNeuronUsage(ctx context.Context, model string, usage *types.Usage) (services.CloudflareUsageStats, error) {
+	return services.CloudflareUsageStats{}, nil
+}
 
 func init() {
 	os.Setenv("GATEWAY_API_KEY", "test-api-key-that-is-at-least-32-characters-long")
@@ -96,6 +131,8 @@ func newTestRouter(t *testing.T) (*services.Router, *mocks.MockQuotaChecker, *mo
 	mockQuota := mocks.NewMockQuotaChecker(ctrl)
 	mockHealth := mocks.NewMockHealthChecker(ctrl)
 	mockProvider := mocks.NewMockProviderCaller(ctrl)
+	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
 	r := services.NewRouterWithConfig(testConfig(), mockQuota, mockHealth, mockProvider)
 	return r, mockQuota, mockHealth, mockProvider
 }
@@ -406,6 +443,7 @@ func TestFilterCandidates_FiltersUnavailableProviders(t *testing.T) {
 	mockQuota := mocks.NewMockQuotaChecker(ctrl)
 	mockHealth := mocks.NewMockHealthChecker(ctrl)
 	mockProvider := mocks.NewMockProviderCaller(ctrl)
+	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
 
 	cfg := types.AppConfig{
 		Providers: []types.ProviderConfig{{
@@ -428,6 +466,79 @@ func TestFilterCandidates_FiltersUnavailableProviders(t *testing.T) {
 	eligible, filtered := r.FilterCandidates(context.Background(), candidates, reqs, req, nil)
 	assert.Empty(t, eligible)
 	assert.Equal(t, "provider_unavailable", filtered["provider-missing-key/model-1"])
+}
+
+func TestFilterCandidates_FiltersCloudflareWithoutAccountID(t *testing.T) {
+	t.Setenv("CLOUDFLARE_API_TOKEN", "test-cloudflare-token")
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "")
+
+	ctrl := gomock.NewController(t)
+	mockQuota := mocks.NewMockQuotaChecker(ctrl)
+	mockHealth := mocks.NewMockHealthChecker(ctrl)
+	mockProvider := mocks.NewMockProviderCaller(ctrl)
+	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+
+	cfg := types.AppConfig{
+		Providers: []types.ProviderConfig{{
+			ID:      "cloudflare",
+			BaseURL: "https://api.cloudflare.com/client/v4",
+			Auth:    types.ProviderAuth{Type: "bearer", Env: "CLOUDFLARE_API_TOKEN"},
+			Models: types.ProviderModels{
+				Mode: "allowlist",
+				List: []string{"@cf/openai/gpt-oss-20b"},
+			},
+			Capabilities: types.ProviderCapabilities{Streaming: false, Tools: false, StructuredOutputs: "none"},
+			ProviderType: "cloudflare_workers_ai",
+		}},
+	}
+
+	r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "hi"}}}
+	reqs := types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "forbidden"}
+	candidates := r.GenerateCandidates()
+
+	eligible, filtered := r.FilterCandidates(context.Background(), candidates, reqs, req, nil)
+	assert.Empty(t, eligible)
+	assert.Equal(t, "provider_unavailable", filtered["cloudflare/@cf/openai/gpt-oss-20b"])
+}
+
+func TestFilterCandidates_FiltersCloudflareWhenNeuronBudgetExceeded(t *testing.T) {
+	t.Setenv("CLOUDFLARE_API_TOKEN", "test-cloudflare-token")
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
+
+	ctrl := gomock.NewController(t)
+	quotaStub := &cloudflareQuotaStub{
+		estimateTokens:           100,
+		estimatedCloudflareUnits: 400,
+		cloudflareErr:            errors.NewModelQuotaExceededError("budget exhausted", "cloudflare", "@cf/openai/gpt-oss-20b", "daily_neurons"),
+	}
+	mockHealth := mocks.NewMockHealthChecker(ctrl)
+	mockProvider := mocks.NewMockProviderCaller(ctrl)
+	mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+
+	cfg := types.AppConfig{
+		Providers: []types.ProviderConfig{{
+			ID:      "cloudflare",
+			BaseURL: "https://api.cloudflare.com/client/v4",
+			Auth:    types.ProviderAuth{Type: "bearer", Env: "CLOUDFLARE_API_TOKEN"},
+			Models: types.ProviderModels{
+				Mode:   "allowlist",
+				List:   []string{"@cf/openai/gpt-oss-20b"},
+				Limits: map[string]types.ModelLimits{"@cf/openai/gpt-oss-20b": {Rpm: intPtr(5)}},
+			},
+			Capabilities: types.ProviderCapabilities{Streaming: false, Tools: false, StructuredOutputs: "none", MaxTokens: true},
+			ProviderType: "cloudflare_workers_ai",
+		}},
+	}
+
+	r := services.NewRouterWithConfig(cfg, quotaStub, mockHealth, mockProvider)
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "hi"}}, MaxTokens: intPtr(200)}
+	reqs := types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "forbidden"}
+	candidates := r.GenerateCandidates()
+
+	eligible, filtered := r.FilterCandidates(context.Background(), candidates, reqs, req, nil)
+	assert.Empty(t, eligible)
+	assert.Equal(t, "quota_exceeded_daily_neurons", filtered["cloudflare/@cf/openai/gpt-oss-20b"])
 }
 
 // --- ScoreCandidates ---

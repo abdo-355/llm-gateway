@@ -16,15 +16,17 @@ type EnvConfig struct {
 	MetricsPort int
 	LogLevel    string
 
-	GatewayAPIKey  string
-	GroqAPIKey     string
-	CerebrasAPIKey string
-	MistralAPIKey  string
-	GeminiAPIKey   string
-	NimAPIKey      string
-	OllamaAPIKey   string
-	KiloAPIKey     string
-	OpenCodeAPIKey string
+	GatewayAPIKey       string
+	GroqAPIKey          string
+	CerebrasAPIKey      string
+	MistralAPIKey       string
+	GeminiAPIKey        string
+	NimAPIKey           string
+	OllamaAPIKey        string
+	KiloAPIKey          string
+	CloudflareAccountID string
+	CloudflareAPIToken  string
+	OpenCodeAPIKey      string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -148,25 +150,27 @@ func LoadEnv() (*EnvConfig, error) {
 	}
 
 	return &EnvConfig{
-		Environment:       environment,
-		Port:              port,
-		MetricsPort:       metricsPort,
-		LogLevel:          getEnvString("LOG_LEVEL", "info"),
-		GatewayAPIKey:     gatewayKey,
-		GroqAPIKey:        os.Getenv("GROQ_API_KEY"),
-		CerebrasAPIKey:    os.Getenv("CEREBRAS_API_KEY"),
-		MistralAPIKey:     os.Getenv("MISTRAL_API_KEY"),
-		GeminiAPIKey:      os.Getenv("GEMINI_API_KEY"),
-		NimAPIKey:         os.Getenv("NIM_API_KEY"),
-		OllamaAPIKey:      os.Getenv("OLLAMA_API_KEY"),
-		KiloAPIKey:        os.Getenv("KILO_API_KEY"),
-		OpenCodeAPIKey:    os.Getenv("OPENCODE_ZEN_API_KEY"),
-		RedisURL:          getEnvString("REDIS_URL", "redis://localhost:6379"),
-		RedisKeyPrefix:    getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
-		RateLimitGlobal:   rateLimitGlobal,
-		RateLimitPerIP:    rateLimitPerIP,
-		RateLimitWindowMs: rateLimitWindowMs,
-		CORSOrigins:       os.Getenv("CORS_ORIGINS"),
+		Environment:         environment,
+		Port:                port,
+		MetricsPort:         metricsPort,
+		LogLevel:            getEnvString("LOG_LEVEL", "info"),
+		GatewayAPIKey:       gatewayKey,
+		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
+		CerebrasAPIKey:      os.Getenv("CEREBRAS_API_KEY"),
+		MistralAPIKey:       os.Getenv("MISTRAL_API_KEY"),
+		GeminiAPIKey:        os.Getenv("GEMINI_API_KEY"),
+		NimAPIKey:           os.Getenv("NIM_API_KEY"),
+		OllamaAPIKey:        os.Getenv("OLLAMA_API_KEY"),
+		KiloAPIKey:          os.Getenv("KILO_API_KEY"),
+		CloudflareAccountID: os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
+		CloudflareAPIToken:  os.Getenv("CLOUDFLARE_API_TOKEN"),
+		OpenCodeAPIKey:      os.Getenv("OPENCODE_ZEN_API_KEY"),
+		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
+		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
+		RateLimitGlobal:     rateLimitGlobal,
+		RateLimitPerIP:      rateLimitPerIP,
+		RateLimitWindowMs:   rateLimitWindowMs,
+		CORSOrigins:         os.Getenv("CORS_ORIGINS"),
 	}, nil
 }
 

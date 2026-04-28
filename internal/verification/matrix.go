@@ -3,6 +3,7 @@ package verification
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -184,6 +185,13 @@ func resolveEndpoint(provider types.ProviderConfig) string {
 	baseURL := provider.BaseURL
 	if provider.ProviderType == "ollama" {
 		return strings.TrimRight(baseURL, "/") + "/api/chat"
+	}
+	if provider.ProviderType == "cloudflare_workers_ai" {
+		accountID := strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID"))
+		if accountID == "" {
+			accountID = "{account_id}"
+		}
+		return strings.TrimRight(baseURL, "/") + "/accounts/" + accountID + "/ai/run/{model}"
 	}
 	return strings.TrimRight(baseURL, "/") + "/chat/completions"
 }

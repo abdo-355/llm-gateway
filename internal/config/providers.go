@@ -10,6 +10,7 @@ func GetProviders() []types.ProviderConfig {
 		getGeminiConfig(),
 		getNIMConfig(),
 		getKiloConfig(),
+		getCloudflareConfig(),
 		getOpenCodeConfig(),
 		getOllamaConfig(),
 	}
@@ -370,6 +371,83 @@ func getKiloConfig() types.ProviderConfig {
 			Rph: &rph200,
 		},
 		ProviderType: "openai",
+	}
+}
+
+func getCloudflareConfig() types.ProviderConfig {
+	rpm1 := 1
+	rpm2 := 2
+	rpm3 := 3
+	rpm5 := 5
+	rpm10 := 10
+
+	return types.ProviderConfig{
+		ID:      "cloudflare",
+		BaseURL: "https://api.cloudflare.com/client/v4",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "CLOUDFLARE_API_TOKEN",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"@cf/openai/gpt-oss-20b",
+				"@cf/qwen/qwen3-30b-a3b-fp8",
+				"@cf/zai-org/glm-4.7-flash",
+				"@cf/qwen/qwen2.5-coder-32b-instruct",
+				"@cf/qwen/qwq-32b",
+				"@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+				"@cf/meta/llama-4-scout-17b-16e-instruct",
+				"@cf/mistralai/mistral-small-3.1-24b-instruct",
+				"@cf/google/gemma-3-12b-it",
+				"@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+				"@cf/ibm-granite/granite-4.0-h-micro",
+				"@cf/meta/llama-3.2-3b-instruct",
+				"@cf/meta/llama-3.2-1b-instruct",
+				"@cf/google/gemma-4-26b-a4b-it",
+				"@cf/openai/gpt-oss-120b",
+				"@cf/nvidia/nemotron-3-120b-a12b",
+				"@cf/moonshotai/kimi-k2.6",
+				"@cf/moonshotai/kimi-k2.5",
+			},
+			Limits: map[string]types.ModelLimits{
+				"@cf/openai/gpt-oss-20b":                       {Rpm: &rpm5},
+				"@cf/qwen/qwen3-30b-a3b-fp8":                   {Rpm: &rpm10},
+				"@cf/zai-org/glm-4.7-flash":                    {Rpm: &rpm10},
+				"@cf/qwen/qwen2.5-coder-32b-instruct":          {Rpm: &rpm3},
+				"@cf/qwen/qwq-32b":                             {Rpm: &rpm3},
+				"@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": {Rpm: &rpm1},
+				"@cf/meta/llama-4-scout-17b-16e-instruct":      {Rpm: &rpm5},
+				"@cf/mistralai/mistral-small-3.1-24b-instruct": {Rpm: &rpm5},
+				"@cf/google/gemma-3-12b-it":                    {Rpm: &rpm5},
+				"@cf/meta/llama-3.3-70b-instruct-fp8-fast":     {Rpm: &rpm3},
+				"@cf/ibm-granite/granite-4.0-h-micro":          {Rpm: &rpm10},
+				"@cf/meta/llama-3.2-3b-instruct":               {Rpm: &rpm10},
+				"@cf/meta/llama-3.2-1b-instruct":               {Rpm: &rpm10},
+				"@cf/google/gemma-4-26b-a4b-it":                {Rpm: &rpm5},
+				"@cf/openai/gpt-oss-120b":                      {Rpm: &rpm3},
+				"@cf/nvidia/nemotron-3-120b-a12b":              {Rpm: &rpm3},
+				"@cf/moonshotai/kimi-k2.6":                     {Rpm: &rpm2},
+				"@cf/moonshotai/kimi-k2.5":                     {Rpm: &rpm2},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           false,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "cloudflare_workers_ai",
 	}
 }
 
