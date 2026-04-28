@@ -5,12 +5,12 @@ import (
 	"log"
 
 	"github.com/abdo-355/llm-gateway/internal/app"
-	"github.com/joho/godotenv"
+	"github.com/abdo-355/llm-gateway/internal/config"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+	if err := config.LoadDotEnv(); err != nil {
+		log.Fatal(err)
 	}
 
 	app, err := app.New(context.Background())

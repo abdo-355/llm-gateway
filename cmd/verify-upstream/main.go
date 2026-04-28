@@ -8,14 +8,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/verification"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+	if err := config.LoadDotEnv(); err != nil {
+		log.Fatal(err)
 	}
 
 	provider := flag.String("provider", "", "Only test a single provider ID")
