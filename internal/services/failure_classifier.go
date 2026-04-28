@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	stdErrors "errors"
 	"strings"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
@@ -25,6 +27,10 @@ func NewDefaultFailureClassifier() *DefaultFailureClassifier {
 
 // Categorize maps an error to a failure category
 func (c *DefaultFailureClassifier) Categorize(err error) types.FailureCategory {
+	if stdErrors.Is(err, context.DeadlineExceeded) || stdErrors.Is(err, context.Canceled) {
+		return types.CategoryTimeout
+	}
+
 	switch e := err.(type) {
 	case *errors.NetworkError:
 		return types.CategoryNetwork

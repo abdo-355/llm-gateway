@@ -36,9 +36,9 @@ func TestFailureClassifier_ClassifyCanceledNetworkFailsOver(t *testing.T) {
 		HasRemainingBudget: true,
 	})
 
-	assert.Equal(t, types.CategoryNetwork, decision.Category)
+	assert.Equal(t, types.CategoryTimeout, decision.Category)
 	assert.Equal(t, types.ActionFailover, decision.Action)
-	assert.Equal(t, "upstream request canceled, trying different provider", decision.Reason)
+	assert.Equal(t, "provider request timed out, trying different provider", decision.Reason)
 	assert.True(t, decision.IsRetryable)
 	assert.Zero(t, decision.BackoffMs)
 }
@@ -59,4 +59,32 @@ func TestFailureClassifier_ClassifyTransientNetworkRetries(t *testing.T) {
 	assert.Equal(t, "transient network/timeout error", decision.Reason)
 	assert.True(t, decision.IsRetryable)
 	require.NotZero(t, decision.BackoffMs)
+}
+
+func TestFailureClassifier_CategorizeRawContextDeadlineAsTimeout(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+
+	decision := classifier.Classify(context.DeadlineExceeded, types.FailureContext{
+		AttemptIndex:       0,
+		MaxAttempts:        3,
+		HasRemainingBudget: true,
+	})
+
+	assert.Equal(t, types.CategoryTimeout, decision.Category)
+	assert.Equal(t, types.ActionFailover, decision.Action)
+	assert.Equal(t, "provider request timed out, trying different provider", decision.Reason)
+}
+
+func TestFailureClassifier_CategorizeRawContextCanceledAsTimeout(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+
+	decision := classifier.Classify(context.Canceled, types.FailureContext{
+		AttemptIndex:       0,
+		MaxAttempts:        3,
+		HasRemainingBudget: true,
+	})
+
+	assert.Equal(t, types.CategoryTimeout, decision.Category)
+	assert.Equal(t, types.ActionFailover, decision.Action)
+	assert.Equal(t, "provider request timed out, trying different provider", decision.Reason)
 }
