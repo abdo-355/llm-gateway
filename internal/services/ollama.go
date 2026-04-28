@@ -136,8 +136,6 @@ func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string
 
 	provider := "ollama"
 
-	s.logRawProviderResponseBody(provider, model, resp.StatusCode, body)
-
 	if resp.StatusCode == http.StatusTooManyRequests {
 		headers := flattenHeaders(resp.Header)
 		retryAfter := 60
@@ -186,16 +184,32 @@ func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string
 		return nil, errors.NewEmptyResponseError(provider, model, resp.StatusCode)
 	}
 
+	s.logRawProviderResponseBody(provider, model, resp.StatusCode, body)
+
 	var ollamaResp ollamaChatResponse
 	if err := json.Unmarshal(body, &ollamaResp); err != nil {
-		return nil, errors.NewParseError(
-			fmt.Sprintf("Failed to parse Ollama response for model %s", model),
-			"json",
-			provider,
-			model,
-			truncateString(string(body), 500),
-			err,
-		)
+		// Try parsing as NDJSON (single line) - Ollama native API always returns this format
+		if firstLine, _, cut := bytes.Cut(body, []byte("\n")); cut {
+			if err2 := json.Unmarshal(firstLine, &ollamaResp); err2 != nil {
+				return nil, errors.NewParseError(
+					fmt.Sprintf("Failed to parse Ollama response for model %s", model),
+					"json",
+					provider,
+					model,
+					truncateString(string(body), 500),
+					err,
+				)
+			}
+		} else {
+			return nil, errors.NewParseError(
+				fmt.Sprintf("Failed to parse Ollama response for model %s", model),
+				"json",
+				provider,
+				model,
+				truncateString(string(body), 500),
+				err,
+			)
+		}
 	}
 
 	if ollamaResp.Message.Content == "" && len(ollamaResp.Message.ToolCalls) == 0 {
@@ -417,7 +431,7 @@ func (s *ProviderService) callOllamaProvider(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "application/x-ndjson")
 
 	if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
 		return nil, err
