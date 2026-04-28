@@ -42,6 +42,10 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "kilo", Model: "openrouter/free", Weight: 0.7},
 			{Provider: "kilo", Model: "tencent/hy3-preview:free", Weight: 0.7},
+
+			{Provider: "opencode", Model: "big-pickle", Weight: 0.6},
+			{Provider: "opencode", Model: "ling-2.6-flash-free", Weight: 0.6},
+			{Provider: "opencode", Model: "hy3-preview-free", Weight: 0.6},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -79,6 +83,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.8},
 			{Provider: "kilo", Model: "inclusionai/ling-2.6-1t:free", Weight: 0.8},
+
+			{Provider: "opencode", Model: "minimax-m2.5-free", Weight: 0.7},
+			{Provider: "opencode", Model: "nemotron-3-super-free", Weight: 0.7},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),

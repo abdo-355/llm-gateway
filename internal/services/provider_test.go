@@ -131,6 +131,22 @@ func TestPrepareRequest_GeminiShaping(t *testing.T) {
 	assert.NotContains(t, payload, "presence_penalty")
 }
 
+func TestPrepareRequest_OpenCodeShaping(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		MaxCompletionTokens: ptrInt(11),
+	}
+
+	body, err := svc.prepareRequest(req, "big-pickle", "https://opencode.ai/zen/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "OPENCODE_ZEN_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, float64(11), payload["max_tokens"])
+	assert.NotContains(t, payload, "max_completion_tokens")
+}
+
 func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{

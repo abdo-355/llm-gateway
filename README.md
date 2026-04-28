@@ -31,6 +31,7 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **NVIDIA NIM** - High-performance LLMs via NVIDIA's API
 - **Ollama** - Self-hosted and cloud Ollama models
 - **Kilo** - Diverse models via Kilo's gateway
+- **OpenCode Zen** - Free and experimental models via OpenCode's Zen gateway
 - **Google Gemini** - Gemini models (via Gemini API)
 
 ---
@@ -268,6 +269,7 @@ Failures include the exact reason when available, for example:
 | `NIM_API_KEY` | No | NVIDIA NIM API key |
 | `OLLAMA_API_KEY` | No | Ollama API key |
 | `KILO_API_KEY` | No | Kilo API key (optional for free models) |
+| `OPENCODE_ZEN_API_KEY` | No | OpenCode Zen API key |
 
 | Variable | Default | Description |
 |----------|---------|-------------|

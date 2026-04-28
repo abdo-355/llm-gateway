@@ -24,6 +24,7 @@ type EnvConfig struct {
 	NimAPIKey      string
 	OllamaAPIKey   string
 	KiloAPIKey     string
+	OpenCodeAPIKey string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -159,6 +160,7 @@ func LoadEnv() (*EnvConfig, error) {
 		NimAPIKey:         os.Getenv("NIM_API_KEY"),
 		OllamaAPIKey:      os.Getenv("OLLAMA_API_KEY"),
 		KiloAPIKey:        os.Getenv("KILO_API_KEY"),
+		OpenCodeAPIKey:    os.Getenv("OPENCODE_ZEN_API_KEY"),
 		RedisURL:          getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:    getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
 		RateLimitGlobal:   rateLimitGlobal,

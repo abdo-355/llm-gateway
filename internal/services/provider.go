@@ -338,6 +338,11 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 			request.MaxCompletionTokens = request.MaxTokens
 		}
 		request.MaxTokens = nil
+	case "opencode":
+		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
+			request.MaxTokens = request.MaxCompletionTokens
+		}
+		request.MaxCompletionTokens = nil
 	case "gemini":
 		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
 			request.MaxTokens = request.MaxCompletionTokens
@@ -390,6 +395,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "ollama"
 	case "KILO_API_KEY":
 		return "kilo"
+	case "OPENCODE_ZEN_API_KEY":
+		return "opencode"
 	}
 
 	switch {
@@ -405,6 +412,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
 		return "kilo"
+	case strings.Contains(baseURL, "opencode.ai"):
+		return "opencode"
 	case strings.Contains(baseURL, "ollama.com"):
 		return "ollama"
 	default:

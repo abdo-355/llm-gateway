@@ -10,6 +10,7 @@ func GetProviders() []types.ProviderConfig {
 		getGeminiConfig(),
 		getNIMConfig(),
 		getKiloConfig(),
+		getOpenCodeConfig(),
 		getOllamaConfig(),
 	}
 }
@@ -368,6 +369,53 @@ func getKiloConfig() types.ProviderConfig {
 		Limits: types.ProviderLimits{
 			Rph: &rph200,
 		},
+		ProviderType: "openai",
+	}
+}
+
+func getOpenCodeConfig() types.ProviderConfig {
+	rpm10 := 10
+
+	return types.ProviderConfig{
+		ID:      "opencode",
+		BaseURL: "https://opencode.ai/zen/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "OPENCODE_ZEN_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"minimax-m2.5-free",
+				"big-pickle",
+				"ling-2.6-flash-free",
+				"hy3-preview-free",
+				"nemotron-3-super-free",
+			},
+			Limits: map[string]types.ModelLimits{
+				"minimax-m2.5-free":     {Rpm: &rpm10},
+				"big-pickle":            {Rpm: &rpm10},
+				"ling-2.6-flash-free":   {Rpm: &rpm10},
+				"hy3-preview-free":      {Rpm: &rpm10},
+				"nemotron-3-super-free": {Rpm: &rpm10},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
 		ProviderType: "openai",
 	}
 }
