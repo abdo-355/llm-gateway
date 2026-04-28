@@ -412,13 +412,18 @@ func ollamaStrPtr(s string) *string {
 }
 
 // callOllamaProvider makes a non-streaming call to the Ollama native /api/chat endpoint.
+// Uses stream:true internally for reliability, then collects chunks into a single response.
 func (s *ProviderService) callOllamaProvider(
 	baseURL, apiKey, model string,
 	request types.ChatCompletionRequest,
 	ctx context.Context,
 	auth types.ProviderAuth,
 ) (*types.ChatCompletionResponse, error) {
-	reqBody, err := s.prepareOllamaRequest(request, model)
+	stream := true
+	requestCopy := request
+	requestCopy.Stream = &stream
+
+	reqBody, err := s.prepareOllamaRequest(requestCopy, model)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +451,114 @@ func (s *ProviderService) callOllamaProvider(
 	}
 	defer resp.Body.Close()
 
-	return s.handleOllamaResponse(resp, model)
+	if resp.StatusCode != http.StatusOK {
+		return nil, &errors.ProviderError{
+			Message:     fmt.Sprintf("Ollama returned HTTP %d", resp.StatusCode),
+			StatusCode:  resp.StatusCode,
+			IsRetryable: resp.StatusCode >= 500,
+		}
+	}
+
+	return s.collectOllamaStreamResult(resp.Body, model, baseURL)
+}
+
+// collectOllamaStreamResult reads an NDJSON stream from Ollama and builds a single ChatCompletionResponse.
+func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, baseURL string) (*types.ChatCompletionResponse, error) {
+	provider := "ollama"
+
+	scanner := bufio.NewScanner(body)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	var contentBuilder strings.Builder
+	var role string
+	var finalModel string
+	promptTokens := 0
+	completionTokens := 0
+	var toolCalls []types.ToolCall
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		s.logRawProviderSSEData(provider, model, line)
+
+		var ollamaResp ollamaChatResponse
+		if err := json.Unmarshal([]byte(line), &ollamaResp); err != nil {
+			logger.Error().
+				Str("type", "http").
+				Str("event", "ollama.stream_line_invalid").
+				Err(err).
+				Str("data", truncateString(line, 200)).
+				Msg("Failed to parse Ollama stream line")
+			continue
+		}
+
+		if ollamaResp.Message.Role != "" {
+			role = ollamaResp.Message.Role
+		}
+
+		contentBuilder.WriteString(ollamaResp.Message.Content)
+
+		for _, tc := range ollamaResp.Message.ToolCalls {
+			argsStr := ""
+			switch args := tc.Function.Arguments.(type) {
+			case string:
+				argsStr = args
+			default:
+				if argsBytes, err := json.Marshal(args); err == nil {
+					argsStr = string(argsBytes)
+				}
+			}
+			toolCalls = append(toolCalls, types.ToolCall{
+				ID:   "call_" + uuid.NewString()[:12],
+				Type: "function",
+				Function: types.FunctionCall{
+					Name:      tc.Function.Name,
+					Arguments: argsStr,
+				},
+			})
+		}
+
+		finalModel = ollamaResp.Model
+
+		if ollamaResp.Done {
+			promptTokens = ollamaResp.PromptEvalCount
+			completionTokens = ollamaResp.EvalCount
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, wrapNetworkError(err, provider, baseURL)
+	}
+
+	fullContent := contentBuilder.String()
+	if fullContent == "" && len(toolCalls) == 0 {
+		return nil, errors.NewEmptyResponseError(provider, model, 200)
+	}
+
+	return &types.ChatCompletionResponse{
+		ID:      "chatcmpl-" + uuid.NewString()[:29],
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   finalModel,
+		Choices: []types.Choice{{
+			Index: 0,
+			Message: types.ResponseMessage{
+				Role:      role,
+				Content:   ollamaStrPtr(fullContent),
+				ToolCalls: toolCalls,
+			},
+			FinishReason: "stop",
+		}},
+		Usage: &types.Usage{
+			PromptTokens:     promptTokens,
+			CompletionTokens: completionTokens,
+			TotalTokens:      promptTokens + completionTokens,
+		},
+	}, nil
 }
 
 // callOllamaStreamProvider makes a streaming call to the Ollama native /api/chat endpoint.
