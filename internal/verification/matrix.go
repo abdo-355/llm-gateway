@@ -182,6 +182,9 @@ func probeTokenPtr(cfg Config, fallback int) *int {
 
 func resolveEndpoint(provider types.ProviderConfig) string {
 	baseURL := provider.BaseURL
+	if provider.ProviderType == "ollama" {
+		return strings.TrimRight(baseURL, "/") + "/api/chat"
+	}
 	return strings.TrimRight(baseURL, "/") + "/chat/completions"
 }
 
