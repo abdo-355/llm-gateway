@@ -1,6 +1,8 @@
 package services
 
 import (
+	"strings"
+
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
@@ -55,21 +57,31 @@ func (c *DefaultFailureClassifier) Categorize(err error) types.FailureCategory {
 // Classify categorizes an error and decides the appropriate action
 func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext) types.FailureDecision {
 	category := c.Categorize(err)
-	
+
 	decision := types.FailureDecision{
 		Category:            category,
 		IsRetryable:         c.isRetryable(category),
 		ShouldRecordFailure: true,
 		ShouldRecordSuccess: false,
 	}
-	
+
 	// Determine action based on category
 	switch category {
-	case types.CategoryNetwork, types.CategoryTimeout:
+	case types.CategoryNetwork:
+		if c.isCanceledNetworkError(err) {
+			decision.Action = types.ActionFailover
+			decision.Reason = "upstream request canceled, trying different provider"
+			break
+		}
+
 		decision.Action = types.ActionRetryWithBackoff
 		decision.BackoffMs = c.calculateBackoff(ctx.AttemptIndex)
 		decision.Reason = "transient network/timeout error"
-		
+
+	case types.CategoryTimeout:
+		decision.Action = types.ActionFailover
+		decision.Reason = "provider request timed out, trying different provider"
+
 	case types.CategoryRateLimit:
 		decision.ShouldRecordFailure = false
 		subtype := c.extractRateLimitSubtype(err)
@@ -91,42 +103,42 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 				decision.Reason = "all providers rate limited, applying cooldown"
 			}
 		}
-		
+
 	case types.CategoryProvider5xx:
 		decision.Action = types.ActionRetryWithBackoff
 		decision.BackoffMs = c.calculateBackoff(ctx.AttemptIndex)
 		decision.Reason = "provider server error, retrying"
-		
+
 	case types.CategoryParse, types.CategoryEmpty:
 		decision.Action = types.ActionFailover
 		decision.Reason = "parsing/empty response issue, trying different provider"
-		
+
 	case types.CategoryPayment, types.CategoryValidation:
 		decision.Action = types.ActionAbort
 		decision.IsRetryable = false
 		decision.Reason = "non-retryable client error"
-		
+
 	case types.CategoryCircuitBreaker:
 		decision.Action = types.ActionFailover
 		decision.ShouldRecordFailure = false
 		decision.Reason = "circuit breaker open, failover"
-		
+
 	case types.CategoryQuota:
 		decision.ShouldRecordFailure = false
 		decision.Action = types.ActionFailover
 		decision.Reason = "quota exceeded, trying different provider"
-		
+
 	default:
 		decision.Action = types.ActionAbort
 		decision.Reason = "unknown error type"
 	}
-	
+
 	// Check retry budget
 	if !ctx.HasRemainingBudget {
 		decision.Action = types.ActionAbort
 		decision.Reason = "retry budget exhausted"
 	}
-	
+
 	return decision
 }
 
@@ -150,15 +162,15 @@ func (c *DefaultFailureClassifier) calculateBackoff(attemptIndex int) int {
 	// With max of 8 seconds
 	baseBackoff := 250 // ms
 	backoff := baseBackoff
-	
+
 	for i := 0; i < attemptIndex && backoff < 8000; i++ {
 		backoff *= 2
 	}
-	
+
 	if backoff > 8000 {
 		backoff = 8000
 	}
-	
+
 	return backoff
 }
 
@@ -176,4 +188,14 @@ func (c *DefaultFailureClassifier) extractRateLimitSubtype(err error) string {
 		return rateErr.LimitSubtype
 	}
 	return "rate_limit"
+}
+
+func (c *DefaultFailureClassifier) isCanceledNetworkError(err error) bool {
+	networkErr, ok := err.(*errors.NetworkError)
+	if !ok {
+		return false
+	}
+
+	errText := strings.ToLower(networkErr.Error())
+	return strings.Contains(errText, "context canceled") || strings.Contains(errText, "context cancelled")
 }

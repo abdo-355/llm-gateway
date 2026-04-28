@@ -61,6 +61,26 @@ func envFlagEnabled(key string) bool {
 	}
 }
 
+func requestTimeoutError(ctx context.Context) error {
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		return errors.NewTimeoutError("Request timeout", "request")
+	case context.Canceled:
+		return errors.NewTimeoutError("Request canceled", "request")
+	default:
+		return nil
+	}
+}
+
+func requestTimeoutGatewayError(ctx context.Context) *types.GatewayError {
+	if err := requestTimeoutError(ctx); err != nil {
+		if timeoutErr, ok := err.(*errors.TimeoutError); ok {
+			return &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: timeoutErr.Message}
+		}
+	}
+	return nil
+}
+
 func (s *ProviderService) CallProvider(
 	baseURL, apiKey, model string,
 	request types.ChatCompletionRequest,
@@ -96,8 +116,8 @@ func (s *ProviderService) CallProvider(
 	// Make request with timeout
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, errors.NewTimeoutError("Request timeout", "request")
+		if timeoutErr := requestTimeoutError(ctx); timeoutErr != nil {
+			return nil, timeoutErr
 		}
 		return nil, wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
 	}
@@ -149,8 +169,8 @@ func (s *ProviderService) StreamProviderChannel(
 
 		resp, err := s.httpClient.Do(req)
 		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
+			if timeoutErr := requestTimeoutGatewayError(ctx); timeoutErr != nil {
+				errChan <- timeoutErr
 			} else {
 				wrappedErr := wrapNetworkError(err, detectProvider(baseURL, providerType, auth), baseURL)
 				errChan <- &types.GatewayError{

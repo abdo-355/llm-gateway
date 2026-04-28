@@ -510,5 +510,51 @@ func TestProviderCallProvider_NetworkError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestProviderCallProvider_ContextCanceledReturnsTimeoutError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"test","object":"chat.completion","model":"gpt-4","choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 1000, ctx, "openai", types.ProviderAuth{Type: "bearer"})
+	require.Error(t, err)
+
+	var timeoutErr *errors.TimeoutError
+	require.ErrorAs(t, err, &timeoutErr)
+	assert.Equal(t, "request", timeoutErr.TimeoutType)
+	assert.Equal(t, 504, timeoutErr.StatusCode)
+}
+
+func TestProviderCallProvider_Ollama429ReturnsRateLimitError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/chat", r.URL.Path)
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+	}
+
+	_, err := svc.CallProvider(srv.URL, "", "minimax-m2.7", req, 1000, context.Background(), "ollama", types.ProviderAuth{Type: "none"})
+	require.Error(t, err)
+
+	var rateErr *errors.RateLimitError
+	require.ErrorAs(t, err, &rateErr)
+	assert.Equal(t, 42, rateErr.RetryAfter)
+	assert.Equal(t, "rate_limit", rateErr.LimitSubtype)
+}
+
 // Helper functions - ptrString is defined in provider_test.go
 func boolPtr(b bool) *bool { return &b }

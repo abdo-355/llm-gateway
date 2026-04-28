@@ -19,31 +19,31 @@ import (
 
 // ollamaChatRequest is the native Ollama /api/chat request body.
 type ollamaChatRequest struct {
-	Model    string                 `json:"model"`
-	Messages []types.OpenAIMessage  `json:"messages"`
-	Stream   bool                   `json:"stream,omitempty"`
-	Format   any                    `json:"format,omitempty"`
-	Options  *ollamaOptions         `json:"options,omitempty"`
-	Tools    []types.OpenAITool     `json:"tools,omitempty"`
+	Model    string                `json:"model"`
+	Messages []types.OpenAIMessage `json:"messages"`
+	Stream   bool                  `json:"stream,omitempty"`
+	Format   any                   `json:"format,omitempty"`
+	Options  *ollamaOptions        `json:"options,omitempty"`
+	Tools    []types.OpenAITool    `json:"tools,omitempty"`
 }
 
 type ollamaOptions struct {
-	Temperature      *float64  `json:"temperature,omitempty"`
-	NumPredict       *int      `json:"num_predict,omitempty"`
-	Seed             *int      `json:"seed,omitempty"`
-	TopP             *float64  `json:"top_p,omitempty"`
-	FrequencyPenalty *float64  `json:"frequency_penalty,omitempty"`
-	PresencePenalty  *float64  `json:"presence_penalty,omitempty"`
-	Stop             any       `json:"stop,omitempty"`
+	Temperature      *float64 `json:"temperature,omitempty"`
+	NumPredict       *int     `json:"num_predict,omitempty"`
+	Seed             *int     `json:"seed,omitempty"`
+	TopP             *float64 `json:"top_p,omitempty"`
+	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
+	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
+	Stop             any      `json:"stop,omitempty"`
 }
 
 // ollamaChatResponse is the native Ollama /api/chat response body.
 type ollamaChatResponse struct {
-	Model            string            `json:"model"`
-	Message          ollamaMessage     `json:"message"`
-	Done             bool              `json:"done"`
-	PromptEvalCount  int               `json:"prompt_eval_count,omitempty"`
-	EvalCount        int               `json:"eval_count,omitempty"`
+	Model           string        `json:"model"`
+	Message         ollamaMessage `json:"message"`
+	Done            bool          `json:"done"`
+	PromptEvalCount int           `json:"prompt_eval_count,omitempty"`
+	EvalCount       int           `json:"eval_count,omitempty"`
 }
 
 type ollamaMessage struct {
@@ -444,19 +444,15 @@ func (s *ProviderService) callOllamaProvider(
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return nil, errors.NewTimeoutError("Request timeout", "request")
+		if timeoutErr := requestTimeoutError(ctx); timeoutErr != nil {
+			return nil, timeoutErr
 		}
 		return nil, wrapNetworkError(err, "ollama", baseURL)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, &errors.ProviderError{
-			Message:     fmt.Sprintf("Ollama returned HTTP %d", resp.StatusCode),
-			StatusCode:  resp.StatusCode,
-			IsRetryable: resp.StatusCode >= 500,
-		}
+		return s.handleOllamaResponse(resp, model)
 	}
 
 	return s.collectOllamaStreamResult(resp.Body, model, baseURL)
@@ -601,8 +597,8 @@ func (s *ProviderService) callOllamaStreamProvider(
 
 		resp, err := s.httpClient.Do(req)
 		if err != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				errChan <- &types.GatewayError{Type: "provider_error", Code: "TIMEOUT", Message: "Request timeout"}
+			if timeoutErr := requestTimeoutGatewayError(ctx); timeoutErr != nil {
+				errChan <- timeoutErr
 			} else {
 				wrappedErr := wrapNetworkError(err, "ollama", baseURL)
 				errChan <- &types.GatewayError{
@@ -620,11 +616,8 @@ func (s *ProviderService) callOllamaStreamProvider(
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			errChan <- &types.GatewayError{
-				Type:    "provider_error",
-				Code:    "REQUEST_FAILED",
-				Message: fmt.Sprintf("Ollama returned HTTP %d", resp.StatusCode),
-			}
+			_, err := s.handleOllamaResponse(resp, model)
+			errChan <- s.convertToGatewayError(err)
 			return
 		}
 

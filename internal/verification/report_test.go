@@ -118,7 +118,7 @@ func TestRunSkipsRemainingProbesAfterRateLimit(t *testing.T) {
 
 	report, err := runWithClient(context.Background(), Config{
 		Provider: "groq",
-		Model:    "llama-3.1-8b-instant",
+		Model:    "openai/gpt-oss-120b",
 		Timeout:  time.Second,
 	}, client)
 
@@ -160,7 +160,7 @@ func TestRunPreservesNonRateLimitFailures(t *testing.T) {
 
 	report, err := runWithClient(context.Background(), Config{
 		Provider: "cerebras",
-		Model:    "llama3.1-8b",
+		Model:    "qwen-3-235b-a22b-instruct-2507",
 		Timeout:  time.Second,
 	}, client)
 
