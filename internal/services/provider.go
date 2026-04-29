@@ -796,6 +796,12 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 			}
 			return retryAfter, "resource_exhausted", "overload"
 		}
+	case cloudflareProviderID:
+		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||
+			strings.Contains(bodyUpper, "DAILY FREE ALLOCATION OF 10,000 NEURONS") ||
+			(strings.Contains(bodyUpper, "10,000 NEURONS") && strings.Contains(bodyUpper, "FREE ALLOCATION")) {
+			return retryAfter, "daily_neurons", "quota_exhausted"
+		}
 	}
 
 	// Parse body for quota/billing exhaustion signals across all providers

@@ -24,6 +24,7 @@ type CloudflareUsageStats struct {
 type CloudflareBudgetManager interface {
 	EstimateCloudflareRequestNeurons(model string, req types.ChatCompletionRequest) int
 	CheckCloudflareDailyNeuronBudget(ctx context.Context, model string, estimatedNeurons int) error
+	MarkCloudflareDailyBudgetExhausted(ctx context.Context) error
 	RecordCloudflareNeuronUsage(ctx context.Context, model string, usage *types.Usage) (CloudflareUsageStats, error)
 }
 
@@ -114,6 +115,27 @@ func (s *QuotaService) RecordCloudflareNeuronUsage(ctx context.Context, model st
 	stats.RemainingDailyNeurons = max(0, cloudflareFreeDailyNeuronBudget-usedToday)
 	metrics.ProviderDailyBudgetRemaining.WithLabelValues(cloudflareProviderID).Set(float64(stats.RemainingDailyNeurons))
 	return stats, nil
+}
+
+func (s *QuotaService) MarkCloudflareDailyBudgetExhausted(ctx context.Context) error {
+	if s.redis == nil {
+		metrics.ProviderDailyBudgetRemaining.WithLabelValues(cloudflareProviderID).Set(0)
+		return nil
+	}
+
+	now := time.Now().UTC()
+	keys := s.buildCloudflareNeuronKeys("", now)
+	if err := s.redis.Set(ctx, keys.ProviderDaily, cloudflareFreeDailyNeuronBudget, 25*time.Hour).Err(); err != nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "cloudflare.neuron_exhausted_mark_failed").
+			Err(err).
+			Msg("Failed to mark Cloudflare daily neuron budget exhausted")
+		return err
+	}
+
+	metrics.ProviderDailyBudgetRemaining.WithLabelValues(cloudflareProviderID).Set(0)
+	return nil
 }
 
 func (s *QuotaService) GetCloudflareRemainingDailyNeurons(ctx context.Context) int {

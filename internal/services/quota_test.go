@@ -284,6 +284,21 @@ func TestCloudflareCheckDailyNeuronBudget(t *testing.T) {
 	assert.Equal(t, "daily_neurons", quotaErr.LimitType)
 }
 
+func TestCloudflareMarkDailyBudgetExhausted(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	require.NoError(t, svc.MarkCloudflareDailyBudgetExhausted(ctx))
+	assert.Equal(t, 0, svc.GetCloudflareRemainingDailyNeurons(ctx))
+
+	err := svc.CheckCloudflareDailyNeuronBudget(ctx, "@cf/openai/gpt-oss-20b", 1)
+	require.Error(t, err)
+	var quotaErr *errors.ModelQuotaExceededError
+	require.ErrorAs(t, err, &quotaErr)
+	assert.Equal(t, "daily_neurons", quotaErr.LimitType)
+}
+
 func TestQuotaRecordModelUsage_MultipleRecords(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")

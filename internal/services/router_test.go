@@ -23,6 +23,7 @@ type cloudflareQuotaStub struct {
 	estimateTokens           int
 	estimatedCloudflareUnits int
 	cloudflareErr            error
+	markedExhausted          bool
 }
 
 func (s *cloudflareQuotaStub) EstimateTokens(req types.ChatCompletionRequest) int {
@@ -51,6 +52,11 @@ func (s *cloudflareQuotaStub) CheckCloudflareDailyNeuronBudget(ctx context.Conte
 
 func (s *cloudflareQuotaStub) RecordCloudflareNeuronUsage(ctx context.Context, model string, usage *types.Usage) (services.CloudflareUsageStats, error) {
 	return services.CloudflareUsageStats{}, nil
+}
+
+func (s *cloudflareQuotaStub) MarkCloudflareDailyBudgetExhausted(ctx context.Context) error {
+	s.markedExhausted = true
+	return nil
 }
 
 func init() {

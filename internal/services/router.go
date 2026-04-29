@@ -491,6 +491,18 @@ func (r *Router) Execute(
 	var attemptChain []map[string]any
 
 	for i, attempt := range plan.Attempts {
+		if quotaErr := r.checkCloudflareAttemptBudget(ctx, attempt, req); quotaErr != nil {
+			logger.Warn().
+				Str("type", "router").
+				Str("event", "attempt.skipped").
+				Str("request_id", requestID).
+				Str("provider", attempt.ProviderID).
+				Str("model", attempt.Model).
+				Err(quotaErr).
+				Msg("Skipping Cloudflare attempt because daily neuron budget is exhausted")
+			continue
+		}
+
 		if plan.HardTimeoutMs != nil {
 			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
 				return nil, errors.NewTimeoutError("Hard timeout exceeded", "request")
@@ -738,6 +750,7 @@ func (r *Router) Execute(
 		}
 
 		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
+			r.maybeMarkCloudflareDailyBudgetExhausted(ctx, attempt.ProviderID, rateLimitErr)
 			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
 		}
 	}
@@ -782,6 +795,18 @@ func (r *Router) ExecuteStream(
 		var outputTokenCount int
 
 		for i, attempt := range plan.Attempts {
+			if quotaErr := r.checkCloudflareAttemptBudget(ctx, attempt, req); quotaErr != nil {
+				logger.Warn().
+					Str("type", "router").
+					Str("event", "attempt.skipped").
+					Str("request_id", requestID).
+					Str("provider", attempt.ProviderID).
+					Str("model", attempt.Model).
+					Err(quotaErr).
+					Msg("Skipping Cloudflare attempt because daily neuron budget is exhausted")
+				continue
+			}
+
 			if plan.HardTimeoutMs != nil {
 				if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
 					errChan <- &types.GatewayError{
@@ -903,7 +928,9 @@ func (r *Router) ExecuteStream(
 			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
-				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(r.gatewayErrorToTypedError(err).(*errors.RateLimitError)))
+				rateLimitErr := r.gatewayErrorToTypedError(err).(*errors.RateLimitError)
+				r.maybeMarkCloudflareDailyBudgetExhausted(ctx, attempt.ProviderID, rateLimitErr)
+				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
 			}
 
 			// Don't retry if we already sent chunks to the client
@@ -1254,6 +1281,39 @@ func buildRateLimitResponse(rateLimitErr *errors.RateLimitError) *http.Response 
 		header.Set(key, value)
 	}
 	return &http.Response{StatusCode: 429, Header: header}
+}
+
+func (r *Router) checkCloudflareAttemptBudget(ctx context.Context, attempt types.RoutingAttempt, req types.ChatCompletionRequest) error {
+	if attempt.ProviderID != cloudflareProviderID {
+		return nil
+	}
+
+	budgetMgr, ok := r.quotaService.(CloudflareBudgetManager)
+	if !ok {
+		return nil
+	}
+
+	estimatedNeurons := budgetMgr.EstimateCloudflareRequestNeurons(attempt.Model, req)
+	return budgetMgr.CheckCloudflareDailyNeuronBudget(ctx, attempt.Model, estimatedNeurons)
+}
+
+func (r *Router) maybeMarkCloudflareDailyBudgetExhausted(ctx context.Context, providerID string, rateLimitErr *errors.RateLimitError) {
+	if providerID != cloudflareProviderID || rateLimitErr == nil || rateLimitErr.LimitSubtype != "quota_exhausted" {
+		return
+	}
+
+	budgetMgr, ok := r.quotaService.(CloudflareBudgetManager)
+	if !ok {
+		return
+	}
+
+	if err := budgetMgr.MarkCloudflareDailyBudgetExhausted(ctx); err != nil {
+		logger.Warn().
+			Str("type", "router").
+			Str("event", "cloudflare.neuron_exhausted_mark_failed").
+			Err(err).
+			Msg("Failed to mark Cloudflare daily neuron budget exhausted")
+	}
 }
 
 func (r *Router) isCertifiedForStrictSchema(providerID, model string) bool {

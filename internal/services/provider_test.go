@@ -182,6 +182,18 @@ func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
 	assert.Equal(t, 6, resp.Usage.PromptTokensDetails.CachedTokens)
 }
 
+func TestParseRateLimitDetails_CloudflareDailyAllocationExhausted(t *testing.T) {
+	retryAfter, limitType, limitSubtype := parseRateLimitDetails(
+		cloudflareProviderID,
+		http.Header{"Retry-After": []string{"60"}},
+		[]byte(`{"errors":[{"message":"AiError: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare's Workers Paid plan if you would like to continue usage."}]}`),
+	)
+
+	assert.Equal(t, 60, retryAfter)
+	assert.Equal(t, "daily_neurons", limitType)
+	assert.Equal(t, "quota_exhausted", limitSubtype)
+}
+
 func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{
