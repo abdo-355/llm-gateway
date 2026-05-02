@@ -116,7 +116,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "z-ai/glm-5.1", Weight: 1.0},
 			{Provider: "cloudflare", Model: "@cf/moonshotai/kimi-k2.6", Weight: 0.9},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.9},
-			{Provider: "nim", Model: "moonshotai/kimi-k2.5", Weight: 0.9},
+			{Provider: "nim", Model: "moonshotai/kimi-k2.6", Weight: 0.9},
 			{Provider: "cloudflare", Model: "@cf/moonshotai/kimi-k2.5", Weight: 0.8},
 			{Provider: "nim", Model: "z-ai/glm5", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.8},

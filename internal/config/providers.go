@@ -258,7 +258,7 @@ func getNIMConfig() types.ProviderConfig {
 			List: []string{
 				"moonshotai/kimi-k2-instruct",
 				"moonshotai/kimi-k2-instruct-0905",
-				"moonshotai/kimi-k2.5",
+				"moonshotai/kimi-k2.6",
 				"moonshotai/kimi-k2-thinking",
 				"qwen/qwen3-next-80b-a3b-thinking",
 				"qwen/qwen3-next-80b-a3b-instruct",
@@ -280,7 +280,7 @@ func getNIMConfig() types.ProviderConfig {
 			Limits: map[string]types.ModelLimits{
 				"moonshotai/kimi-k2-instruct":                  {Rpd: &rpd14400, Tpm: &tpm500000},
 				"moonshotai/kimi-k2-instruct-0905":             {Rpd: &rpd14400, Tpm: &tpm500000},
-				"moonshotai/kimi-k2.5":                         {Rpd: &rpd14400, Tpm: &tpm500000},
+				"moonshotai/kimi-k2.6":                         {Rpd: &rpd14400, Tpm: &tpm500000},
 				"moonshotai/kimi-k2-thinking":                  {Rpd: &rpd14400, Tpm: &tpm500000},
 				"qwen/qwen3-next-80b-a3b-thinking":             {Rpd: &rpd500, Tpm: &tpm250000},
 				"qwen/qwen3-next-80b-a3b-instruct":             {Rpd: &rpd500, Tpm: &tpm250000},
