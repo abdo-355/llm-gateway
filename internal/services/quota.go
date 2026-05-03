@@ -226,7 +226,20 @@ func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model s
 func (s *QuotaService) AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error {
 	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
 
-	count, err := s.redis.Incr(ctx, key).Result()
+	script := redis.NewScript(`
+		local current = redis.call('INCR', KEYS[1])
+		if current == 1 then
+			redis.call('EXPIRE', KEYS[1], 120)
+		end
+		local max = tonumber(ARGV[1])
+		if current > max then
+			redis.call('DECR', KEYS[1])
+			return -1
+		end
+		return current
+	`)
+
+	result, err := script.Run(ctx, s.redis, []string{key}, maxConcurrent).Int64()
 	if err != nil {
 		logger.Error().
 			Str("type", "db").
@@ -236,13 +249,10 @@ func (s *QuotaService) AcquireConcurrencySlot(ctx context.Context, providerID, m
 		return err
 	}
 
-	s.redis.Expire(ctx, key, 120*time.Second)
-
-	if count > int64(maxConcurrent) {
-		s.redis.Decr(ctx, key)
+	if result == -1 {
 		metrics.QuotaRejectionsTotal.WithLabelValues(providerID, model, "concurrent").Inc()
 		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("Concurrency limit exceeded: %d/%d", count-1, maxConcurrent),
+			fmt.Sprintf("Concurrency limit exceeded: %d/%d", result-1, maxConcurrent),
 			providerID, model, "concurrent",
 		)
 	}
