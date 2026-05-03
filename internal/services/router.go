@@ -338,6 +338,13 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
+		if modelLimits.MaxConcurrent != nil && *modelLimits.MaxConcurrent > 0 {
+			if !r.quotaService.CheckConcurrencyLimit(ctx, provider.ID, model, *modelLimits.MaxConcurrent) {
+				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "concurrency_limit_exceeded"
+				continue
+			}
+		}
+
 		eligible = append(eligible, candidate)
 	}
 
@@ -519,6 +526,22 @@ func (r *Router) Execute(
 			Float64("score", attempt.Score).
 			Msg("Trying provider")
 
+		concurrencyAcquired := false
+		if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
+			if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
+				logger.Warn().
+					Str("type", "router").
+					Str("event", "attempt.concurrency_denied").
+					Str("request_id", requestID).
+					Str("provider", attempt.ProviderID).
+					Str("model", attempt.Model).
+					Err(err).
+					Msg("Concurrency slot unavailable")
+				continue
+			}
+			concurrencyAcquired = true
+		}
+
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
 
 		resp, err := r.providerService.CallProvider(
@@ -533,6 +556,10 @@ func (r *Router) Execute(
 		)
 
 		cancel()
+
+		if concurrencyAcquired {
+			r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
+		}
 
 		latencyMs := time.Since(startTime).Milliseconds()
 
@@ -820,6 +847,23 @@ func (r *Router) ExecuteStream(
 
 			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
 
+			concurrencyAcquired := false
+			if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
+				if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
+					logger.Warn().
+						Str("type", "router").
+						Str("event", "attempt.concurrency_denied").
+						Str("request_id", requestID).
+						Str("provider", attempt.ProviderID).
+						Str("model", attempt.Model).
+						Err(err).
+						Msg("Concurrency slot unavailable")
+					cancel()
+					continue
+				}
+				concurrencyAcquired = true
+			}
+
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
 				attempt.APIKey,
@@ -853,6 +897,10 @@ func (r *Router) ExecuteStream(
 
 			err := <-result.Err
 			cancel()
+
+			if concurrencyAcquired {
+				r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
+			}
 
 			latencyMs := time.Since(startTime).Milliseconds()
 
@@ -1338,4 +1386,16 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 	default:
 		return CooldownDefault
 	}
+}
+
+func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
+	for _, p := range r.config.Providers {
+		if p.ID == providerID {
+			if limits, ok := p.Models.Limits[model]; ok && limits.MaxConcurrent != nil {
+				return *limits.MaxConcurrent
+			}
+			return 0
+		}
+	}
+	return 0
 }

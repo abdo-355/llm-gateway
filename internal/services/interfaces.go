@@ -12,6 +12,9 @@ type QuotaChecker interface {
 	CheckModelQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error
 	RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error
 	HandleProviderRateLimit(ctx context.Context, providerID, model string, resp *http.Response) RateLimitInfo
+	AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error
+	ReleaseConcurrencySlot(ctx context.Context, providerID, model string)
+	CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool
 }
 
 type HealthChecker interface {

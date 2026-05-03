@@ -58,6 +58,23 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "opencode", Model: "big-pickle", Weight: 0.6},
 			{Provider: "opencode", Model: "ling-2.6-flash-free", Weight: 0.6},
 			{Provider: "opencode", Model: "hy3-preview-free", Weight: 0.6},
+
+			{Provider: "zai", Model: "glm-4.7-flash", Weight: 0.8},
+			{Provider: "zai", Model: "glm-4.5-flash", Weight: 0.8},
+			{Provider: "zai", Model: "glm-4.6v-flash", Weight: 0.7},
+
+			{Provider: "llm7", Model: "gpt-oss-20b", Weight: 0.8},
+			{Provider: "llm7", Model: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo", Weight: 0.7},
+			{Provider: "llm7", Model: "ministral-8b-2512", Weight: 0.7},
+			{Provider: "llm7", Model: "GLM-4.6V-Flash", Weight: 0.7},
+			{Provider: "llm7", Model: "fast", Weight: 0.8},
+			{Provider: "llm7", Model: "default", Weight: 0.8},
+
+			{Provider: "cohere", Model: "command-a-vision-03-2025", Weight: 0.6},
+			{Provider: "cohere", Model: "command-r-plus-08-2025", Weight: 0.7},
+			{Provider: "cohere", Model: "command-r-08-2025", Weight: 0.6},
+			{Provider: "cohere", Model: "command-r7b-12-2024", Weight: 0.5},
+			{Provider: "cohere", Model: "tiny-aya-global-03-2025", Weight: 0.5},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -104,6 +121,13 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "opencode", Model: "minimax-m2.5-free", Weight: 0.7},
 			{Provider: "opencode", Model: "nemotron-3-super-free", Weight: 0.7},
+
+			{Provider: "llm7", Model: "codestral-latest", Weight: 0.8},
+			{Provider: "llm7", Model: "deepseek-chat", Weight: 0.9},
+			{Provider: "llm7", Model: "llama-3-70b-instruct", Weight: 0.8},
+
+			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
+			{Provider: "cohere", Model: "command-a-reasoning-08-2025", Weight: 0.7},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),
@@ -130,6 +154,8 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "mistral-medium-3.5", Weight: 0.75},
 			{Provider: "ollama", Model: "kimi-k2-thinking", Weight: 0.8},
 			{Provider: "ollama", Model: "kimi-k2:1t", Weight: 0.8},
+
+			{Provider: "llm7", Model: "pro", Weight: 0.9},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(60000),

@@ -223,6 +223,56 @@ func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model s
 	return err
 }
 
+func (s *QuotaService) AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error {
+	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
+
+	count, err := s.redis.Incr(ctx, key).Result()
+	if err != nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.concurrent_acquire_failed").
+			Err(err).
+			Msg("Failed to acquire concurrency slot")
+		return err
+	}
+
+	s.redis.Expire(ctx, key, 120*time.Second)
+
+	if count > int64(maxConcurrent) {
+		s.redis.Decr(ctx, key)
+		metrics.QuotaRejectionsTotal.WithLabelValues(providerID, model, "concurrent").Inc()
+		return errors.NewModelQuotaExceededError(
+			fmt.Sprintf("Concurrency limit exceeded: %d/%d", count-1, maxConcurrent),
+			providerID, model, "concurrent",
+		)
+	}
+
+	return nil
+}
+
+func (s *QuotaService) ReleaseConcurrencySlot(ctx context.Context, providerID, model string) {
+	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
+	if _, err := s.redis.Decr(ctx, key).Result(); err != nil {
+		logger.Error().
+			Str("type", "db").
+			Str("event", "quota.concurrent_release_failed").
+			Err(err).
+			Msg("Failed to release concurrency slot")
+	}
+}
+
+func (s *QuotaService) CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool {
+	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
+	count, err := s.redis.Get(ctx, key).Int64()
+	if err != nil {
+		if err == redis.Nil {
+			return true
+		}
+		return true
+	}
+	return int(count) < maxConcurrent
+}
+
 func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, model string, resp *http.Response) RateLimitInfo {
 	result := RateLimitInfo{}
 

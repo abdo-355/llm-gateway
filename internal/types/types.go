@@ -500,13 +500,14 @@ type ProviderLimits struct {
 }
 
 type ModelLimits struct {
-	Rpm  *int `json:"rpm,omitempty"`
-	Rph  *int `json:"rph,omitempty"` // Requests per hour
-	Rpd  *int `json:"rpd,omitempty"` // Requests per day
-	Tpm  *int `json:"tpm,omitempty"`
-	Tph  *int `json:"tph,omitempty"`  // Tokens per hour
-	Tpd  *int `json:"tpd,omitempty"`  // Tokens per day
-	Tpmu *int `json:"tpmu,omitempty"` // Tokens per month
+	Rpm           *int `json:"rpm,omitempty"`
+	Rph           *int `json:"rph,omitempty"`           // Requests per hour
+	Rpd           *int `json:"rpd,omitempty"`           // Requests per day
+	Tpm           *int `json:"tpm,omitempty"`
+	Tph           *int `json:"tph,omitempty"`           // Tokens per hour
+	Tpd           *int `json:"tpd,omitempty"`           // Tokens per day
+	Tpmu          *int `json:"tpmu,omitempty"`          // Tokens per month
+	MaxConcurrent *int `json:"maxConcurrent,omitempty"` // Max in-flight requests
 }
 
 type Certification struct {

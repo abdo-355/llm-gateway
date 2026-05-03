@@ -42,6 +42,16 @@ func (s *cloudflareQuotaStub) HandleProviderRateLimit(ctx context.Context, provi
 	return services.RateLimitInfo{}
 }
 
+func (s *cloudflareQuotaStub) AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error {
+	return nil
+}
+
+func (s *cloudflareQuotaStub) ReleaseConcurrencySlot(ctx context.Context, providerID, model string) {}
+
+func (s *cloudflareQuotaStub) CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool {
+	return true
+}
+
 func (s *cloudflareQuotaStub) EstimateCloudflareRequestNeurons(model string, req types.ChatCompletionRequest) int {
 	return s.estimatedCloudflareUnits
 }

@@ -95,6 +95,9 @@ func (s *ProviderService) CallProvider(
 	if providerType == cloudflareProviderType {
 		return s.callCloudflareProvider(baseURL, apiKey, model, request, ctx, auth)
 	}
+	if providerType == cohereProviderType {
+		return s.callCohereProvider(baseURL, apiKey, model, request, ctx, auth)
+	}
 
 	reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
 	if err != nil {
@@ -148,6 +151,9 @@ func (s *ProviderService) StreamProviderChannel(
 		errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAMING_NOT_SUPPORTED", Message: "Cloudflare Workers AI native endpoint does not support streaming in this gateway"}
 		close(errChan)
 		return types.StreamResult{Chunks: chunks, Err: errChan}
+	}
+	if providerType == cohereProviderType {
+		return s.callCohereStreamProvider(baseURL, apiKey, model, request, ctx, auth)
 	}
 
 	chunks := make(chan *types.SSEChunk)

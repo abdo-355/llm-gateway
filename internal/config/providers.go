@@ -13,6 +13,9 @@ func GetProviders() []types.ProviderConfig {
 		getCloudflareConfig(),
 		getOpenCodeConfig(),
 		getOllamaConfig(),
+		getZaiConfig(),
+		getLLM7Config(),
+		getCohereConfig(),
 	}
 }
 
@@ -501,7 +504,7 @@ func getOpenCodeConfig() types.ProviderConfig {
 }
 
 func getOllamaConfig() types.ProviderConfig {
-	rpm20 := 20
+	conc1 := 1
 
 	return types.ProviderConfig{
 		ID:      "ollama",
@@ -546,9 +549,41 @@ func getOllamaConfig() types.ProviderConfig {
 				"kimi-k2-thinking",
 				"kimi-k2:1t",
 			},
-			Limits: map[string]types.ModelLimits{}, // using provider default
+			Limits: map[string]types.ModelLimits{
+				"qwen3-next:80b":            {MaxConcurrent: &conc1},
+				"devstral-small-2:24b":      {MaxConcurrent: &conc1},
+				"gemma4:31b":                {MaxConcurrent: &conc1},
+				"gemma3:27b":                {MaxConcurrent: &conc1},
+				"gemma3:12b":                {MaxConcurrent: &conc1},
+				"nemotron-3-nano:30b":       {MaxConcurrent: &conc1},
+				"gpt-oss:20b":               {MaxConcurrent: &conc1},
+				"gemma3:4b":                 {MaxConcurrent: &conc1},
+				"ministral-3:14b":           {MaxConcurrent: &conc1},
+				"ministral-3:8b":            {MaxConcurrent: &conc1},
+				"ministral-3:3b":            {MaxConcurrent: &conc1},
+				"rnj-1:8b":                  {MaxConcurrent: &conc1},
+				"deepseek-v3.2":             {MaxConcurrent: &conc1},
+				"qwen3-coder:480b":          {MaxConcurrent: &conc1},
+				"qwen3-coder-next":          {MaxConcurrent: &conc1},
+				"devstral-2:123b":           {MaxConcurrent: &conc1},
+				"minimax-m2.5":              {MaxConcurrent: &conc1},
+				"nemotron-3-super":          {MaxConcurrent: &conc1},
+				"cogito-2.1:671b":           {MaxConcurrent: &conc1},
+				"deepseek-v3.1:671b":        {MaxConcurrent: &conc1},
+				"gpt-oss:120b":              {MaxConcurrent: &conc1},
+				"gemini-3-flash-preview":    {MaxConcurrent: &conc1},
+				"glm-4.7":                   {MaxConcurrent: &conc1},
+				"glm-4.6":                   {MaxConcurrent: &conc1},
+				"minimax-m2.1":              {MaxConcurrent: &conc1},
+				"minimax-m2":                {MaxConcurrent: &conc1},
+				"minimax-m2.7":              {MaxConcurrent: &conc1},
+				"qwen3.5:397b":              {MaxConcurrent: &conc1},
+				"mistral-large-3:675b":      {MaxConcurrent: &conc1},
+				"mistral-medium-3.5":        {MaxConcurrent: &conc1},
+				"kimi-k2-thinking":          {MaxConcurrent: &conc1},
+				"kimi-k2:1t":                {MaxConcurrent: &conc1},
+			},
 			Capabilities: map[string]types.ModelCapabilities{
-				// Models empirically verified to NOT support tool calling
 				"cogito-2.1:671b":    {Tools: boolPtr(false)},
 				"deepseek-v3.1:671b": {Tools: boolPtr(false)},
 				"gemma3:12b":         {Tools: boolPtr(false)},
@@ -577,10 +612,162 @@ func getOllamaConfig() types.ProviderConfig {
 			MultipleChoices:     false,
 			ToolSchema:          "json_schema",
 		},
-		Limits: types.ProviderLimits{
-			Rpm: &rpm20,
-		},
+		Limits:       types.ProviderLimits{},
 		ProviderType: "ollama",
+	}
+}
+
+func getZaiConfig() types.ProviderConfig {
+	conc1 := 1
+	conc2 := 2
+
+	return types.ProviderConfig{
+		ID:      "zai",
+		BaseURL: "https://api.z.ai/api/paas/v4",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "ZAI_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"glm-4.7-flash",
+				"glm-4.5-flash",
+				"glm-4.6v-flash",
+			},
+			Limits: map[string]types.ModelLimits{
+				"glm-4.7-flash":  {MaxConcurrent: &conc1},
+				"glm-4.5-flash":  {MaxConcurrent: &conc2},
+				"glm-4.6v-flash": {MaxConcurrent: &conc1},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getLLM7Config() types.ProviderConfig {
+	rpm20 := 20
+	rph100 := 100
+
+	return types.ProviderConfig{
+		ID:      "llm7",
+		BaseURL: "https://api.llm7.io/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "LLM7_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"gpt-oss-20b",
+				"meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+				"codestral-latest",
+				"ministral-8b-2512",
+				"GLM-4.6V-Flash",
+				"fast",
+				"pro",
+				"default",
+				"deepseek-chat",
+				"llama-3-70b-instruct",
+			},
+			Limits: map[string]types.ModelLimits{
+				"gpt-oss-20b":                                     {Rpm: &rpm20, Rph: &rph100},
+				"meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo":     {Rpm: &rpm20, Rph: &rph100},
+				"codestral-latest":                                 {Rpm: &rpm20, Rph: &rph100},
+				"ministral-8b-2512":                                {Rpm: &rpm20, Rph: &rph100},
+				"GLM-4.6V-Flash":                                   {Rpm: &rpm20, Rph: &rph100},
+				"fast":                                             {Rpm: &rpm20, Rph: &rph100},
+				"pro":                                              {Rpm: &rpm20, Rph: &rph100},
+				"default":                                          {Rpm: &rpm20, Rph: &rph100},
+				"deepseek-chat":                                    {Rpm: &rpm20, Rph: &rph100},
+				"llama-3-70b-instruct":                             {Rpm: &rpm20, Rph: &rph100},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getCohereConfig() types.ProviderConfig {
+	rpm20 := 20
+
+	return types.ProviderConfig{
+		ID:      "cohere",
+		BaseURL: "https://api.cohere.com/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "COHERE_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"command-a-03-2025",
+				"command-a-reasoning-08-2025",
+				"command-a-vision-03-2025",
+				"command-r-plus-08-2025",
+				"command-r-08-2025",
+				"command-r7b-12-2024",
+				"tiny-aya-global-03-2025",
+			},
+			Limits: map[string]types.ModelLimits{
+				"command-a-03-2025":             {Rpm: &rpm20},
+				"command-a-reasoning-08-2025":   {Rpm: &rpm20},
+				"command-a-vision-03-2025":      {Rpm: &rpm20},
+				"command-r-plus-08-2025":        {Rpm: &rpm20},
+				"command-r-08-2025":             {Rpm: &rpm20},
+				"command-r7b-12-2024":           {Rpm: &rpm20},
+				"tiny-aya-global-03-2025":       {Rpm: &rpm20},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "cohere",
 	}
 }
 

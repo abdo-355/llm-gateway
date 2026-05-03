@@ -85,6 +85,46 @@ func (mr *MockQuotaCheckerMockRecorder) HandleProviderRateLimit(ctx, providerID,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProviderRateLimit", reflect.TypeOf((*MockQuotaChecker)(nil).HandleProviderRateLimit), ctx, providerID, model, resp)
 }
 
+// AcquireConcurrencySlot mocks base method.
+func (m *MockQuotaChecker) AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AcquireConcurrencySlot", ctx, providerID, model, maxConcurrent)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AcquireConcurrencySlot indicates an expected call of AcquireConcurrencySlot.
+func (mr *MockQuotaCheckerMockRecorder) AcquireConcurrencySlot(ctx, providerID, model, maxConcurrent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcquireConcurrencySlot", reflect.TypeOf((*MockQuotaChecker)(nil).AcquireConcurrencySlot), ctx, providerID, model, maxConcurrent)
+}
+
+// CheckConcurrencyLimit mocks base method.
+func (m *MockQuotaChecker) CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckConcurrencyLimit", ctx, providerID, model, maxConcurrent)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// CheckConcurrencyLimit indicates an expected call of CheckConcurrencyLimit.
+func (mr *MockQuotaCheckerMockRecorder) CheckConcurrencyLimit(ctx, providerID, model, maxConcurrent any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckConcurrencyLimit", reflect.TypeOf((*MockQuotaChecker)(nil).CheckConcurrencyLimit), ctx, providerID, model, maxConcurrent)
+}
+
+// ReleaseConcurrencySlot mocks base method.
+func (m *MockQuotaChecker) ReleaseConcurrencySlot(ctx context.Context, providerID, model string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReleaseConcurrencySlot", ctx, providerID, model)
+}
+
+// ReleaseConcurrencySlot indicates an expected call of ReleaseConcurrencySlot.
+func (mr *MockQuotaCheckerMockRecorder) ReleaseConcurrencySlot(ctx, providerID, model any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseConcurrencySlot", reflect.TypeOf((*MockQuotaChecker)(nil).ReleaseConcurrencySlot), ctx, providerID, model)
+}
+
 // RecordModelUsage mocks base method.
 func (m *MockQuotaChecker) RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error {
 	m.ctrl.T.Helper()
