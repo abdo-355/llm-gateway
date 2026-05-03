@@ -16,6 +16,7 @@ func GetProviders() []types.ProviderConfig {
 		getZaiConfig(),
 		getLLM7Config(),
 		getCohereConfig(),
+		getOciConfig(),
 	}
 }
 
@@ -768,6 +769,43 @@ func getCohereConfig() types.ProviderConfig {
 		},
 		Limits:       types.ProviderLimits{},
 		ProviderType: "cohere",
+	}
+}
+
+func getOciConfig() types.ProviderConfig {
+	return types.ProviderConfig{
+		ID:      "oci",
+		BaseURL: "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/openai/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "OCI_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"meta.llama-3.3-70b-instruct",
+				"openai.gpt-oss-120b",
+				"google.gemini-2.5-flash-lite",
+			},
+			Limits: map[string]types.ModelLimits{},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
 	}
 }
 
