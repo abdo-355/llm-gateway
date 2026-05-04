@@ -194,6 +194,8 @@ func accessLogMiddleware() gin.HandlerFunc {
 			Str("client_ip", clientIP).
 			Str("latency", latency.String()).
 			Str("request_id", reqID).
+			Int64("request_bytes", c.Request.ContentLength).
+			Int("response_bytes", c.Writer.Size()).
 			Msg("HTTP request completed")
 	}
 }

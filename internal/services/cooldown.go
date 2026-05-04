@@ -7,6 +7,7 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/logger"
+	"github.com/abdo-355/llm-gateway/internal/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -65,6 +66,7 @@ func (s *CooldownService) ApplyCooldown(ctx context.Context, providerID, model s
 		return
 	}
 
+	metrics.CooldownAppliedTotal.WithLabelValues(providerID, model, string(reason)).Inc()
 	logger.Info().
 		Str("type", "cooldown").
 		Str("event", "cooldown.applied").

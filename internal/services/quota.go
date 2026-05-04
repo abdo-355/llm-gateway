@@ -355,9 +355,12 @@ func parseRequestLimitHeaders(providerID string, headers http.Header) (int, int,
 		if limit > 0 {
 			return limit, remaining, "rpd"
 		}
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Tokens"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Tokens"), "tpm"
+		}
 	case "cerebras":
-		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests-Minute"); limit > 0 {
-			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests-Minute"), "rpm"
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Tokens-Minute"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Tokens-Minute"), "tpm"
 		}
 		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests-Day"); limit > 0 {
 			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests-Day"), "rpd"
