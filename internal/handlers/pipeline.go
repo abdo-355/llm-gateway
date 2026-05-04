@@ -31,7 +31,7 @@ type RouteResult struct {
 	Ctx          context.Context
 }
 
-func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterHints, req types.ChatCompletionRequest) (*RouteResult, error) {
+func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterHints, req types.ChatCompletionRequest, requestID string) (*RouteResult, error) {
 	var tierConfig *types.TierConfig
 	if model != "" {
 		tierConfig = resolveTier(model)
@@ -88,6 +88,20 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 	}
 
 	plan := p.router.CompilePlan(scored, hints, slo)
+
+	tierName := "unknown"
+	if tierConfig != nil {
+		tierName = string(tierConfig.Tier)
+	}
+	logger.Info().
+		Str("type", "router").
+		Str("event", "tier.resolved").
+		Str("request_id", requestID).
+		Str("model", model).
+		Str("tier", tierName).
+		Int("candidate_count", len(candidates)).
+		Int("eligible_count", len(eligible)).
+		Msg("Tier resolution complete")
 
 	return &RouteResult{
 		Tier:         tierConfig,
@@ -156,6 +170,15 @@ func writeExecutionError(c *gin.Context, err error) {
 	case "VALIDATION_ERROR":
 		status = http.StatusBadRequest
 	}
+
+	logger.Warn().
+		Str("type", "http").
+		Str("event", "request.execution_error").
+		Str("request_id", gatewayErr.RequestID).
+		Str("error_code", gatewayErr.Code).
+		Int("status", status).
+		Str("message", gatewayErr.Message).
+		Msg("Request execution error")
 
 	c.JSON(status, gin.H{"error": gatewayErr})
 }

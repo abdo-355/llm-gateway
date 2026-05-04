@@ -10,7 +10,11 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/types"
+
 	"github.com/gin-contrib/requestid"
+
+	"github.com/abdo-355/llm-gateway/internal/logger"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +32,12 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 
 	var req types.ChatCompletionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Warn().
+			Str("type", "http").
+			Str("event", "request.validation_failed").
+			Str("request_id", reqID).
+			Err(err).
+			Msg("Invalid request body")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"type":    "validation_error",
@@ -39,7 +49,7 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	result, err := h.pipeline.Route(ctx, req.Model, req.Router, req)
+	result, err := h.pipeline.Route(ctx, req.Model, req.Router, req, reqID)
 	if err != nil {
 		writeExecutionError(c, err)
 		return
@@ -93,6 +103,12 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 
 	var req types.ResponseRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Warn().
+			Str("type", "http").
+			Str("event", "request.validation_failed").
+			Str("request_id", reqID).
+			Err(err).
+			Msg("Invalid response request body")
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": gin.H{
 				"type":    "validation_error",
@@ -117,7 +133,7 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	result, err := h.pipeline.Route(ctx, req.Model, req.Router, *chatReq)
+	result, err := h.pipeline.Route(ctx, req.Model, req.Router, *chatReq, reqID)
 	if err != nil {
 		writeExecutionError(c, err)
 		return
