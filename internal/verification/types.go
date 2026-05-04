@@ -16,6 +16,7 @@ const (
 type Config struct {
 	Provider       string
 	Model          string
+	Probe          string
 	Timeout        time.Duration
 	FailFast       bool
 	Progress       io.Writer

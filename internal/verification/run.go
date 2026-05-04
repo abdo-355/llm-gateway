@@ -220,6 +220,10 @@ func runModel(runner *Runner, combo Combo, probes []Probe) modelExecutionResult 
 	}
 
 	for _, probe := range probes {
+		if runner.config.Probe != "" && probe.Name != runner.config.Probe {
+			continue
+		}
+
 		if state.deferred {
 			state.remaining = append(state.remaining, probe)
 			state.completed = append(state.completed, deferredSkip(combo, probe))

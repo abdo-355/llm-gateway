@@ -20,6 +20,7 @@ func main() {
 
 	provider := flag.String("provider", "", "Only test a single provider ID")
 	model := flag.String("model", "", "Only test a single model ID")
+	probe := flag.String("probe", "", "Only run a specific probe (basic_text, json_schema_strict, etc.)")
 	timeout := flag.Duration("timeout", 5*time.Minute, "Per-attempt timeout for the main verification pass (default 5m)")
 	retries := flag.Int("retries", 3, "Maximum attempts for timeout or rate-limited probes during the main pass")
 	failFast := flag.Bool("fail-fast", false, "Stop on the first failure")
@@ -31,6 +32,7 @@ func main() {
 	report, err := verification.Run(context.Background(), verification.Config{
 		Provider:       *provider,
 		Model:          *model,
+		Probe:          *probe,
 		Timeout:        *timeout,
 		FailFast:       *failFast,
 		Progress:       os.Stderr,
