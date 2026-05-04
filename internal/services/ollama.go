@@ -270,7 +270,7 @@ func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string
 }
 
 // parseOllamaSSEStream parses the Ollama native API SSE stream and converts to standard SSEChunk objects.
-func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk, model string) error {
+func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk, model, requestID string) error {
 	scanner := bufio.NewScanner(body)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
@@ -331,7 +331,10 @@ func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.Read
 			if err := json.Unmarshal([]byte(data), &ollamaResp); err != nil {
 				logger.Error().
 					Str("type", "http").
-					Str("event", "sse.parse_failed").
+					Str("event", "ollama.sse_parse_failed").
+					Str("request_id", requestID).
+					Str("provider", provider).
+					Str("model", model).
 					Err(err).
 					Str("data", data).
 					Msg("Failed to parse Ollama SSE line")
@@ -418,6 +421,7 @@ func (s *ProviderService) callOllamaProvider(
 	request types.ChatCompletionRequest,
 	ctx context.Context,
 	auth types.ProviderAuth,
+	requestID string,
 ) (*types.ChatCompletionResponse, error) {
 	stream := true
 	requestCopy := request
@@ -455,11 +459,11 @@ func (s *ProviderService) callOllamaProvider(
 		return s.handleOllamaResponse(resp, model)
 	}
 
-	return s.collectOllamaStreamResult(resp.Body, model, baseURL)
+	return s.collectOllamaStreamResult(resp.Body, model, baseURL, requestID)
 }
 
 // collectOllamaStreamResult reads an NDJSON stream from Ollama and builds a single ChatCompletionResponse.
-func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, baseURL string) (*types.ChatCompletionResponse, error) {
+func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, baseURL, requestID string) (*types.ChatCompletionResponse, error) {
 	provider := "ollama"
 
 	scanner := bufio.NewScanner(body)
@@ -486,6 +490,9 @@ func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, b
 			logger.Error().
 				Str("type", "http").
 				Str("event", "ollama.stream_line_invalid").
+				Str("request_id", requestID).
+				Str("provider", provider).
+				Str("model", model).
 				Err(err).
 				Str("data", truncateString(line, 200)).
 				Msg("Failed to parse Ollama stream line")
@@ -563,6 +570,7 @@ func (s *ProviderService) callOllamaStreamProvider(
 	request types.ChatCompletionRequest,
 	ctx context.Context,
 	auth types.ProviderAuth,
+	requestID string,
 ) types.StreamResult {
 	chunks := make(chan *types.SSEChunk)
 	errChan := make(chan *types.GatewayError, 1)
@@ -621,7 +629,7 @@ func (s *ProviderService) callOllamaStreamProvider(
 			return
 		}
 
-		if err := s.parseOllamaSSEStream(ctx, resp.Body, chunks, model); err != nil {
+		if err := s.parseOllamaSSEStream(ctx, resp.Body, chunks, model, requestID); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
 		} else {
 			errChan <- nil

@@ -88,15 +88,16 @@ func (s *ProviderService) CallProvider(
 	ctx context.Context,
 	providerType string,
 	auth types.ProviderAuth,
+	requestID string,
 ) (*types.ChatCompletionResponse, error) {
 	if providerType == "ollama" {
-		return s.callOllamaProvider(baseURL, apiKey, model, request, ctx, auth)
+		return s.callOllamaProvider(baseURL, apiKey, model, request, ctx, auth, requestID)
 	}
 	if providerType == cloudflareProviderType {
 		return s.callCloudflareProvider(baseURL, apiKey, model, request, ctx, auth)
 	}
 	if providerType == cohereProviderType {
-		return s.callCohereProvider(baseURL, apiKey, model, request, ctx, auth)
+		return s.callCohereProvider(baseURL, apiKey, model, request, ctx, auth, requestID)
 	}
 
 	reqBody, err := s.prepareRequest(request, model, baseURL, providerType, auth)
@@ -140,9 +141,10 @@ func (s *ProviderService) StreamProviderChannel(
 	ctx context.Context,
 	providerType string,
 	auth types.ProviderAuth,
+	requestID string,
 ) types.StreamResult {
 	if providerType == "ollama" {
-		return s.callOllamaStreamProvider(baseURL, apiKey, model, request, ctx, auth)
+		return s.callOllamaStreamProvider(baseURL, apiKey, model, request, ctx, auth, requestID)
 	}
 	if providerType == cloudflareProviderType {
 		chunks := make(chan *types.SSEChunk)
@@ -153,7 +155,7 @@ func (s *ProviderService) StreamProviderChannel(
 		return types.StreamResult{Chunks: chunks, Err: errChan}
 	}
 	if providerType == cohereProviderType {
-		return s.callCohereStreamProvider(baseURL, apiKey, model, request, ctx, auth)
+		return s.callCohereStreamProvider(baseURL, apiKey, model, request, ctx, auth, requestID)
 	}
 
 	chunks := make(chan *types.SSEChunk)
@@ -210,7 +212,7 @@ func (s *ProviderService) StreamProviderChannel(
 		}
 
 		provider := detectProvider(baseURL, providerType, auth)
-		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks, provider, model); err != nil {
+		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks, provider, model, requestID); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
 		} else {
 			errChan <- nil
@@ -786,9 +788,6 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 			return retryAfter, "tpm", limitSubtype
 		}
 	case "cerebras":
-		if headers.Get("X-RateLimit-Limit-Requests-Minute") != "" {
-			return retryAfter, "rpm", limitSubtype
-		}
 		if headers.Get("X-RateLimit-Limit-Tokens-Minute") != "" {
 			return retryAfter, "tpm", limitSubtype
 		}
@@ -886,7 +885,7 @@ func isValidationStatus(statusCode int) bool {
 	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity
 }
 
-func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk, provider, model string) error {
+func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.ReadCloser, chunks chan<- *types.SSEChunk, provider, model, requestID string) error {
 	scanner := bufio.NewScanner(body)
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 1024*1024)
@@ -953,6 +952,9 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 				logger.Error().
 					Str("type", "http").
 					Str("event", "sse.parse_failed").
+					Str("request_id", requestID).
+					Str("provider", provider).
+					Str("model", model).
 					Err(err).
 					Str("data", data).
 					Msg("Failed to parse SSE chunk")

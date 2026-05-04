@@ -49,6 +49,7 @@ func (c *client) call(ctx context.Context, combo Combo, request types.ChatComple
 		ctx,
 		providerType(combo.Provider),
 		combo.Provider.Auth,
+		"",
 	)
 	latency := time.Since(started)
 	if err != nil {
@@ -79,6 +80,7 @@ func (c *client) stream(ctx context.Context, combo Combo, request types.ChatComp
 		ctx,
 		providerType(combo.Provider),
 		combo.Provider.Auth,
+		"",
 	)
 
 	chunks := make([]types.SSEChunk, 0)

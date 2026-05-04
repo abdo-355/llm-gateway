@@ -752,7 +752,7 @@ func TestExecute(t *testing.T) {
 			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
 		}
 
-		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
 		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-a", "model-1", gomock.Any())
 		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "model-1", 50).Return(nil)
 
@@ -784,9 +784,9 @@ func TestExecute(t *testing.T) {
 		}
 
 		gomock.InOrder(
-			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr),
 			mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1"),
-			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil),
 			mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any()),
 			mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 30).Return(nil),
 		)
@@ -809,7 +809,7 @@ func TestExecute(t *testing.T) {
 		r, _, mockHealth, mockProvider := newTestRouter(t)
 
 		providerErr := &errors.ProviderError{Message: "error", StatusCode: 500, IsRetryable: true}
-		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr).Times(2)
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr).Times(2)
 		mockHealth.EXPECT().RecordFailure(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
 
 		plan := types.RoutingPlan{
@@ -832,7 +832,7 @@ func TestExecute(t *testing.T) {
 		r, _, mockHealth, mockProvider := newTestRouter(t)
 
 		payErr := errors.NewPaymentRequiredError("payment required")
-		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr)
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr)
 		mockHealth.EXPECT().RecordFailure(gomock.Any(), gomock.Any(), gomock.Any())
 
 		plan := types.RoutingPlan{

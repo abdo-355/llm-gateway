@@ -282,30 +282,30 @@ func (m *MockProviderCaller) EXPECT() *MockProviderCallerMockRecorder {
 }
 
 // CallProvider mocks base method.
-func (m *MockProviderCaller) CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) (*types.ChatCompletionResponse, error) {
+func (m *MockProviderCaller) CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) (*types.ChatCompletionResponse, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CallProvider", baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
+	ret := m.ctrl.Call(m, "CallProvider", baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID)
 	ret0, _ := ret[0].(*types.ChatCompletionResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CallProvider indicates an expected call of CallProvider.
-func (mr *MockProviderCallerMockRecorder) CallProvider(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth any) *gomock.Call {
+func (mr *MockProviderCallerMockRecorder) CallProvider(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallProvider", reflect.TypeOf((*MockProviderCaller)(nil).CallProvider), baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CallProvider", reflect.TypeOf((*MockProviderCaller)(nil).CallProvider), baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID)
 }
 
 // StreamProviderChannel mocks base method.
-func (m *MockProviderCaller) StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) types.StreamResult {
+func (m *MockProviderCaller) StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) types.StreamResult {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "StreamProviderChannel", baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
+	ret := m.ctrl.Call(m, "StreamProviderChannel", baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID)
 	ret0, _ := ret[0].(types.StreamResult)
 	return ret0
 }
 
 // StreamProviderChannel indicates an expected call of StreamProviderChannel.
-func (mr *MockProviderCallerMockRecorder) StreamProviderChannel(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth any) *gomock.Call {
+func (mr *MockProviderCallerMockRecorder) StreamProviderChannel(baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamProviderChannel", reflect.TypeOf((*MockProviderCaller)(nil).StreamProviderChannel), baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamProviderChannel", reflect.TypeOf((*MockProviderCaller)(nil).StreamProviderChannel), baseURL, apiKey, model, request, timeoutMs, ctx, providerType, auth, requestID)
 }

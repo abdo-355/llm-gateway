@@ -172,7 +172,7 @@ func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}, MaxCompletionTokens: ptrInt(160)}
 
-	resp, err := svc.CallProvider(srv.URL, "test-key", "@cf/openai/gpt-oss-20b", req, 10000, context.Background(), cloudflareProviderType, types.ProviderAuth{Type: "bearer", Env: cloudflareAPITokenEnv})
+	resp, err := svc.CallProvider(srv.URL, "test-key", "@cf/openai/gpt-oss-20b", req, 10000, context.Background(), cloudflareProviderType, types.ProviderAuth{Type: "bearer", Env: cloudflareAPITokenEnv}, "")
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.NotNil(t, resp.Choices[0].Message.Content)
@@ -257,7 +257,7 @@ func TestProviderCallProvider_ParsesArrayContentResponse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
 
-	resp, err := svc.CallProvider(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	resp, err := svc.CallProvider(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"}, "")
 	require.NoError(t, err)
 	require.NotNil(t, resp.Choices[0].Message.Content)
 	assert.Equal(t, "Visible answer", *resp.Choices[0].Message.Content)
@@ -291,7 +291,7 @@ func TestProviderStreamProviderChannel_SkipsThinkingOnlyChunks(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}, Stream: boolPtr(true)}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "magistral-medium-2509", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"}, "")
 
 	var received []*types.SSEChunk
 	for chunk := range result.Chunks {
@@ -349,7 +349,7 @@ func TestProviderCallProvider_Success(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	got, err := svc.CallProvider(srv.URL, "test-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	got, err := svc.CallProvider(srv.URL, "test-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.NoError(t, err)
 	assert.Equal(t, want.ID, got.ID)
 	assert.Equal(t, want.Model, got.Model)
@@ -370,7 +370,7 @@ func TestProviderCallProvider_429_RateLimitError(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.Error(t, err)
 
 	var rlErr *errors.RateLimitError
@@ -391,7 +391,7 @@ func TestProviderCallProvider_GroqRateLimitDetails(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
 
-	_, err := svc.CallProvider(srv.URL, "key", "llama-3.1-8b-instant", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"})
+	_, err := svc.CallProvider(srv.URL, "key", "llama-3.1-8b-instant", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"}, "")
 	require.Error(t, err)
 
 	var rlErr *errors.RateLimitError
@@ -411,7 +411,7 @@ func TestProviderCallProvider_MistralValidationError(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
 
-	_, err := svc.CallProvider(srv.URL, "key", "mistral-large-2411", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
+	_, err := svc.CallProvider(srv.URL, "key", "mistral-large-2411", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"}, "")
 	require.Error(t, err)
 
 	var validationErr *errors.ValidationError
@@ -429,7 +429,7 @@ func TestProviderCallProvider_GoogleErrorMessage(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
 
-	_, err := svc.CallProvider(srv.URL, "key", "gemini-2.5-flash", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"})
+	_, err := svc.CallProvider(srv.URL, "key", "gemini-2.5-flash", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"}, "")
 	require.Error(t, err)
 
 	var providerErr *errors.ProviderError
@@ -449,7 +449,7 @@ func TestProviderCallProvider_402_PaymentRequiredError(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.Error(t, err)
 
 	var pErr *errors.PaymentRequiredError
@@ -468,7 +468,7 @@ func TestProviderCallProvider_500_RetryableProviderError(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.Error(t, err)
 
 	var pErr *errors.ProviderError
@@ -493,7 +493,7 @@ func TestProviderCallProvider_BearerAuth(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	_, err := svc.CallProvider(srv.URL, "my-secret-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider(srv.URL, "my-secret-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.NoError(t, err)
 }
 
@@ -517,7 +517,7 @@ func TestProviderCallProvider_CustomHeaderAuth(t *testing.T) {
 	_, err := svc.CallProvider(srv.URL, "my-api-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{
 		Type:       "header",
 		HeaderName: "X-Custom-Auth",
-	})
+	}, "")
 	require.NoError(t, err)
 }
 
@@ -561,7 +561,7 @@ func TestProviderStreamProviderChannel_Success(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	var received []*types.SSEChunk
 	for chunk := range result.Chunks {
@@ -597,7 +597,7 @@ func TestProviderStreamProviderChannel_ErrorResponse(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	for range result.Chunks {
 	}
@@ -639,7 +639,7 @@ func TestProviderStreamProviderChannel_DoneTerminates(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	count := 0
 	for range result.Chunks {

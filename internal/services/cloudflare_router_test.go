@@ -30,10 +30,10 @@ func (stubHealthChecker) GetAllHealthMetrics(ctx context.Context) []HealthMetric
 
 type stubProviderCaller struct{}
 
-func (stubProviderCaller) CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) (*types.ChatCompletionResponse, error) {
+func (stubProviderCaller) CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) (*types.ChatCompletionResponse, error) {
 	return nil, nil
 }
-func (stubProviderCaller) StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) types.StreamResult {
+func (stubProviderCaller) StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) types.StreamResult {
 	chunks := make(chan *types.SSEChunk)
 	errCh := make(chan *types.GatewayError, 1)
 	close(chunks)

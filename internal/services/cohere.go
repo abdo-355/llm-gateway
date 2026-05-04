@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -56,6 +57,7 @@ func (s *ProviderService) callCohereProvider(
 	request types.ChatCompletionRequest,
 	ctx context.Context,
 	auth types.ProviderAuth,
+	requestID string,
 ) (*types.ChatCompletionResponse, error) {
 	msg := buildCohereMessage(request.Messages)
 	cohereReq := cohereChatRequest{
@@ -126,6 +128,7 @@ func (s *ProviderService) callCohereStreamProvider(
 	request types.ChatCompletionRequest,
 	ctx context.Context,
 	auth types.ProviderAuth,
+	requestID string,
 ) types.StreamResult {
 	chunks := make(chan *types.SSEChunk)
 	errChan := make(chan *types.GatewayError, 1)
@@ -254,8 +257,8 @@ func (s *ProviderService) callCohereStreamProvider(
 					}},
 				}
 				if event.Meta != nil && event.Meta.Tokens != nil {
-					promptTokens := int(event.Meta.Tokens.InputTokens)
-					completionTokens := int(event.Meta.Tokens.OutputTokens)
+					promptTokens := int(math.Round(event.Meta.Tokens.InputTokens))
+					completionTokens := int(math.Round(event.Meta.Tokens.OutputTokens))
 					totalTokens := promptTokens + completionTokens
 					chunks <- &types.SSEChunk{
 						ID:     generationID,
@@ -322,8 +325,8 @@ func cohereToOpenAIResponse(cohereResp cohereChatResponse, model string) types.C
 	promptTokens := 0
 	completionTokens := 0
 	if cohereResp.Meta != nil && cohereResp.Meta.Tokens != nil {
-		promptTokens = int(cohereResp.Meta.Tokens.InputTokens)
-		completionTokens = int(cohereResp.Meta.Tokens.OutputTokens)
+		promptTokens = int(math.Round(cohereResp.Meta.Tokens.InputTokens))
+		completionTokens = int(math.Round(cohereResp.Meta.Tokens.OutputTokens))
 	}
 
 	finishReason := "stop"

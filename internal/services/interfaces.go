@@ -28,8 +28,8 @@ type HealthChecker interface {
 }
 
 type ProviderCaller interface {
-	CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) (*types.ChatCompletionResponse, error)
-	StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth) types.StreamResult
+	CallProvider(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) (*types.ChatCompletionResponse, error)
+	StreamProviderChannel(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, ctx context.Context, providerType string, auth types.ProviderAuth, requestID string) types.StreamResult
 }
 
 type RouterHandler interface {

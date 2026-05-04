@@ -149,7 +149,7 @@ func TestProviderCallProvider_RateLimitHeaderExtraction(t *testing.T) {
 				Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 			}
 
-			_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+			_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 			if tt.wantIsRateLimit {
 				require.Error(t, err)
@@ -203,7 +203,7 @@ func TestProviderStreamProvider_Success(t *testing.T) {
 		Stream:   boolPtr(true),
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "test-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "test-key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	var chunks []*types.SSEChunk
 	for chunk := range result.Chunks {
@@ -253,7 +253,7 @@ func TestProviderStreamProvider_MultipleChunks(t *testing.T) {
 		Stream:   boolPtr(true),
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	var receivedChunks int
 	for range result.Chunks {
@@ -304,7 +304,7 @@ func TestProviderStreamProvider_ErrorMidStream(t *testing.T) {
 		Stream:   boolPtr(true),
 	}
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	// Should receive at least one chunk before error
 	var receivedFirstChunk bool
@@ -350,7 +350,7 @@ func TestProviderStreamProvider_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, ctx, "openai", types.ProviderAuth{Type: "bearer"})
+	result := svc.StreamProviderChannel(srv.URL, "key", "gpt-4", req, 10000, ctx, "openai", types.ProviderAuth{Type: "bearer"}, "")
 
 	// Should receive at least the first chunk
 	var receivedChunk bool
@@ -472,7 +472,7 @@ func TestProviderCallProvider_ErrorEdgeCases(t *testing.T) {
 				Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 			}
 
-			_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+			_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 			require.Error(t, err)
 
 			switch tt.wantErrorType {
@@ -506,7 +506,7 @@ func TestProviderCallProvider_NetworkError(t *testing.T) {
 	}
 
 	// Try to connect to a non-existent server
-	_, err := svc.CallProvider("http://localhost:99999", "key", "gpt-4", req, 1000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider("http://localhost:99999", "key", "gpt-4", req, 1000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.Error(t, err)
 }
 
@@ -524,7 +524,7 @@ func TestProviderCallProvider_ContextCanceledReturnsTimeoutError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 1000, ctx, "openai", types.ProviderAuth{Type: "bearer"})
+	_, err := svc.CallProvider(srv.URL, "key", "gpt-4", req, 1000, ctx, "openai", types.ProviderAuth{Type: "bearer"}, "")
 	require.Error(t, err)
 
 	var timeoutErr *errors.TimeoutError
@@ -547,7 +547,7 @@ func TestProviderCallProvider_Ollama429ReturnsRateLimitError(t *testing.T) {
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
 	}
 
-	_, err := svc.CallProvider(srv.URL, "", "minimax-m2.7", req, 1000, context.Background(), "ollama", types.ProviderAuth{Type: "none"})
+	_, err := svc.CallProvider(srv.URL, "", "minimax-m2.7", req, 1000, context.Background(), "ollama", types.ProviderAuth{Type: "none"}, "")
 	require.Error(t, err)
 
 	var rateErr *errors.RateLimitError

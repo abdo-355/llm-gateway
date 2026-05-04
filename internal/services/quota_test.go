@@ -435,20 +435,20 @@ func TestQuotaHandleProviderRateLimit_GroqDailyHeaders(t *testing.T) {
 	assert.Equal(t, 10, status.Rpd)
 }
 
-func TestQuotaHandleProviderRateLimit_CerebrasMinuteHeaders(t *testing.T) {
+func TestQuotaHandleProviderRateLimit_CerebrasDayHeaders(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")
 	ctx := testContext()
 
 	resp := &http.Response{StatusCode: 429, Header: http.Header{}, Body: http.NoBody}
-	resp.Header.Set("X-RateLimit-Limit-Requests-Minute", "30")
-	resp.Header.Set("X-RateLimit-Remaining-Requests-Minute", "5")
+	resp.Header.Set("X-RateLimit-Limit-Requests-Day", "30")
+	resp.Header.Set("X-RateLimit-Remaining-Requests-Day", "5")
 
 	info := svc.HandleProviderRateLimit(ctx, "cerebras", "model1", resp)
-	assert.Equal(t, "rpm", info.LimitType)
+	assert.Equal(t, "rpd", info.LimitType)
 
 	status := svc.GetModelQuotaStatus(ctx, "cerebras", "model1", nil)
-	assert.Equal(t, 25, status.Rpm)
+	assert.Equal(t, 25, status.Rpd)
 }
 
 func TestQuotaGetModelQuotaStatus(t *testing.T) {

@@ -553,6 +553,7 @@ func (r *Router) Execute(
 			attemptCtx,
 			attempt.ProviderType,
 			attempt.Auth,
+			requestID,
 		)
 
 		cancel()
@@ -820,6 +821,7 @@ func (r *Router) ExecuteStream(
 		var hadFailure bool
 		var chunksSent bool
 		var outputTokenCount int
+		var streamUsage *types.Usage
 
 		for i, attempt := range plan.Attempts {
 			if quotaErr := r.checkCloudflareAttemptBudget(ctx, attempt, req); quotaErr != nil {
@@ -873,9 +875,11 @@ func (r *Router) ExecuteStream(
 				attemptCtx,
 				attempt.ProviderType,
 				attempt.Auth,
+				requestID,
 			)
 
 			outputTokenCount = 0
+			streamUsage = nil
 			for chunk := range result.Chunks {
 				if !ttfbRecorded {
 					metrics.StreamTTFBSeconds.WithLabelValues(
@@ -885,6 +889,9 @@ func (r *Router) ExecuteStream(
 				}
 				if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != nil {
 					outputTokenCount++
+				}
+				if chunk.Usage != nil {
+					streamUsage = chunk.Usage
 				}
 				chunksSent = true
 				select {
@@ -906,8 +913,30 @@ func (r *Router) ExecuteStream(
 
 			if err == nil {
 				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
-				tokensUsed := r.quotaService.EstimateTokens(req)
+
+				tokensUsed := 0
+				if streamUsage != nil && streamUsage.TotalTokens > 0 {
+					tokensUsed = streamUsage.TotalTokens
+				} else {
+					tokensUsed = r.quotaService.EstimateTokens(req)
+				}
 				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+
+				if attempt.ProviderID == cloudflareProviderID && streamUsage != nil {
+					if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok {
+						stats, quotaErr := budgetMgr.RecordCloudflareNeuronUsage(ctx, attempt.Model, streamUsage)
+						if quotaErr != nil {
+							logger.Warn().
+								Str("type", "router").
+								Str("event", "cloudflare.neuron_record_failed").
+								Str("request_id", requestID).
+								Str("model", attempt.Model).
+								Err(quotaErr).
+								Msg("Failed to record Cloudflare neuron usage")
+						}
+						_ = stats
+					}
+				}
 
 				if hadFailure {
 					metrics.RetrySuccessTotal.WithLabelValues(tier).Inc()
@@ -924,12 +953,39 @@ func (r *Router) ExecuteStream(
 				metrics.StreamDurationSeconds.WithLabelValues(
 					attempt.ProviderID, attempt.Model, tier, strategy,
 				).Observe(float64(latencyMs) / 1000.0)
-				metrics.StreamOutputTokensTotal.WithLabelValues(
-					attempt.ProviderID, attempt.Model, tier, strategy,
-				).Add(float64(outputTokenCount))
+				if streamUsage != nil {
+					metrics.ProviderTokensTotal.WithLabelValues(
+						attempt.ProviderID, attempt.Model, "prompt", tier, strategy,
+					).Add(float64(streamUsage.PromptTokens))
+					metrics.ProviderTokensTotal.WithLabelValues(
+						attempt.ProviderID, attempt.Model, "completion", tier, strategy,
+					).Add(float64(streamUsage.CompletionTokens))
+					metrics.ProviderTokensTotal.WithLabelValues(
+						attempt.ProviderID, attempt.Model, "total", tier, strategy,
+					).Add(float64(streamUsage.TotalTokens))
+					metrics.StreamOutputTokensTotal.WithLabelValues(
+						attempt.ProviderID, attempt.Model, tier, strategy,
+					).Add(float64(streamUsage.CompletionTokens))
+				} else {
+					metrics.StreamOutputTokensTotal.WithLabelValues(
+						attempt.ProviderID, attempt.Model, tier, strategy,
+					).Add(float64(outputTokenCount))
+				}
 				metrics.RoutingAttemptsTotal.WithLabelValues(
 					tier, strategy,
 				).Observe(float64(i + 1))
+
+				logEvent := logger.Info().
+					Str("type", "router").
+					Str("event", "attempt.success").
+					Str("request_id", requestID).
+					Str("provider", attempt.ProviderID).
+					Str("model", attempt.Model).
+					Int64("latency_ms", latencyMs).
+					Int("tokens", tokensUsed).
+					Int("attempts", i+1)
+				logEvent.Msg("Request completed")
+
 				errChan <- nil
 				return
 			}
@@ -973,6 +1029,19 @@ func (r *Router) ExecuteStream(
 				attempt.ProviderID, attempt.Model, status,
 				tier, strategy, errorType,
 			).Inc()
+
+			logger.Warn().
+				Str("type", "router").
+				Str("event", "attempt.failed").
+				Str("request_id", requestID).
+				Str("provider", attempt.ProviderID).
+				Str("model", attempt.Model).
+				Str("failure_category", string(decision.Category)).
+				Str("failure_action", string(decision.Action)).
+				Str("failure_reason", decision.Reason).
+				Err(err).
+				Msg("Provider attempt failed")
+
 			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
@@ -994,6 +1063,13 @@ func (r *Router) ExecuteStream(
 			case types.ActionRetry, types.ActionRetryWithBackoff:
 				if decision.BackoffMs > 0 {
 					backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+					metrics.BackoffSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(backoffDuration.Seconds())
+					logger.Info().
+						Str("type", "router").
+						Str("event", "attempt.backoff").
+						Str("request_id", requestID).
+						Dur("backoff", backoffDuration).
+						Msg("Backing off before retry")
 					select {
 					case <-time.After(backoffDuration):
 					case <-ctx.Done():
@@ -1004,6 +1080,13 @@ func (r *Router) ExecuteStream(
 			case types.ActionFailover, types.ActionFailoverWithBackoff:
 				if decision.BackoffMs > 0 {
 					backoffDuration := r.backoffStrategy.CalculateBackoff(i)
+					metrics.BackoffSeconds.WithLabelValues(attempt.ProviderID, attempt.Model).Observe(backoffDuration.Seconds())
+					logger.Info().
+						Str("type", "router").
+						Str("event", "attempt.backoff").
+						Str("request_id", requestID).
+						Dur("backoff", backoffDuration).
+						Msg("Backing off before failover")
 					select {
 					case <-time.After(backoffDuration):
 					case <-ctx.Done():
