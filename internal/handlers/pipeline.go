@@ -93,6 +93,13 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 	if tierConfig != nil {
 		tierName = string(tierConfig.Tier)
 	}
+
+	// TODO: Remove after debugging candidate filtering
+	filteredSummary := make(map[string]int)
+	for _, reason := range filtered {
+		filteredSummary[reason]++
+	}
+
 	logger.Info().
 		Str("type", "router").
 		Str("event", "tier.resolved").
@@ -101,6 +108,7 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		Str("tier", tierName).
 		Int("candidate_count", len(candidates)).
 		Int("eligible_count", len(eligible)).
+		Interface("filtered_summary", filteredSummary).
 		Msg("Tier resolution complete")
 
 	return &RouteResult{
