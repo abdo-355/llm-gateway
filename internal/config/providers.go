@@ -232,20 +232,7 @@ func getGeminiConfig() types.ProviderConfig {
 }
 
 func GetCertifications() []types.Certification {
-	return []types.Certification{
-		{Provider: "gemini", Model: "gemini-2.5-flash", StrictSchema: true},
-		{Provider: "llm7", Model: "fast", StrictSchema: true},
-		{Provider: "llm7", Model: "default", StrictSchema: true},
-		{Provider: "llm7", Model: "GLM-4.6V-Flash", StrictSchema: true},
-		{Provider: "llm7", Model: "gpt-oss-20b", StrictSchema: true},
-		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
-		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
-		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
-		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
-		{Provider: "ollama", Model: "qwen3-next:80b", StrictSchema: true},
-		{Provider: "zai", Model: "glm-4.5-flash", StrictSchema: true},
-		{Provider: "zai", Model: "glm-4.7-flash", StrictSchema: true},
-	}
+	return nil
 }
 
 // LoadConfig returns the complete app configuration
