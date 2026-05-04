@@ -125,6 +125,20 @@ func (mr *MockQuotaCheckerMockRecorder) ReleaseConcurrencySlot(ctx, providerID, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseConcurrencySlot", reflect.TypeOf((*MockQuotaChecker)(nil).ReleaseConcurrencySlot), ctx, providerID, model)
 }
 
+// GetModelQuotaStatus mocks base method.
+func (m *MockQuotaChecker) GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) services.QuotaStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetModelQuotaStatus", ctx, providerID, model, limits)
+	ret0, _ := ret[0].(services.QuotaStatus)
+	return ret0
+}
+
+// GetModelQuotaStatus indicates an expected call of GetModelQuotaStatus.
+func (mr *MockQuotaCheckerMockRecorder) GetModelQuotaStatus(ctx, providerID, model, limits any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModelQuotaStatus", reflect.TypeOf((*MockQuotaChecker)(nil).GetModelQuotaStatus), ctx, providerID, model, limits)
+}
+
 // RecordModelUsage mocks base method.
 func (m *MockQuotaChecker) RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error {
 	m.ctrl.T.Helper()

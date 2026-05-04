@@ -15,6 +15,7 @@ type QuotaChecker interface {
 	AcquireConcurrencySlot(ctx context.Context, providerID, model string, maxConcurrent int) error
 	ReleaseConcurrencySlot(ctx context.Context, providerID, model string)
 	CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool
+	GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) QuotaStatus
 }
 
 type HealthChecker interface {

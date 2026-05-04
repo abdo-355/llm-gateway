@@ -52,6 +52,10 @@ func (s *cloudflareQuotaStub) CheckConcurrencyLimit(ctx context.Context, provide
 	return true
 }
 
+func (s *cloudflareQuotaStub) GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) services.QuotaStatus {
+	return services.QuotaStatus{}
+}
+
 func (s *cloudflareQuotaStub) EstimateCloudflareRequestNeurons(model string, req types.ChatCompletionRequest) int {
 	return s.estimatedCloudflareUnits
 }
@@ -149,6 +153,7 @@ func newTestRouter(t *testing.T) (*services.Router, *mocks.MockQuotaChecker, *mo
 	mockProvider := mocks.NewMockProviderCaller(ctrl)
 	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
 	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+	mockQuota.EXPECT().GetModelQuotaStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(services.QuotaStatus{}).AnyTimes()
 	r := services.NewRouterWithConfig(testConfig(), mockQuota, mockHealth, mockProvider)
 	return r, mockQuota, mockHealth, mockProvider
 }
