@@ -33,7 +33,6 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **Kilo** - Diverse models via Kilo's gateway
 - **Cloudflare Workers AI** - Native Workers AI chat models with daily neuron-budget tracking
 - **OpenCode Zen** - Free and experimental models via OpenCode's Zen gateway
-- **Google Gemini** - Gemini models (via Gemini API)
 
 ---
 
@@ -220,7 +219,6 @@ Optional filters:
 
 ```bash
 go run ./cmd/verify-upstream --provider mistral
-go run ./cmd/verify-upstream --provider gemini --model gemini-2.5-flash
 ```
 
 Optional behavior flags:
@@ -236,8 +234,8 @@ When a provider returns `200 OK` but the visible content is empty, you can log t
 
 ```bash
 LOG_RAW_PROVIDER_RESPONSES=1 \
-LOG_RAW_PROVIDER_RESPONSE_FILTERS=gemini,mistral/magistral-* \
-go run ./cmd/verify-upstream --provider gemini
+LOG_RAW_PROVIDER_RESPONSE_FILTERS=mistral/magistral-* \
+go run ./cmd/verify-upstream --provider mistral
 ```
 
 Notes:
@@ -248,7 +246,7 @@ Notes:
 ### Failure Reporting
 
 Failures include the exact reason when available, for example:
-- missing provider auth envs like `GEMINI_API_KEY`
+- missing provider auth envs like `MISTRAL_API_KEY`
 - provider HTTP status and error message
 - invalid JSON output when structured output was requested
 - missing tool calls when tools were required
@@ -266,7 +264,6 @@ Failures include the exact reason when available, for example:
 | `GROQ_API_KEY` | No | Groq API key |
 | `CEREBRAS_API_KEY` | No | Cerebras API key |
 | `MISTRAL_API_KEY` | No | Mistral API key |
-| `GEMINI_API_KEY` | No | Google Gemini API key |
 | `NIM_API_KEY` | No | NVIDIA NIM API key |
 | `OLLAMA_API_KEY` | No | Ollama API key |
 | `KILO_API_KEY` | No | Kilo API key (optional for free models) |

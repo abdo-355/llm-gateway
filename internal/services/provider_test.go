@@ -30,11 +30,11 @@ func TestNewProviderService_DefaultTimeout(t *testing.T) {
 
 func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
-	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "gemini,mistral/magistral-*")
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")
 
 	svc := newProviderService()
 
-	assert.False(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
+	assert.False(t, svc.shouldLogRawProviderResponse("mistral", "magistral-medium-2509"))
 }
 
 func TestProviderServiceShouldLogRawProviderResponse_EnabledWithoutFilters(t *testing.T) {
@@ -43,17 +43,15 @@ func TestProviderServiceShouldLogRawProviderResponse_EnabledWithoutFilters(t *te
 
 	svc := newProviderService()
 
-	assert.True(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
 	assert.True(t, svc.shouldLogRawProviderResponse("mistral", "mistral-large-2411"))
 }
 
 func TestProviderServiceShouldLogRawProviderResponse_FilterMatching(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "true")
-	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "gemini,mistral/magistral-*")
+	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")
 
 	svc := newProviderService()
 
-	assert.True(t, svc.shouldLogRawProviderResponse("gemini", "gemini-2.5-flash"))
 	assert.True(t, svc.shouldLogRawProviderResponse("mistral", "magistral-medium-2509"))
 	assert.False(t, svc.shouldLogRawProviderResponse("mistral", "mistral-large-2411"))
 	assert.False(t, svc.shouldLogRawProviderResponse("groq", "llama-3.1-8b-instant"))
@@ -99,34 +97,6 @@ func TestPrepareRequest_GroqShaping(t *testing.T) {
 	assert.Equal(t, float64(10), payload["max_completion_tokens"])
 	assert.NotContains(t, payload, "max_tokens")
 	assert.NotContains(t, payload, "metadata")
-	assert.NotContains(t, payload, "frequency_penalty")
-	assert.NotContains(t, payload, "presence_penalty")
-}
-
-func TestPrepareRequest_GeminiShaping(t *testing.T) {
-	svc := newProviderService()
-	penalty := 0.5
-	req := types.ChatCompletionRequest{
-		Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
-		MaxCompletionTokens: ptrInt(9),
-		Metadata:            map[string]string{"trace": "abc"},
-		Seed:                ptrInt(9),
-		User:                "verify-upstream",
-		FrequencyPenalty:    &penalty,
-		PresencePenalty:     &penalty,
-	}
-
-	body, err := svc.prepareRequest(req, "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"})
-	require.NoError(t, err)
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal(body, &payload))
-	assert.Equal(t, float64(9), payload["max_tokens"])
-	assert.NotContains(t, payload, "max_completion_tokens")
-	assert.NotContains(t, payload, "metadata")
-	assert.NotContains(t, payload, "seed")
-	assert.NotContains(t, payload, "random_seed")
-	assert.NotContains(t, payload, "user")
 	assert.NotContains(t, payload, "frequency_penalty")
 	assert.NotContains(t, payload, "presence_penalty")
 }
@@ -417,24 +387,6 @@ func TestProviderCallProvider_MistralValidationError(t *testing.T) {
 	var validationErr *errors.ValidationError
 	require.ErrorAs(t, err, &validationErr)
 	assert.Contains(t, validationErr.Message, "extra_forbidden")
-}
-
-func TestProviderCallProvider_GoogleErrorMessage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"error":{"code":403,"message":"Permission denied","status":"PERMISSION_DENIED"}}`))
-	}))
-	defer srv.Close()
-
-	svc := newProviderService()
-	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
-
-	_, err := svc.CallProvider(srv.URL, "key", "gemini-2.5-flash", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GEMINI_API_KEY"}, "")
-	require.Error(t, err)
-
-	var providerErr *errors.ProviderError
-	require.ErrorAs(t, err, &providerErr)
-	assert.Equal(t, "HTTP error 403: Permission denied", providerErr.Message)
 }
 
 func TestProviderCallProvider_402_PaymentRequiredError(t *testing.T) {

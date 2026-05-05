@@ -362,11 +362,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 			request.MaxTokens = request.MaxCompletionTokens
 		}
 		request.MaxCompletionTokens = nil
-	case "gemini":
-		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
-			request.MaxTokens = request.MaxCompletionTokens
-		}
-		request.MaxCompletionTokens = nil
 	case "mistral":
 		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
 			request.MaxTokens = request.MaxCompletionTokens
@@ -386,13 +381,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 		request.PresencePenalty = nil
 	case "cerebras":
 		request.Metadata = nil
-	case "gemini":
-		request.Metadata = nil
-		request.Seed = nil
-		request.RandomSeed = nil
-		request.User = ""
-		request.FrequencyPenalty = nil
-		request.PresencePenalty = nil
 	}
 
 	return request
@@ -410,8 +398,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case "MISTRAL_API_KEY":
 		return "mistral"
-	case "GEMINI_API_KEY":
-		return "gemini"
 	case "NIM_API_KEY":
 		return "nim"
 	case "OLLAMA_API_KEY":
@@ -431,8 +417,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "cerebras"
 	case strings.Contains(baseURL, "api.mistral.ai"):
 		return "mistral"
-	case strings.Contains(baseURL, "generativelanguage.googleapis.com"):
-		return "gemini"
 	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
 		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
@@ -793,13 +777,6 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		}
 		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
 			return retryAfter, "rpd", limitSubtype
-		}
-	case "gemini":
-		if strings.Contains(bodyUpper, "RESOURCE_EXHAUSTED") {
-			if strings.Contains(bodyUpper, "QUOTA") || strings.Contains(bodyUpper, "MONTHLY") {
-				return retryAfter, "resource_exhausted", "quota_exhausted"
-			}
-			return retryAfter, "resource_exhausted", "overload"
 		}
 	case cloudflareProviderID:
 		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||

@@ -7,7 +7,6 @@ func GetProviders() []types.ProviderConfig {
 		getGroqConfig(),
 		getCerebrasConfig(),
 		getMistralConfig(),
-		getGeminiConfig(),
 		getNIMConfig(),
 		getKiloConfig(),
 		getCloudflareConfig(),
@@ -173,67 +172,8 @@ func getMistralConfig() types.ProviderConfig {
 	}
 }
 
-func getGeminiConfig() types.ProviderConfig {
-	rpm5 := 5
-	rpm15 := 15
-	rpd20 := 20
-	rpd1500 := 1500
-	tpm250000 := 250000
-
-	return types.ProviderConfig{
-		ID:      "gemini",
-		BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "GEMINI_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"gemma-4-26b-a4b-it",
-				"gemini-2.5-flash",
-				"gemini-3-flash-preview",
-			},
-			Limits: map[string]types.ModelLimits{
-				"gemma-4-26b-a4b-it": {
-					Rpm: &rpm15,
-					Rpd: &rpd1500,
-				},
-				"gemini-2.5-flash": {
-					Rpm: &rpm5,
-					Rpd: &rpd20,
-					Tpm: &tpm250000,
-				},
-				"gemini-3-flash-preview": {
-					Rpm: &rpm5,
-					Rpd: &rpd20,
-					Tpm: &tpm250000,
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: false,
-			MultipleChoices:     true,
-			ToolSchema:          "json_schema",
-		},
-		Limits:       types.ProviderLimits{},
-		ProviderType: "openai",
-	}
-}
-
 func GetCertifications() []types.Certification {
 	return []types.Certification{
-		{Provider: "gemini", Model: "gemini-2.5-flash", StrictSchema: true},
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
@@ -545,11 +485,10 @@ func getOllamaConfig() types.ProviderConfig {
 				"minimax-m2.5",
 				"nemotron-3-super",
 				"cogito-2.1:671b",
-				"deepseek-v3.1:671b",
-				"gpt-oss:120b",
-				"gemini-3-flash-preview",
-				"glm-4.7",
-				"glm-4.6",
+			"deepseek-v3.1:671b",
+			"gpt-oss:120b",
+			"glm-4.7",
+			"glm-4.6",
 				"minimax-m2.1",
 				"minimax-m2",
 				"minimax-m2.7",
@@ -579,11 +518,10 @@ func getOllamaConfig() types.ProviderConfig {
 				"minimax-m2.5":              {MaxConcurrent: &conc1},
 				"nemotron-3-super":          {MaxConcurrent: &conc1},
 				"cogito-2.1:671b":           {MaxConcurrent: &conc1},
-				"deepseek-v3.1:671b":        {MaxConcurrent: &conc1},
-				"gpt-oss:120b":              {MaxConcurrent: &conc1},
-				"gemini-3-flash-preview":    {MaxConcurrent: &conc1},
-				"glm-4.7":                   {MaxConcurrent: &conc1},
-				"glm-4.6":                   {MaxConcurrent: &conc1},
+			"deepseek-v3.1:671b":        {MaxConcurrent: &conc1},
+			"gpt-oss:120b":              {MaxConcurrent: &conc1},
+			"glm-4.7":                   {MaxConcurrent: &conc1},
+			"glm-4.6":                   {MaxConcurrent: &conc1},
 				"minimax-m2.1":              {MaxConcurrent: &conc1},
 				"minimax-m2":                {MaxConcurrent: &conc1},
 				"minimax-m2.7":              {MaxConcurrent: &conc1},
@@ -794,7 +732,6 @@ func getOciConfig() types.ProviderConfig {
 			List: []string{
 				"meta.llama-3.3-70b-instruct",
 				"openai.gpt-oss-120b",
-				"google.gemini-2.5-flash-lite",
 			},
 			Limits: map[string]types.ModelLimits{},
 		},

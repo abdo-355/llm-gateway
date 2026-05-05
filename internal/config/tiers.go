@@ -7,7 +7,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Tier: types.TierDefault,
 		Entries: []types.TierEntry{
 			{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", Weight: 1.0},
-			{Provider: "gemini", Model: "gemini-2.5-flash", Weight: 1.0},
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.8},
 			{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-thinking", Weight: 0.5},
 			{Provider: "mistral", Model: "mistral-large-2512", Weight: 0.9},
@@ -75,7 +74,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 1.0},
 			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
-			{Provider: "oci", Model: "google.gemini-2.5-flash-lite", Weight: 1.0},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -88,7 +86,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.2", Weight: 1.0},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.5", Weight: 1.0},
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 1.0},
-			{Provider: "gemini", Model: "gemma-4-26b-a4b-it", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.9},
 			{Provider: "nim", Model: "stepfun-ai/step-3.5-flash", Weight: 0.9},
 			{Provider: "nim", Model: "z-ai/glm4.7", Weight: 0.9},
@@ -108,7 +105,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "ollama", Model: "deepseek-v3.1:671b", Weight: 0.8},
 			{Provider: "ollama", Model: "gpt-oss:120b", Weight: 0.8},
-			{Provider: "ollama", Model: "gemini-3-flash-preview", Weight: 0.8},
 			{Provider: "ollama", Model: "glm-4.7", Weight: 0.8},
 			{Provider: "ollama", Model: "glm-4.6", Weight: 0.8},
 			{Provider: "ollama", Model: "minimax-m2.1", Weight: 0.8},
