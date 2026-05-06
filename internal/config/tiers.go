@@ -79,7 +79,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierPro: {
 		Tier: types.TierPro,
 		Entries: []types.TierEntry{
-			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.2", Weight: 1.0},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.5", Weight: 1.0},
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 1.0},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.9},
@@ -88,10 +87,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "mistralai/mistral-medium-3.5-128b", Weight: 0.9},
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.8},
 			{Provider: "nim", Model: "deepseek-ai/deepseek-v3.1-terminus", Weight: 0.8},
-			{Provider: "nim", Model: "openai/gpt-oss-120b", Weight: 0.8},
-			{Provider: "ollama", Model: "mistral-medium-3.5", Weight: 0.8},
+		{Provider: "nim", Model: "openai/gpt-oss-120b", Weight: 0.8},
 
-			{Provider: "ollama", Model: "deepseek-v3.2", Weight: 0.9},
+		{Provider: "ollama", Model: "deepseek-v3.2", Weight: 0.9},
 			{Provider: "ollama", Model: "qwen3-coder:480b", Weight: 0.9},
 			{Provider: "ollama", Model: "qwen3-coder-next", Weight: 0.9},
 			{Provider: "ollama", Model: "devstral-2:123b", Weight: 0.9},
@@ -140,13 +138,10 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "ollama", Model: "minimax-m2.7", Weight: 0.9},
 
-			{Provider: "ollama", Model: "qwen3.5:397b", Weight: 0.8},
-			{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
-			{Provider: "ollama", Model: "mistral-medium-3.5", Weight: 0.75},
-			{Provider: "ollama", Model: "kimi-k2-thinking", Weight: 0.8},
-			{Provider: "ollama", Model: "kimi-k2:1t", Weight: 0.8},
+		{Provider: "ollama", Model: "qwen3.5:397b", Weight: 0.8},
+		{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
 
-			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
+		{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(60000),
