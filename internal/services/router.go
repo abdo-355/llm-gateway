@@ -568,11 +568,15 @@ func (r *Router) Execute(
 		r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
 		if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
-			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownMs)
+			cooldownSec := cooldownMs / 1000
+			if cooldownSec < 1 {
+				cooldownSec = 1
+			}
+			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
 		}
 
 		tokensUsed := 0
-			var cloudflareStats *CloudflareUsageStats
+		var cloudflareStats *CloudflareUsageStats
 			if resp.Usage != nil {
 				tokensUsed = resp.Usage.TotalTokens
 			} else {
@@ -943,8 +947,12 @@ func (r *Router) ExecuteStream(
 		if err == nil {
 			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
-			if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
-				r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownMs)
+		if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
+			cooldownSec := cooldownMs / 1000
+			if cooldownSec < 1 {
+				cooldownSec = 1
+			}
+			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
 			}
 
 			tokensUsed := 0

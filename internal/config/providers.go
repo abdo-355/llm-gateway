@@ -726,10 +726,10 @@ func getOciConfig() types.ProviderConfig {
 				"meta.llama-3.3-70b-instruct",
 				"openai.gpt-oss-120b",
 			},
-			Limits: map[string]types.ModelLimits{
-				"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(4)},
-				"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(4)},
-			},
+		Limits: map[string]types.ModelLimits{
+			"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(10)},
+			"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(10)},
+		},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,

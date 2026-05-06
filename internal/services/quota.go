@@ -252,7 +252,7 @@ func (s *QuotaService) AcquireConcurrencySlot(ctx context.Context, providerID, m
 	if result == -1 {
 		metrics.QuotaRejectionsTotal.WithLabelValues(providerID, model, "concurrent").Inc()
 		return errors.NewModelQuotaExceededError(
-			fmt.Sprintf("Concurrency limit exceeded: %d/%d", result-1, maxConcurrent),
+			fmt.Sprintf("Concurrency limit exceeded: %d/%d", maxConcurrent, maxConcurrent),
 			providerID, model, "concurrent",
 		)
 	}
