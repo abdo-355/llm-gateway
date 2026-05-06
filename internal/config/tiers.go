@@ -147,6 +147,8 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "kimi-k2:1t", Weight: 0.8},
 
 			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
+		},
+		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(60000),
 			MaxAttempts:  intPtr(3),
 		},
