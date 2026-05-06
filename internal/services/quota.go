@@ -262,7 +262,20 @@ func (s *QuotaService) AcquireConcurrencySlot(ctx context.Context, providerID, m
 
 func (s *QuotaService) ReleaseConcurrencySlot(ctx context.Context, providerID, model string) {
 	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
-	if _, err := s.redis.Decr(ctx, key).Result(); err != nil {
+
+	script := redis.NewScript(`
+		if redis.call('EXISTS', KEYS[1]) == 1 then
+			local val = redis.call('DECR', KEYS[1])
+			if val < 0 then
+				redis.call('SET', KEYS[1], 0)
+				return 0
+			end
+			return val
+		end
+		return -1
+	`)
+
+	if _, err := script.Run(ctx, s.redis, []string{key}).Result(); err != nil {
 		logger.Error().
 			Str("type", "db").
 			Str("event", "quota.concurrent_release_failed").

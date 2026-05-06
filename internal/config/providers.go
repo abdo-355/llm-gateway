@@ -605,6 +605,8 @@ func getZaiConfig() types.ProviderConfig {
 func getLLM7Config() types.ProviderConfig {
 	rpm20 := 20
 	rph100 := 100
+	conc1 := 1
+	cooldown1s := 1000
 
 	return types.ProviderConfig{
 		ID:      "llm7",
@@ -634,9 +636,9 @@ func getLLM7Config() types.ProviderConfig {
 				"codestral-latest":                                 {Rpm: &rpm20, Rph: &rph100},
 				"ministral-8b-2512":                                {Rpm: &rpm20, Rph: &rph100},
 				"GLM-4.6V-Flash":                                   {Rpm: &rpm20, Rph: &rph100},
-				"fast":                                             {Rpm: &rpm20, Rph: &rph100},
-				"pro":                                              {Rpm: &rpm20, Rph: &rph100},
-				"default":                                          {Rpm: &rpm20, Rph: &rph100},
+			"fast":                                             {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
+			"pro":                                              {Rpm: &rpm20, Rph: &rph100},
+			"default":                                          {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
 				"deepseek-chat":                                    {Rpm: &rpm20, Rph: &rph100},
 				"llama-3-70b-instruct":                             {Rpm: &rpm20, Rph: &rph100},
 			},

@@ -565,9 +565,13 @@ func (r *Router) Execute(
 		latencyMs := time.Since(startTime).Milliseconds()
 
 		if err == nil {
-			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+		r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
-			tokensUsed := 0
+		if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
+			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownMs)
+		}
+
+		tokensUsed := 0
 			var cloudflareStats *CloudflareUsageStats
 			if resp.Usage != nil {
 				tokensUsed = resp.Usage.TotalTokens
@@ -803,6 +807,17 @@ func (r *Router) Execute(
 		tier, strategy,
 	).Observe(float64(len(plan.Attempts)))
 
+	if allAttemptsRateLimited(attemptChain) {
+		return nil, &types.GatewayError{
+			Type:    "gateway_error",
+			Code:    "RATE_LIMITED",
+			Message: "All provider attempts failed due to rate limits or quota",
+			Details: map[string]any{
+				"attempts": attemptChain,
+			},
+		}
+	}
+
 	return nil, &types.GatewayError{
 		Type:    "gateway_error",
 		Code:    "ALL_ATTEMPTS_FAILED",
@@ -833,10 +848,11 @@ func (r *Router) ExecuteStream(
 		tier := metrics.GetTier(ctx)
 		strategy := metrics.GetStrategy(ctx)
 
-		var previousProvider string
-		var hadFailure bool
-		var chunksSent bool
-		var outputTokenCount int
+	var previousProvider string
+	var hadFailure bool
+	var chunksSent bool
+	var outputTokenCount int
+	var failureKinds []types.FailureCategory
 		var streamUsage *types.Usage
 
 		for i, attempt := range plan.Attempts {
@@ -863,10 +879,9 @@ func (r *Router) ExecuteStream(
 				}
 			}
 
-			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
 
-			concurrencyAcquired := false
-			if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
+		if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
 				if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
 					logger.Warn().
 						Str("type", "router").
@@ -876,11 +891,13 @@ func (r *Router) ExecuteStream(
 						Str("model", attempt.Model).
 						Err(err).
 						Msg("Concurrency slot unavailable")
-					cancel()
-					continue
-				}
-				concurrencyAcquired = true
+				cancel()
+				continue
 			}
+			defer func() {
+				r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
+			}()
+		}
 
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
@@ -918,19 +935,19 @@ func (r *Router) ExecuteStream(
 				}
 			}
 
-			err := <-result.Err
-			cancel()
+		err := <-result.Err
+		cancel()
 
-			if concurrencyAcquired {
-				r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
+		latencyMs := time.Since(startTime).Milliseconds()
+
+		if err == nil {
+			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+
+			if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
+				r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownMs)
 			}
 
-			latencyMs := time.Since(startTime).Milliseconds()
-
-			if err == nil {
-				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
-
-				tokensUsed := 0
+			tokensUsed := 0
 				if streamUsage != nil && streamUsage.TotalTokens > 0 {
 					tokensUsed = streamUsage.TotalTokens
 				} else {
@@ -1070,11 +1087,13 @@ func (r *Router) ExecuteStream(
 				Str("model", attempt.Model).
 				Str("failure_category", string(decision.Category)).
 				Str("failure_action", string(decision.Action)).
-				Str("failure_reason", decision.Reason).
-				Err(err).
-				Msg("Provider attempt failed")
+		Str("failure_reason", decision.Reason).
+		Err(err).
+		Msg("Provider attempt failed")
 
-			ttfbRecorded = false
+	failureKinds = append(failureKinds, decision.Category)
+
+	ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
 				rateLimitErr := r.gatewayErrorToTypedError(err).(*errors.RateLimitError)
@@ -1136,14 +1155,22 @@ func (r *Router) ExecuteStream(
 					r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
 				}
 			}
-		}
+	}
 
+	if allStreamFailuresRateLimited(failureKinds) {
+		errChan <- &types.GatewayError{
+			Type:    "gateway_error",
+			Code:    "RATE_LIMITED",
+			Message: "All provider attempts failed due to rate limits or quota",
+		}
+	} else {
 		errChan <- &types.GatewayError{
 			Type:    "gateway_error",
 			Code:    "ALL_ATTEMPTS_FAILED",
 			Message: "All provider attempts failed",
 		}
-	}()
+	}
+}()
 
 	return types.StreamResult{
 		Chunks: chunks,
@@ -1513,4 +1540,41 @@ func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 		}
 	}
 	return 0
+}
+
+func (r *Router) lookupModelCooldownMs(providerID, model string) int {
+	for _, p := range r.config.Providers {
+		if p.ID == providerID {
+			if limits, ok := p.Models.Limits[model]; ok && limits.CooldownAfterMs != nil {
+				return *limits.CooldownAfterMs
+			}
+			return 0
+		}
+	}
+	return 0
+}
+
+func allAttemptsRateLimited(chain []map[string]any) bool {
+	if len(chain) == 0 {
+		return false
+	}
+	for _, entry := range chain {
+		kind, _ := entry["failure_kind"].(string)
+		if kind != "rate_limit" && kind != "quota" {
+			return false
+		}
+	}
+	return true
+}
+
+func allStreamFailuresRateLimited(kinds []types.FailureCategory) bool {
+	if len(kinds) == 0 {
+		return false
+	}
+	for _, k := range kinds {
+		if k != types.CategoryRateLimit && k != types.CategoryQuota {
+			return false
+		}
+	}
+	return true
 }
