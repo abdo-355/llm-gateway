@@ -492,9 +492,8 @@ func getOllamaConfig() types.ProviderConfig {
 			"glm-4.6",
 				"minimax-m2.1",
 				"minimax-m2",
-				"minimax-m2.7",
-			"qwen3.5:397b",
-			"mistral-large-3:675b",
+		"minimax-m2.7",
+		"mistral-large-3:675b",
 		},
 			Limits: map[string]types.ModelLimits{
 				"qwen3-next:80b":            {MaxConcurrent: &conc1},
@@ -522,9 +521,8 @@ func getOllamaConfig() types.ProviderConfig {
 			"glm-4.6":                   {MaxConcurrent: &conc1},
 				"minimax-m2.1":              {MaxConcurrent: &conc1},
 				"minimax-m2":                {MaxConcurrent: &conc1},
-				"minimax-m2.7":              {MaxConcurrent: &conc1},
-			"qwen3.5:397b":              {MaxConcurrent: &conc1},
-			"mistral-large-3:675b":      {MaxConcurrent: &conc1},
+		"minimax-m2.7":              {MaxConcurrent: &conc1},
+		"mistral-large-3:675b":      {MaxConcurrent: &conc1},
 		},
 			Capabilities: map[string]types.ModelCapabilities{
 				"cogito-2.1:671b":    {Tools: boolPtr(false)},

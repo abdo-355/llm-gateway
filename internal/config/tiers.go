@@ -136,10 +136,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.85},
 			{Provider: "nim", Model: "mistralai/mistral-medium-3.5-128b", Weight: 0.75},
 
-			{Provider: "ollama", Model: "minimax-m2.7", Weight: 0.9},
+	{Provider: "ollama", Model: "minimax-m2.7", Weight: 0.9},
 
-		{Provider: "ollama", Model: "qwen3.5:397b", Weight: 0.8},
-		{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
+	{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
 
 		{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
 		},
