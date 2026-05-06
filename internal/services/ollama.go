@@ -423,9 +423,11 @@ func (s *ProviderService) callOllamaProvider(
 	auth types.ProviderAuth,
 	requestID string,
 ) (*types.ChatCompletionResponse, error) {
-	stream := true
 	requestCopy := request
-	requestCopy.Stream = &stream
+	if requestCopy.Stream == nil {
+		defaultStream := true
+		requestCopy.Stream = &defaultStream
+	}
 
 	reqBody, err := s.prepareOllamaRequest(requestCopy, model)
 	if err != nil {
@@ -440,7 +442,11 @@ func (s *ProviderService) callOllamaProvider(
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/x-ndjson")
+	if *requestCopy.Stream {
+		req.Header.Set("Accept", "application/x-ndjson")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 
 	if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
 		return nil, err
@@ -459,7 +465,10 @@ func (s *ProviderService) callOllamaProvider(
 		return s.handleOllamaResponse(resp, model)
 	}
 
-	return s.collectOllamaStreamResult(resp.Body, model, baseURL, requestID)
+	if *requestCopy.Stream {
+		return s.collectOllamaStreamResult(resp.Body, model, baseURL, requestID)
+	}
+	return s.handleOllamaResponse(resp, model)
 }
 
 // collectOllamaStreamResult reads an NDJSON stream from Ollama and builds a single ChatCompletionResponse.

@@ -110,6 +110,7 @@ func BuildProbes(cfg Config) []Probe {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Return a JSON object with key ok set to true."),
+					Stream:              boolPtr(false),
 					ResponseFormat:      &types.ResponseFormat{Type: "json_object"},
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
@@ -123,6 +124,7 @@ func BuildProbes(cfg Config) []Probe {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Return JSON only with ok=true."),
+					Stream:              boolPtr(false),
 					ResponseFormat:      strictJSONSchemaFormat(),
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
@@ -266,7 +268,13 @@ func validateNonEmptyChatMessage(resp *types.ChatCompletionResponse) error {
 	}
 	choice := resp.Choices[0]
 	if choice.Message.Content == nil || strings.TrimSpace(*choice.Message.Content) == "" {
-		return fmt.Errorf("assistant message content was empty")
+		finish := choice.FinishReason
+		toolCalls := len(choice.Message.ToolCalls)
+		refusal := ""
+		if choice.Message.Refusal != nil {
+			refusal = *choice.Message.Refusal
+		}
+		return fmt.Errorf("assistant message content was empty (finish=%s, tool_calls=%d, refusal=%q)", finish, toolCalls, refusal)
 	}
 	return nil
 }
@@ -324,26 +332,43 @@ func validateMultipleChoices(resp *types.ChatCompletionResponse) error {
 }
 
 func validateJSONObject(payload string) error {
+	trimmed := strings.TrimSpace(payload)
 	var object map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(payload)), &object); err != nil {
-		return fmt.Errorf("response was not valid JSON object: %w", err)
+	if err := json.Unmarshal([]byte(trimmed), &object); err != nil {
+		preview := trimmed
+		if len(preview) > 250 {
+			preview = preview[:250] + "..."
+		}
+		return fmt.Errorf("response was not valid JSON object: %w [content: %s]", err, preview)
 	}
 	return nil
 }
 
 func validateStrictJSON(payload string) error {
+	trimmed := strings.TrimSpace(payload)
 	var object map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSpace(payload)), &object); err != nil {
-		return fmt.Errorf("response did not match strict JSON schema: %w", err)
+	if err := json.Unmarshal([]byte(trimmed), &object); err != nil {
+		preview := trimmed
+		if len(preview) > 250 {
+			preview = preview[:250] + "..."
+		}
+		return fmt.Errorf("response did not match strict JSON schema: %w [content: %s]", err, preview)
 	}
 	value, ok := object["ok"]
 	if !ok {
-		return fmt.Errorf("response did not match strict JSON schema: missing ok field")
+		return fmt.Errorf("response did not match strict JSON schema: missing ok field [content: %s]", previewContent(trimmed))
 	}
 	if _, ok := value.(bool); !ok {
-		return fmt.Errorf("response did not match strict JSON schema: ok field was not boolean")
+		return fmt.Errorf("response did not match strict JSON schema: ok field was not boolean [content: %s]", previewContent(trimmed))
 	}
 	return nil
+}
+
+func previewContent(s string) string {
+	if len(s) > 250 {
+		return s[:250] + "..."
+	}
+	return s
 }
 
 func boolPtr(v bool) *bool        { return &v }

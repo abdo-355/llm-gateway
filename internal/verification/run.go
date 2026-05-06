@@ -219,8 +219,9 @@ func runModel(runner *Runner, combo Combo, probes []Probe) modelExecutionResult 
 		remaining: make([]Probe, 0),
 	}
 
+	requestedProbes := parseProbeList(runner.config.Probe)
 	for _, probe := range probes {
-		if runner.config.Probe != "" && probe.Name != runner.config.Probe {
+		if len(requestedProbes) > 0 && !containsProbe(requestedProbes, probe.Name) {
 			continue
 		}
 
@@ -936,6 +937,30 @@ func sortModelOutcomes(outcomes []ModelOutcome) {
 func hasFailure(results []ProbeResult) bool {
 	for _, result := range results {
 		if result.Status == "FAIL" {
+			return true
+		}
+	}
+	return false
+}
+
+func parseProbeList(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func containsProbe(list []string, name string) bool {
+	for _, entry := range list {
+		if entry == name {
 			return true
 		}
 	}

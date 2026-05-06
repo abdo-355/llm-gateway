@@ -174,6 +174,10 @@ func getMistralConfig() types.ProviderConfig {
 
 func GetCertifications() []types.Certification {
 	return []types.Certification{
+		{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", StrictSchema: true},
+		{Provider: "kilo", Model: "kilo-auto/free", StrictSchema: true},
+		{Provider: "llm7", Model: "fast", StrictSchema: true},
+		{Provider: "llm7", Model: "default", StrictSchema: true},
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
