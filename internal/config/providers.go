@@ -197,8 +197,6 @@ func LoadConfig() types.AppConfig {
 
 func getNIMConfig() types.ProviderConfig {
 	rpm40 := 40
-	rpd500 := 500
-	rpd14400 := 14400
 	tpm250000 := 250000
 	tpm500000 := 500000
 
@@ -233,25 +231,25 @@ func getNIMConfig() types.ProviderConfig {
 				"openai/gpt-oss-120b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"moonshotai/kimi-k2-instruct":                  {Rpd: &rpd14400, Tpm: &tpm500000},
-				"moonshotai/kimi-k2-instruct-0905":             {Rpd: &rpd14400, Tpm: &tpm500000},
-				"moonshotai/kimi-k2.6":                         {Rpd: &rpd14400, Tpm: &tpm500000},
-				"moonshotai/kimi-k2-thinking":                  {Rpd: &rpd14400, Tpm: &tpm500000},
-				"qwen/qwen3-next-80b-a3b-thinking":             {Rpd: &rpd500, Tpm: &tpm250000},
-				"qwen/qwen3-next-80b-a3b-instruct":             {Rpd: &rpd500, Tpm: &tpm250000},
-				"qwen/qwen3.5-397b-a17b":                       {Rpd: &rpd500, Tpm: &tpm250000},
-				"qwen/qwen3.5-122b-a10b":                       {Rpd: &rpd14400, Tpm: &tpm500000},
-				"mistralai/mistral-medium-3.5-128b":            {Rpd: &rpd500, Tpm: &tpm250000},
-				"mistralai/devstral-2-123b-instruct-2512":      {Rpd: &rpd500, Tpm: &tpm250000},
-			"mistralai/mistral-large-3-675b-instruct-2512": {Rpd: &rpd500, Tpm: &tpm250000},
-			"deepseek-ai/deepseek-v3.1-terminus":           {Rpd: &rpd14400, Tpm: &tpm500000},
-				"minimaxai/minimax-m2.5":                       {Rpd: &rpd500, Tpm: &tpm250000},
-				"minimaxai/minimax-m2.7":                       {Rpd: &rpd500, Tpm: &tpm250000},
-				"stepfun-ai/step-3.5-flash":                    {Rpd: &rpd14400, Tpm: &tpm500000},
-				"z-ai/glm-5.1":                                 {Rpd: &rpd500, Tpm: &tpm250000},
-				"z-ai/glm5":                                    {Rpd: &rpd500, Tpm: &tpm250000},
-				"z-ai/glm4.7":                                  {Rpd: &rpd14400, Tpm: &tpm500000},
-				"openai/gpt-oss-120b":                          {Rpd: &rpd14400, Tpm: &tpm500000},
+				"moonshotai/kimi-k2-instruct":                  {Tpm: &tpm500000},
+				"moonshotai/kimi-k2-instruct-0905":             {Tpm: &tpm500000},
+				"moonshotai/kimi-k2.6":                         {Tpm: &tpm500000},
+				"moonshotai/kimi-k2-thinking":                  {Tpm: &tpm500000},
+				"qwen/qwen3-next-80b-a3b-thinking":             {Tpm: &tpm250000},
+				"qwen/qwen3-next-80b-a3b-instruct":             {Tpm: &tpm250000},
+				"qwen/qwen3.5-397b-a17b":                       {Tpm: &tpm250000},
+				"qwen/qwen3.5-122b-a10b":                       {Tpm: &tpm500000},
+				"mistralai/mistral-medium-3.5-128b":            {Tpm: &tpm250000},
+				"mistralai/devstral-2-123b-instruct-2512":      {Tpm: &tpm250000},
+			"mistralai/mistral-large-3-675b-instruct-2512": {Tpm: &tpm250000},
+			"deepseek-ai/deepseek-v3.1-terminus":           {Tpm: &tpm500000},
+				"minimaxai/minimax-m2.5":                       {Tpm: &tpm250000},
+				"minimaxai/minimax-m2.7":                       {Tpm: &tpm250000},
+				"stepfun-ai/step-3.5-flash":                    {Tpm: &tpm500000},
+				"z-ai/glm-5.1":                                 {Tpm: &tpm250000},
+				"z-ai/glm5":                                    {Tpm: &tpm250000},
+				"z-ai/glm4.7":                                  {Tpm: &tpm500000},
+				"openai/gpt-oss-120b":                          {Tpm: &tpm500000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -420,18 +418,18 @@ func getOpenCodeConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"minimax-m2.5-free",
 				"big-pickle",
-				"ling-2.6-flash-free",
-				"hy3-preview-free",
+				"deepseek-v4-flash-free",
+				"minimax-m2.5-free",
+				"ring-2.6-1t-free",
 				"nemotron-3-super-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"minimax-m2.5-free":     {Rpm: &rpm10},
-				"big-pickle":            {Rpm: &rpm10},
-				"ling-2.6-flash-free":   {Rpm: &rpm10},
-				"hy3-preview-free":      {Rpm: &rpm10},
-				"nemotron-3-super-free": {Rpm: &rpm10},
+				"big-pickle":             {Rpm: &rpm10},
+				"deepseek-v4-flash-free": {Rpm: &rpm10},
+				"minimax-m2.5-free":      {Rpm: &rpm10},
+				"ring-2.6-1t-free":       {Rpm: &rpm10},
+				"nemotron-3-super-free":  {Rpm: &rpm10},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -539,7 +537,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               true,
-			StructuredOutputs:   "json_schema",
+			StructuredOutputs:   "none",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,
@@ -617,28 +615,12 @@ func getLLM7Config() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"gpt-oss-20b",
-				"meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
-				"codestral-latest",
-				"ministral-8b-2512",
-				"GLM-4.6V-Flash",
 				"fast",
-				"pro",
 				"default",
-				"deepseek-chat",
-				"llama-3-70b-instruct",
 			},
 			Limits: map[string]types.ModelLimits{
-				"gpt-oss-20b":                                     {Rpm: &rpm20, Rph: &rph100},
-				"meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo":     {Rpm: &rpm20, Rph: &rph100},
-				"codestral-latest":                                 {Rpm: &rpm20, Rph: &rph100},
-				"ministral-8b-2512":                                {Rpm: &rpm20, Rph: &rph100},
-				"GLM-4.6V-Flash":                                   {Rpm: &rpm20, Rph: &rph100},
-			"fast":                                             {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
-			"pro":                                              {Rpm: &rpm20, Rph: &rph100},
-			"default":                                          {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
-				"deepseek-chat":                                    {Rpm: &rpm20, Rph: &rph100},
-				"llama-3-70b-instruct":                             {Rpm: &rpm20, Rph: &rph100},
+			"fast":    {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
+			"default": {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -675,21 +657,11 @@ func getCohereConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"command-a-03-2025",
-				"command-a-reasoning-08-2025",
-				"command-a-vision-03-2025",
-				"command-r-plus-08-2025",
-				"command-r-08-2025",
 				"command-r7b-12-2024",
-				"tiny-aya-global-03-2025",
 			},
 			Limits: map[string]types.ModelLimits{
-				"command-a-03-2025":             {Rpm: &rpm20},
-				"command-a-reasoning-08-2025":   {Rpm: &rpm20},
-				"command-a-vision-03-2025":      {Rpm: &rpm20},
-				"command-r-plus-08-2025":        {Rpm: &rpm20},
-				"command-r-08-2025":             {Rpm: &rpm20},
-				"command-r7b-12-2024":           {Rpm: &rpm20},
-				"tiny-aya-global-03-2025":       {Rpm: &rpm20},
+				"command-a-03-2025":   {Rpm: &rpm20},
+				"command-r7b-12-2024": {Rpm: &rpm20},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -727,8 +699,8 @@ func getOciConfig() types.ProviderConfig {
 				"openai.gpt-oss-120b",
 			},
 		Limits: map[string]types.ModelLimits{
-			"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(10)},
-			"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(10)},
+			"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(20)},
+			"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(20)},
 		},
 		},
 		Capabilities: types.ProviderCapabilities{

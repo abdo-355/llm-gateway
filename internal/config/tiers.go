@@ -52,8 +52,8 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-1b-instruct", Weight: 0.5},
 
 			{Provider: "opencode", Model: "big-pickle", Weight: 0.6},
-			{Provider: "opencode", Model: "ling-2.6-flash-free", Weight: 0.6},
-			{Provider: "opencode", Model: "hy3-preview-free", Weight: 0.6},
+			{Provider: "opencode", Model: "deepseek-v4-flash-free", Weight: 0.6},
+			{Provider: "opencode", Model: "ring-2.6-1t-free", Weight: 0.6},
 
 			{Provider: "zai", Model: "glm-4.7-flash", Weight: 0.8},
 			{Provider: "zai", Model: "glm-4.5-flash", Weight: 0.8},
@@ -62,11 +62,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "llm7", Model: "fast", Weight: 0.8},
 			{Provider: "llm7", Model: "default", Weight: 0.8},
 
-			{Provider: "cohere", Model: "command-a-vision-03-2025", Weight: 0.6},
-			{Provider: "cohere", Model: "command-r-plus-08-2025", Weight: 0.7},
-			{Provider: "cohere", Model: "command-r-08-2025", Weight: 0.6},
 			{Provider: "cohere", Model: "command-r7b-12-2024", Weight: 0.5},
-			{Provider: "cohere", Model: "tiny-aya-global-03-2025", Weight: 0.5},
 
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 1.0},
 			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
@@ -114,7 +110,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "opencode", Model: "nemotron-3-super-free", Weight: 0.7},
 
 			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
-			{Provider: "cohere", Model: "command-a-reasoning-08-2025", Weight: 0.7},
+
 
 			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
 		},
