@@ -145,6 +145,7 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 			s.setCircuitState(ctx, providerID, model, StateClosed)
 			s.redis.Del(ctx, fmt.Sprintf("%s:failures", circuitPrefix))
 			s.redis.Del(ctx, successesKey)
+			state = StateClosed
 		}
 	} else if state == StateClosed {
 		failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
@@ -180,8 +181,10 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 
 	if state == StateHalfOpen {
 		s.setCircuitState(ctx, providerID, model, StateOpen)
+		state = StateOpen
 	} else if state == StateClosed && failures >= int64(s.failureThreshold) {
 		s.setCircuitState(ctx, providerID, model, StateOpen)
+		state = StateOpen
 	}
 
 	score := healthScoreFromState(state, int(failures))

@@ -337,11 +337,14 @@ func (r *Router) FilterCandidates(
 		model := candidate.Model
 		key := provider.ID + "/" + model
 
-		// Circuit breaker (try cache, fall back to individual call)
+		// Circuit breaker: use batch result as fast path for CLOSED,
+		// fall back to CanExecute for non-CLOSED (handles OPEN→HALF_OPEN recovery).
 		if circuitStates != nil {
 			if circuitStates[key] != StateClosed {
-				filtered[key] = "circuit_breaker_open"
-				continue
+				if !r.healthService.CanExecute(ctx, provider.ID, model) {
+					filtered[key] = "circuit_breaker_open"
+					continue
+				}
 			}
 		} else if !r.healthService.CanExecute(ctx, provider.ID, model) {
 			filtered[key] = "circuit_breaker_open"
