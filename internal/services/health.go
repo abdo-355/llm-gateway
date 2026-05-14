@@ -147,7 +147,6 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 			s.redis.Del(ctx, successesKey)
 		}
 	} else if state == StateClosed {
-		// Gradually decrement failure count instead of clearing entirely
 		failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
 		failures, _ = s.redis.Get(ctx, failuresKey).Int()
 		if failures > 0 {
@@ -156,15 +155,18 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 		}
 	}
 
-	// Issue #8: Use unique member ID with latency as score to prevent deduplication
 	latencyKey := fmt.Sprintf("%s:latencies", healthPrefix)
 	now := time.Now()
 	member := fmt.Sprintf("%d-%d", now.UnixMilli(), now.Nanosecond())
-	s.redis.ZAdd(ctx, latencyKey, redis.Z{Score: float64(latencyMs), Member: member})
-	// Use Redis key expiration instead of ZRemRangeByScore since we store latency as score
-	s.redis.Expire(ctx, latencyKey, time.Hour)
 
-	s.updateHealthScore(ctx, providerID, model, state, failures)
+	score := healthScoreFromState(state, failures)
+	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
+
+	pipe := s.redis.Pipeline()
+	pipe.ZAdd(ctx, latencyKey, redis.Z{Score: float64(latencyMs), Member: member})
+	pipe.Expire(ctx, latencyKey, time.Hour)
+	pipe.Set(ctx, scoreKey, score, time.Hour)
+	pipe.Exec(ctx)
 }
 
 func (s *HealthService) RecordFailure(ctx context.Context, providerID, model string) {
@@ -175,8 +177,6 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 	lastFailureKey := fmt.Sprintf("%s:last_failure", circuitPrefix)
 
 	failures, _ := s.redis.Incr(ctx, failuresKey).Result()
-	s.redis.Expire(ctx, failuresKey, 24*time.Hour)
-	s.redis.Set(ctx, lastFailureKey, time.Now().UnixMilli(), 24*time.Hour)
 
 	if state == StateHalfOpen {
 		s.setCircuitState(ctx, providerID, model, StateOpen)
@@ -184,7 +184,15 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 		s.setCircuitState(ctx, providerID, model, StateOpen)
 	}
 
-	s.updateHealthScore(ctx, providerID, model, state, int(failures))
+	score := healthScoreFromState(state, int(failures))
+	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
+	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
+
+	pipe := s.redis.Pipeline()
+	pipe.Expire(ctx, failuresKey, 24*time.Hour)
+	pipe.Set(ctx, lastFailureKey, time.Now().UnixMilli(), 24*time.Hour)
+	pipe.Set(ctx, scoreKey, score, time.Hour)
+	pipe.Exec(ctx)
 }
 
 func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model string) HealthMetrics {
@@ -287,26 +295,20 @@ func (s *HealthService) setCircuitState(ctx context.Context, providerID, model s
 	}
 }
 
-func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string, state CircuitState, failures int) {
-	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
-
-	var score float64 = 1.0
-
+func healthScoreFromState(state CircuitState, failures int) float64 {
 	switch state {
 	case StateOpen:
-		score = 0.0
+		return 0.0
 	case StateHalfOpen:
-		score = 0.5
+		return 0.5
 	default:
 		if failures > 3 {
-			score = 0.5
+			return 0.5
 		} else if failures > 0 {
-			score = 1.0 - float64(failures)*0.1
+			return 1.0 - float64(failures)*0.1
 		}
+		return 1.0
 	}
-
-	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
-	s.redis.Set(ctx, scoreKey, score, time.Hour)
 }
 
 // BatchCircuitStates reads circuit breaker states for multiple provider/model pairs
