@@ -130,6 +130,7 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
 	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
 
+	var failures int
 	if state == StateHalfOpen {
 		successesKey := fmt.Sprintf("%s:successes", circuitPrefix)
 		successes, _ := s.redis.Incr(ctx, successesKey).Result()
@@ -143,9 +144,10 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 	} else if state == StateClosed {
 		// Gradually decrement failure count instead of clearing entirely
 		failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
-		failures, _ := s.redis.Get(ctx, failuresKey).Int()
+		failures, _ = s.redis.Get(ctx, failuresKey).Int()
 		if failures > 0 {
 			s.redis.Decr(ctx, failuresKey)
+			failures--
 		}
 	}
 
@@ -157,7 +159,7 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 	// Use Redis key expiration instead of ZRemRangeByScore since we store latency as score
 	s.redis.Expire(ctx, latencyKey, time.Hour)
 
-	s.updateHealthScore(ctx, providerID, model)
+	s.updateHealthScore(ctx, providerID, model, state, failures)
 }
 
 func (s *HealthService) RecordFailure(ctx context.Context, providerID, model string) {
@@ -177,7 +179,7 @@ func (s *HealthService) RecordFailure(ctx context.Context, providerID, model str
 		s.setCircuitState(ctx, providerID, model, StateOpen)
 	}
 
-	s.updateHealthScore(ctx, providerID, model)
+	s.updateHealthScore(ctx, providerID, model, state, int(failures))
 }
 
 func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model string) HealthMetrics {
@@ -280,12 +282,8 @@ func (s *HealthService) setCircuitState(ctx context.Context, providerID, model s
 	}
 }
 
-func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string) {
-	circuitPrefix := s.buildCircuitKeyPrefix(providerID, model)
+func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model string, state CircuitState, failures int) {
 	healthPrefix := s.buildHealthKeyPrefix(providerID, model)
-	failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
-	failures, _ := s.redis.Get(ctx, failuresKey).Int()
-	state := s.GetCircuitState(ctx, providerID, model)
 
 	var score float64 = 1.0
 
