@@ -215,6 +215,14 @@ func (r *Router) FilterCandidates(
 	estimatedTokens := r.quotaService.EstimateTokens(req)
 	cloudflareBudget, hasCloudflareBudget := r.quotaService.(CloudflareBudgetManager)
 
+	// Phase 1: Non-Redis capability checks. Collect candidates that need Redis checks.
+	type redisCandidate struct {
+		candidate       types.RoutingCandidate
+		caps            types.ProviderCapabilities
+		modelLimits     types.ModelLimits
+	}
+	var redisCandidates []redisCandidate
+
 	for _, candidate := range candidates {
 		provider := candidate.Provider
 		model := candidate.Model
@@ -259,7 +267,6 @@ func (r *Router) FilterCandidates(
 
 		if requirements.Output == "json_schema_strict" {
 			if !candidate.IsCertifiedForStrictSchema {
-				// Check if provider guarantees strict JSON
 				if caps.StructuredOutputs != "json_schema_strict" {
 					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "not_certified_for_strict_json"
 					continue
@@ -267,13 +274,11 @@ func (r *Router) FilterCandidates(
 			}
 		}
 
-		// Check streaming requirement
 		if requirements.Streaming == "required" && !caps.Streaming {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "streaming_not_supported"
 			continue
 		}
 
-		// Check tools requirement
 		if len(req.Tools) > 0 {
 			if !caps.Tools {
 				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
@@ -300,30 +305,74 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
-		// Check circuit breaker
-		if !r.healthService.CanExecute(ctx, provider.ID, model) {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "circuit_breaker_open"
+		redisCandidates = append(redisCandidates, redisCandidate{
+			candidate:   candidate,
+			caps:        caps,
+			modelLimits: provider.Models.Limits[model],
+		})
+	}
+
+	// Phase 2: Batch Redis checks for surviving candidates.
+	pairs := make([]ProviderModelPair, len(redisCandidates))
+	for i, rc := range redisCandidates {
+		pairs[i] = ProviderModelPair{ProviderID: rc.candidate.Provider.ID, Model: rc.candidate.Model}
+	}
+
+	// Batch circuit state check.
+	var circuitStates map[string]CircuitState
+	if hs, ok := r.healthService.(interface{ BatchCircuitStates(context.Context, []ProviderModelPair) map[string]CircuitState }); ok {
+		circuitStates = hs.BatchCircuitStates(ctx, pairs)
+	}
+
+	// Batch cooldown check.
+	var cooldownStates map[string]bool
+	if r.cooldownService != nil {
+		cooldownStates = r.cooldownService.BatchIsOnCooldown(ctx, pairs)
+	}
+
+	// Phase 3: Use cached Redis results and perform remaining checks.
+	for _, rc := range redisCandidates {
+		candidate := rc.candidate
+		provider := candidate.Provider
+		model := candidate.Model
+		key := provider.ID + "/" + model
+
+		// Circuit breaker (try cache, fall back to individual call)
+		if circuitStates != nil {
+			if circuitStates[key] != StateClosed {
+				filtered[key] = "circuit_breaker_open"
+				continue
+			}
+		} else if !r.healthService.CanExecute(ctx, provider.ID, model) {
+			filtered[key] = "circuit_breaker_open"
 			continue
 		}
 
-		// Check cooldown
-		if r.cooldownService != nil && r.cooldownService.IsOnCooldown(ctx, provider.ID, model) {
+		// Cooldown (try cache, fall back to individual call)
+		if cooldownStates != nil {
+			if cooldownStates[key] {
+				reason := r.cooldownService.GetCooldownReason(ctx, provider.ID, model)
+				remaining := r.cooldownService.GetCooldownRemaining(ctx, provider.ID, model)
+				filtered[key] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
+				continue
+			}
+		} else if r.cooldownService != nil && r.cooldownService.IsOnCooldown(ctx, provider.ID, model) {
 			reason := r.cooldownService.GetCooldownReason(ctx, provider.ID, model)
 			remaining := r.cooldownService.GetCooldownRemaining(ctx, provider.ID, model)
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
+			filtered[key] = fmt.Sprintf("provider_cooldown_active:%s:%.0fs", reason, remaining.Seconds())
 			continue
 		}
 
 		// Check per-model quota
-		modelLimits := provider.Models.Limits[model]
+		modelLimits := rc.modelLimits
 
 		if provider.ID == cloudflareProviderID && hasCloudflareBudget {
 			estimatedNeurons := cloudflareBudget.EstimateCloudflareRequestNeurons(model, req)
 			if err := cloudflareBudget.CheckCloudflareDailyNeuronBudget(ctx, model, estimatedNeurons); err != nil {
 				if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
-					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
+					filtered[key] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
 				} else {
-					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "cloudflare_budget_check_failed"
+					filtered[key] = "cloudflare_budget_check_failed"
 				}
 				continue
 			}
@@ -331,16 +380,16 @@ func (r *Router) FilterCandidates(
 
 		if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, estimatedTokens); err != nil {
 			if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
-				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
+				filtered[key] = fmt.Sprintf("quota_exceeded_%s", quotaErr.LimitType)
 			} else {
-				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "quota_check_failed"
+				filtered[key] = "quota_check_failed"
 			}
 			continue
 		}
 
 		if modelLimits.MaxConcurrent != nil && *modelLimits.MaxConcurrent > 0 {
 			if !r.quotaService.CheckConcurrencyLimit(ctx, provider.ID, model, *modelLimits.MaxConcurrent) {
-				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "concurrency_limit_exceeded"
+				filtered[key] = "concurrency_limit_exceeded"
 				continue
 			}
 		}
@@ -353,6 +402,35 @@ func (r *Router) FilterCandidates(
 
 // Stage 4: Score Candidates
 func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+	// Batch-read health metrics for all candidates in one pipeline.
+	type batchHealthResult struct {
+		healthScore       float64
+		successRatioScore float64
+	}
+	batchResults := make([]batchHealthResult, len(candidates))
+
+	if hs, ok := r.healthService.(interface{ BatchGetHealthMetrics(context.Context, []ProviderModelPair) []HealthMetrics }); ok {
+		pairs := make([]ProviderModelPair, len(candidates))
+		for i, c := range candidates {
+			pairs[i] = ProviderModelPair{ProviderID: c.Provider.ID, Model: c.Model}
+		}
+		metricsList := hs.BatchGetHealthMetrics(ctx, pairs)
+		for i, m := range metricsList {
+			batchResults[i] = batchHealthResult{
+				healthScore:       m.HealthScore,
+				successRatioScore: calculateSuccessRatioScore(m.SuccessCount, m.FailureCount),
+			}
+		}
+	} else {
+		for i, c := range candidates {
+			m := r.healthService.GetHealthMetrics(ctx, c.Provider.ID, c.Model)
+			batchResults[i] = batchHealthResult{
+				healthScore:       m.HealthScore,
+				successRatioScore: calculateSuccessRatioScore(m.SuccessCount, m.FailureCount),
+			}
+		}
+	}
+
 	for i := range candidates {
 		candidate := &candidates[i]
 		baseScore := 1.0
@@ -372,10 +450,9 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 			}
 		}
 
-		// Health score
-		metrics := r.healthService.GetHealthMetrics(ctx, candidate.Provider.ID, candidate.Model)
-		healthScore := metrics.HealthScore
-		successRatioScore := calculateSuccessRatioScore(metrics.SuccessCount, metrics.FailureCount)
+		// Health score (from batch)
+		healthScore := batchResults[i].healthScore
+		successRatioScore := batchResults[i].successRatioScore
 		candidate.ScoreBreakdown["health_score"] = healthScore
 		candidate.ScoreBreakdown["success_ratio"] = successRatioScore
 

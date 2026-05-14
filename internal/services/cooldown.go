@@ -170,3 +170,40 @@ func (s *CooldownService) ApplyCooldownForReason(ctx context.Context, providerID
 
 	s.ApplyCooldown(ctx, providerID, model, duration, reason)
 }
+
+// BatchIsOnCooldown checks cooldown state for multiple provider/model pairs
+// in a single pipeline round trip.
+func (s *CooldownService) BatchIsOnCooldown(ctx context.Context, pairs []ProviderModelPair) map[string]bool {
+	if !s.config.Enabled || len(pairs) == 0 {
+		return nil
+	}
+
+	pipe := s.redis.Pipeline()
+	type cmdEntry struct {
+		pair ProviderModelPair
+		cmd  *redis.StringCmd
+	}
+	entries := make([]cmdEntry, len(pairs))
+	for i, p := range pairs {
+		entries[i] = cmdEntry{
+			pair: p,
+			cmd:  pipe.Get(ctx, s.buildCooldownKey(p.ProviderID, p.Model)),
+		}
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		logger.Error().
+			Str("type", "cooldown").
+			Str("event", "cooldown.batch_check_failed").
+			Err(err).
+			Msg("Failed to batch check cooldowns")
+	}
+
+	result := make(map[string]bool, len(pairs))
+	for _, e := range entries {
+		key := e.pair.ProviderID + "/" + e.pair.Model
+		_, err := e.cmd.Result()
+		result[key] = err == nil
+	}
+	return result
+}

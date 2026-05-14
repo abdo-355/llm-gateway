@@ -21,6 +21,11 @@ const (
 	StateHalfOpen CircuitState = "HALF_OPEN"
 )
 
+type ProviderModelPair struct {
+	ProviderID string
+	Model      string
+}
+
 type HealthMetrics struct {
 	ProviderID      string       `json:"provider_id"`
 	Model           string       `json:"model"`
@@ -302,4 +307,119 @@ func (s *HealthService) updateHealthScore(ctx context.Context, providerID, model
 
 	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
 	s.redis.Set(ctx, scoreKey, score, time.Hour)
+}
+
+// BatchCircuitStates reads circuit breaker states for multiple provider/model pairs
+// in a single pipeline round trip.
+func (s *HealthService) BatchCircuitStates(ctx context.Context, pairs []ProviderModelPair) map[string]CircuitState {
+	if len(pairs) == 0 {
+		return nil
+	}
+
+	pipe := s.redis.Pipeline()
+	type cmdEntry struct {
+		key  string
+		cmd  *redis.StringCmd
+		pair ProviderModelPair
+	}
+	entries := make([]cmdEntry, len(pairs))
+	for i, p := range pairs {
+		key := fmt.Sprintf("%s:state", s.buildCircuitKeyPrefix(p.ProviderID, p.Model))
+		entries[i] = cmdEntry{key: key, cmd: pipe.Get(ctx, key), pair: p}
+	}
+	pipe.Exec(ctx)
+
+	result := make(map[string]CircuitState, len(pairs))
+	for _, e := range entries {
+		key := e.pair.ProviderID + "/" + e.pair.Model
+		val, err := e.cmd.Result()
+		if err != nil || val == "" {
+			result[key] = StateClosed
+		} else {
+			result[key] = CircuitState(val)
+		}
+	}
+	return result
+}
+
+// BatchGetHealthMetrics reads health metrics for multiple provider/model pairs
+// in a single pipeline round trip.
+func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []ProviderModelPair) []HealthMetrics {
+	if len(pairs) == 0 {
+		return nil
+	}
+
+	pipe := s.redis.Pipeline()
+	type cmdGroup struct {
+		pair            ProviderModelPair
+		stateCmd        *redis.StringCmd
+		failuresCmd     *redis.StringCmd
+		successesCmd    *redis.StringCmd
+		lastFailureCmd  *redis.StringCmd
+		scoreCmd        *redis.StringCmd
+		latencyCmd      *redis.ZSliceCmd
+	}
+	groups := make([]cmdGroup, len(pairs))
+
+	for i, p := range pairs {
+		circuitPrefix := s.buildCircuitKeyPrefix(p.ProviderID, p.Model)
+		healthPrefix := s.buildHealthKeyPrefix(p.ProviderID, p.Model)
+		groups[i] = cmdGroup{
+			pair:           p,
+			stateCmd:       pipe.Get(ctx, fmt.Sprintf("%s:state", circuitPrefix)),
+			failuresCmd:    pipe.Get(ctx, fmt.Sprintf("%s:failures", circuitPrefix)),
+			successesCmd:   pipe.Get(ctx, fmt.Sprintf("%s:successes", circuitPrefix)),
+			lastFailureCmd: pipe.Get(ctx, fmt.Sprintf("%s:last_failure", circuitPrefix)),
+			scoreCmd:       pipe.Get(ctx, fmt.Sprintf("%s:score", healthPrefix)),
+			latencyCmd:     pipe.ZRangeWithScores(ctx, fmt.Sprintf("%s:latencies", healthPrefix), 0, -1),
+		}
+	}
+	_, _ = pipe.Exec(ctx)
+
+	results := make([]HealthMetrics, len(groups))
+	for i, g := range groups {
+		failureCount, _ := strconv.Atoi(g.failuresCmd.Val())
+		successCount, _ := strconv.Atoi(g.successesCmd.Val())
+
+		circuitState := StateClosed
+		if val, err := g.stateCmd.Result(); err == nil && val != "" {
+			circuitState = CircuitState(val)
+		}
+
+		var lastFailureTime *int64
+		if val := g.lastFailureCmd.Val(); val != "" {
+			if ts, err := strconv.ParseInt(val, 10, 64); err == nil {
+				lastFailureTime = &ts
+			}
+		}
+
+		var avgLatency *int
+		if scores := g.latencyCmd.Val(); len(scores) > 0 {
+			sum := 0
+			for _, z := range scores {
+				sum += int(z.Score)
+			}
+			avg := sum / len(scores)
+			avgLatency = &avg
+		}
+
+		healthScore := 1.0
+		if val := g.scoreCmd.Val(); val != "" {
+			if score, err := strconv.ParseFloat(val, 64); err == nil {
+				healthScore = score
+			}
+		}
+
+		results[i] = HealthMetrics{
+			ProviderID:      g.pair.ProviderID,
+			Model:           g.pair.Model,
+			CircuitState:    circuitState,
+			FailureCount:    failureCount,
+			SuccessCount:    successCount,
+			LastFailureTime: lastFailureTime,
+			AverageLatency:  avgLatency,
+			HealthScore:     healthScore,
+		}
+	}
+	return results
 }
