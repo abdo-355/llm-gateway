@@ -650,14 +650,6 @@ func (r *Router) Execute(
 					logEvent = logEvent.Int("cached_tokens", resp.Usage.PromptTokensDetails.CachedTokens)
 				}
 			}
-			if quotaStatus := r.quotaService.GetModelQuotaStatus(ctx, attempt.ProviderID, attempt.Model, nil); quotaStatus.Rpm > 0 || quotaStatus.Tpm > 0 {
-				if quotaStatus.Rpm > 0 {
-					logEvent = logEvent.Int("quota_rpm", quotaStatus.Rpm)
-				}
-				if quotaStatus.Tpm > 0 {
-					logEvent = logEvent.Int("quota_tpm", quotaStatus.Tpm)
-				}
-			}
 			if cloudflareStats != nil {
 				logEvent = logEvent.
 					Int("cloudflare_cached_input_tokens", cloudflareStats.CachedInputTokens).
@@ -1031,14 +1023,6 @@ func (r *Router) ExecuteStream(
 						Int("output_tokens", streamUsage.CompletionTokens)
 					if streamUsage.PromptTokensDetails != nil && streamUsage.PromptTokensDetails.CachedTokens > 0 {
 						logEvent = logEvent.Int("cached_tokens", streamUsage.PromptTokensDetails.CachedTokens)
-					}
-				}
-				if quotaStatus := r.quotaService.GetModelQuotaStatus(ctx, attempt.ProviderID, attempt.Model, nil); quotaStatus.Rpm > 0 || quotaStatus.Tpm > 0 {
-					if quotaStatus.Rpm > 0 {
-						logEvent = logEvent.Int("quota_rpm", quotaStatus.Rpm)
-					}
-					if quotaStatus.Tpm > 0 {
-						logEvent = logEvent.Int("quota_tpm", quotaStatus.Tpm)
 					}
 				}
 				logEvent.Msg("Request completed")
