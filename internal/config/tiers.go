@@ -9,7 +9,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", Weight: 1.0},
 		{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.9},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-thinking", Weight: 0.5},
-		{Provider: "mistral", Model: "mistral-large-2512", Weight: 1.0},
 		{Provider: "nim", Model: "mistralai/mistral-large-3-675b-instruct-2512", Weight: 0.3},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-instruct", Weight: 0.9},
 

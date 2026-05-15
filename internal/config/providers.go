@@ -138,14 +138,12 @@ func getMistralConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"magistral-medium-2509",
-				"mistral-large-2512",
 				"mistral-medium-2508",
 				"mistral-small-2603",
 				"mistral-medium-3.5",
 			},
 			Limits: map[string]types.ModelLimits{
 				"magistral-medium-2509": {Rpm: &rpm4, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
-				"mistral-large-2512":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 				"mistral-medium-2508":   {Rpm: &rpm22, Tpm: &tpm356250},
 				"mistral-small-2603":    {Rpm: &rpm400, Tpm: &tpm1500000},
 				"mistral-medium-3.5":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
