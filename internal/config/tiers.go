@@ -7,15 +7,16 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Tier: types.TierDefault,
 		Entries: []types.TierEntry{
 			{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", Weight: 1.0},
-		{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.9},
+		{Provider: "mistral", Model: "mistral-small-2506", Weight: 1.0},
+		{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.45},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-thinking", Weight: 0.5},
 		{Provider: "nim", Model: "mistralai/mistral-large-3-675b-instruct-2512", Weight: 0.3},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-instruct", Weight: 0.9},
 
-		{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.9},
-		{Provider: "mistral", Model: "mistral-small-2506", Weight: 0.9},
-		{Provider: "mistral", Model: "mistral-saba-2502", Weight: 0.9},
-		{Provider: "mistral", Model: "open-mistral-nemo", Weight: 0.9},
+		{Provider: "mistral", Model: "open-mistral-nemo", Weight: 0.95},
+		{Provider: "mistral", Model: "ministral-14b-2512", Weight: 0.9},
+		{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.75},
+		{Provider: "mistral", Model: "mistral-saba-2502", Weight: 0.55},
 
 			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.8},
 			{Provider: "ollama", Model: "devstral-small-2:24b", Weight: 0.8},
@@ -76,7 +77,8 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Tier: types.TierPro,
 		Entries: []types.TierEntry{
 			{Provider: "nim", Model: "minimaxai/minimax-m2.5", Weight: 1.0},
-			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 1.0},
+			{Provider: "mistral", Model: "mistral-medium-2505", Weight: 0.95},
+			{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.9},
 			{Provider: "nim", Model: "stepfun-ai/step-3.5-flash", Weight: 0.9},
 			{Provider: "nim", Model: "z-ai/glm4.7", Weight: 0.9},
@@ -102,10 +104,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.8},
 			{Provider: "kilo", Model: "inclusionai/ling-2.6-1t:free", Weight: 0.8},
-			{Provider: "mistral", Model: "ministral-14b-2512", Weight: 0.9},
-			{Provider: "mistral", Model: "ministral-8b-2512", Weight: 0.9},
-			{Provider: "mistral", Model: "mistral-medium-2505", Weight: 0.9},
-			{Provider: "mistral", Model: "magistral-small-2509", Weight: 0.9},
+			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.75},
+			{Provider: "mistral", Model: "ministral-14b-2512", Weight: 0.65},
+			{Provider: "mistral", Model: "magistral-small-2509", Weight: 0.35},
 			{Provider: "cloudflare", Model: "@cf/google/gemma-4-26b-a4b-it", Weight: 0.8},
 			{Provider: "cloudflare", Model: "@cf/openai/gpt-oss-120b", Weight: 0.8},
 			{Provider: "cloudflare", Model: "@cf/nvidia/nemotron-3-120b-a12b", Weight: 0.8},
@@ -132,15 +133,18 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cloudflare", Model: "@cf/moonshotai/kimi-k2.5", Weight: 0.8},
 			{Provider: "nim", Model: "z-ai/glm5", Weight: 0.9},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.8},
-			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.85},
+			{Provider: "mistral", Model: "mistral-large-2411", Weight: 0.95},
 			{Provider: "nim", Model: "mistralai/mistral-medium-3.5-128b", Weight: 0.75},
+
+	{Provider: "mistral", Model: "magistral-medium-2509", Weight: 0.75},
+	{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.7},
 
 	{Provider: "ollama", Model: "minimax-m2.7", Weight: 0.9},
 
 	{Provider: "ollama", Model: "mistral-large-3:675b", Weight: 0.8},
 
-		{Provider: "mistral", Model: "mistral-large-2411", Weight: 0.9},
-		{Provider: "mistral", Model: "pixtral-large-2411", Weight: 0.9},
+		{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.55},
+		{Provider: "mistral", Model: "pixtral-large-2411", Weight: 0.35},
 
 		{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
 		},

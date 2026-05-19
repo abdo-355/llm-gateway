@@ -115,24 +115,21 @@ func getCerebrasConfig() types.ProviderConfig {
 }
 
 func getMistralConfig() types.ProviderConfig {
-	rpm4 := 4
-	rpm22 := 22
+	rpm5 := 5
+	rpm23 := 23
 	rpm25 := 25
+	rpm26 := 26
 	rpm30 := 30
+	rpm50 := 50
 	rpm60 := 60
-	rpm188 := 188
-	rpm200 := 200
-	rpm400 := 400
-	rpm750 := 750
+	rpm300 := 300
 	tpm50000 := 50000
 	tpm75000 := 75000
 	tpm356250 := 356250
 	tpm375000 := 375000
 	tpm600000 := 600000
-	tpm625000 := 625000
 	tpm937500 := 937500
-	tpm1300000 := 1300000
-	tpm1500000 := 1500000
+	tpm2250000 := 2250000
 	tpmu4000000 := 4000000
 	tpmu1000000000 := 1000000000
 	tpmu200000000000 := 200000000000
@@ -150,8 +147,6 @@ func getMistralConfig() types.ProviderConfig {
 				"magistral-medium-2509",
 				"magistral-small-2509",
 				"ministral-14b-2512",
-				"ministral-3b-2512",
-				"ministral-8b-2512",
 				"mistral-large-2411",
 				"mistral-medium-2505",
 				"mistral-medium-2508",
@@ -163,19 +158,17 @@ func getMistralConfig() types.ProviderConfig {
 				"pixtral-large-2411",
 			},
 			Limits: map[string]types.ModelLimits{
-				"magistral-medium-2509": {Rpm: &rpm4, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
-				"magistral-small-2509":  {Rpm: &rpm4, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
+				"magistral-medium-2509": {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
+				"magistral-small-2509":  {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
 				"ministral-14b-2512":    {Rpm: &rpm30, Tpm: &tpm937500},
-				"ministral-3b-2512":     {Rpm: &rpm750, Tpm: &tpm1300000},
-				"ministral-8b-2512":     {Rpm: &rpm188, Tpm: &tpm625000},
-				"mistral-large-2411":    {Rpm: &rpm25, Tpm: &tpm600000, Tpmu: &tpmu200000000000},
+				"mistral-large-2411":    {Rpm: &rpm26, Tpm: &tpm600000, Tpmu: &tpmu200000000000},
 				"mistral-medium-2505":   {Rpm: &rpm25, Tpm: &tpm375000},
-				"mistral-medium-2508":   {Rpm: &rpm22, Tpm: &tpm356250},
+				"mistral-medium-2508":   {Rpm: &rpm23, Tpm: &tpm356250},
 				"mistral-medium-3.5":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 				"mistral-saba-2502":     {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
-				"mistral-small-2506":    {Rpm: &rpm200, Tpm: &tpm1500000},
-				"mistral-small-2603":    {Rpm: &rpm400, Tpm: &tpm1500000},
-				"open-mistral-nemo":     {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
+				"mistral-small-2506":    {Rpm: &rpm300, Tpm: &tpm2250000},
+				"mistral-small-2603":    {Rpm: &rpm50, Tpm: &tpm50000},
+				"open-mistral-nemo":     {Rpm: &rpm30, Tpm: &tpm937500},
 				"pixtral-large-2411":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 			},
 		},
