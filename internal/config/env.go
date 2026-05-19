@@ -30,7 +30,6 @@ type EnvConfig struct {
 	ZaiAPIKey           string
 	LLM7APIKey          string
 	CohereAPIKey        string
-	OciAPIKey           string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -172,7 +171,6 @@ func LoadEnv() (*EnvConfig, error) {
 		ZaiAPIKey:           os.Getenv("ZAI_API_KEY"),
 		LLM7APIKey:          os.Getenv("LLM7_API_KEY"),
 		CohereAPIKey:        os.Getenv("COHERE_API_KEY"),
-		OciAPIKey:           os.Getenv("OCI_API_KEY"),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
 		RateLimitGlobal:     rateLimitGlobal,

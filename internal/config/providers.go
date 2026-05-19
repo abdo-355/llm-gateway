@@ -15,7 +15,6 @@ func GetProviders() []types.ProviderConfig {
 		getZaiConfig(),
 		getLLM7Config(),
 		getCohereConfig(),
-		getOciConfig(),
 	}
 }
 
@@ -175,7 +174,6 @@ func GetCertifications() []types.Certification {
 		{Provider: "kilo", Model: "kilo-auto/free", StrictSchema: true},
 		{Provider: "llm7", Model: "fast", StrictSchema: true},
 		{Provider: "llm7", Model: "default", StrictSchema: true},
-		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
 		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
@@ -681,46 +679,6 @@ func getCohereConfig() types.ProviderConfig {
 		ProviderType: "cohere",
 	}
 }
-
-func getOciConfig() types.ProviderConfig {
-	return types.ProviderConfig{
-		ID:      "oci",
-		BaseURL: "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/openai/v1",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "OCI_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"meta.llama-3.3-70b-instruct",
-				"openai.gpt-oss-120b",
-			},
-		Limits: map[string]types.ModelLimits{
-			"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(20)},
-			"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(20)},
-		},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits:       types.ProviderLimits{},
-		ProviderType: "openai",
-	}
-}
-
 func boolPtr(b bool) *bool {
 	return &b
 }

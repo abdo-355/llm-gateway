@@ -63,8 +63,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "cohere", Model: "command-r7b-12-2024", Weight: 0.5},
 
-			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 1.0},
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -111,7 +109,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
 
 
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),
