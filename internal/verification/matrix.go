@@ -88,8 +88,9 @@ func BuildProbes(cfg Config) []Probe {
 		},
 
 		{
-			Name:   "stream",
-			Fields: []string{"stream", "stream_options.include_usage"},
+			Name:       "stream",
+			Applicable: supportsStreaming,
+			Fields:     []string{"stream", "stream_options.include_usage"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:    combo.Model,
@@ -104,8 +105,9 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "json_object",
-			Fields: []string{"response_format.type=json_object"},
+			Name:       "json_object",
+			Applicable: supportsJSONOutput,
+			Fields:     []string{"response_format.type=json_object"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -118,8 +120,9 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "json_schema_strict",
-			Fields: []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
+			Name:       "json_schema_strict",
+			Applicable: supportsStrictJSON,
+			Fields:     []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -132,8 +135,9 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "logprobs",
-			Fields: []string{"logprobs", "top_logprobs"},
+			Name:       "logprobs",
+			Applicable: supportsLogprobs,
+			Fields:     []string{"logprobs", "top_logprobs"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:       combo.Model,
@@ -146,8 +150,9 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "multiple_choices",
-			Fields: []string{"n"},
+			Name:       "multiple_choices",
+			Applicable: supportsMultipleChoices,
+			Fields:     []string{"n"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:     combo.Model,
@@ -159,8 +164,9 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "tools",
-			Fields: []string{"tools", "tool_choice", "parallel_tool_calls"},
+			Name:       "tools",
+			Applicable: supportsTools,
+			Fields:     []string{"tools", "tool_choice", "parallel_tool_calls"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -198,8 +204,33 @@ func resolveEndpoint(provider types.ProviderConfig) string {
 	return strings.TrimRight(baseURL, "/") + "/chat/completions"
 }
 
+func resolveCapabilities(combo Combo) types.ProviderCapabilities {
+	resolved := combo.Provider.Capabilities
+	overrides, ok := combo.Provider.Models.Capabilities[combo.Model]
+	if !ok {
+		return resolved
+	}
+	if overrides.Streaming != nil {
+		resolved.Streaming = *overrides.Streaming
+	}
+	if overrides.Tools != nil {
+		resolved.Tools = *overrides.Tools
+	}
+	if overrides.StructuredOutputs != nil {
+		resolved.StructuredOutputs = *overrides.StructuredOutputs
+	}
+	if overrides.Logprobs != nil {
+		resolved.Logprobs = *overrides.Logprobs
+	}
+	if overrides.MultipleChoices != nil {
+		resolved.MultipleChoices = *overrides.MultipleChoices
+	}
+	return resolved
+}
+
 func supportsJSONOutput(combo Combo) bool {
-	switch combo.Provider.Capabilities.StructuredOutputs {
+	caps := resolveCapabilities(combo)
+	switch caps.StructuredOutputs {
 	case "none", "unknown":
 		return false
 	default:
@@ -211,7 +242,23 @@ func supportsStrictJSON(combo Combo) bool {
 	if combo.StrictJSONCertified {
 		return true
 	}
-	return combo.Provider.Capabilities.StructuredOutputs == "json_schema_strict"
+	return resolveCapabilities(combo).StructuredOutputs == "json_schema_strict"
+}
+
+func supportsStreaming(combo Combo) bool {
+	return resolveCapabilities(combo).Streaming
+}
+
+func supportsTools(combo Combo) bool {
+	return resolveCapabilities(combo).Tools
+}
+
+func supportsLogprobs(combo Combo) bool {
+	return resolveCapabilities(combo).Logprobs
+}
+
+func supportsMultipleChoices(combo Combo) bool {
+	return resolveCapabilities(combo).MultipleChoices
 }
 
 func basicMessages(prompt string) []types.OpenAIMessage {

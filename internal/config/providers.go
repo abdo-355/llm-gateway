@@ -716,12 +716,24 @@ func getOciConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"google.gemini-2.5-pro",
+				"google.gemini-2.5-flash",
+				"google.gemini-2.5-flash-lite",
 				"meta.llama-3.3-70b-instruct",
 				"openai.gpt-oss-120b",
+				"openai.gpt-oss-20b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"meta.llama-3.3-70b-instruct": {MaxConcurrent: intPtr(20)},
-				"openai.gpt-oss-120b":         {MaxConcurrent: intPtr(20)},
+				"google.gemini-2.5-pro":        {MaxConcurrent: intPtr(20)},
+				"google.gemini-2.5-flash":      {MaxConcurrent: intPtr(20)},
+				"google.gemini-2.5-flash-lite": {MaxConcurrent: intPtr(20)},
+				"meta.llama-3.3-70b-instruct":  {MaxConcurrent: intPtr(20)},
+				"openai.gpt-oss-120b":          {MaxConcurrent: intPtr(20)},
+				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(20)},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"openai.gpt-oss-120b": {StructuredOutputs: strPtr("none")},
+				"openai.gpt-oss-20b":  {StructuredOutputs: strPtr("none")},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -746,4 +758,8 @@ func getOciConfig() types.ProviderConfig {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func strPtr(s string) *string {
+	return &s
 }

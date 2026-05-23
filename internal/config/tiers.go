@@ -67,8 +67,12 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "cohere", Model: "command-r7b-12-2024", Weight: 0.5},
 
-			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 1.0},
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
+			{Provider: "oci", Model: "google.gemini-2.5-pro",        Weight: 1.0},
+			{Provider: "oci", Model: "google.gemini-2.5-flash",      Weight: 1.0},
+			{Provider: "oci", Model: "google.gemini-2.5-flash-lite", Weight: 1.0},
+			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct",  Weight: 1.0},
+			{Provider: "oci", Model: "openai.gpt-oss-120b",          Weight: 1.0},
+			{Provider: "oci", Model: "openai.gpt-oss-20b",           Weight: 1.0},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
