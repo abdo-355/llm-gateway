@@ -487,6 +487,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"llama3.3:70b",
 				"qwen3-next:80b",
 				"devstral-small-2:24b",
 				"gemma4:31b",
@@ -516,6 +517,7 @@ func getOllamaConfig() types.ProviderConfig {
 		"mistral-large-3:675b",
 		},
 			Limits: map[string]types.ModelLimits{
+				"llama3.3:70b":              {MaxConcurrent: &conc1},
 				"qwen3-next:80b":            {MaxConcurrent: &conc1},
 				"devstral-small-2:24b":      {MaxConcurrent: &conc1},
 				"gemma4:31b":                {MaxConcurrent: &conc1},

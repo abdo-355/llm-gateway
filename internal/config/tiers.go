@@ -13,24 +13,24 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		{Provider: "nim", Model: "mistralai/mistral-large-3-675b-instruct-2512", Weight: 0.3},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-instruct", Weight: 0.9},
 
-		{Provider: "mistral", Model: "open-mistral-nemo", Weight: 0.95},
+		{Provider: "mistral", Model: "open-mistral-nemo", Weight: 0.70},
 		{Provider: "mistral", Model: "ministral-14b-2512", Weight: 0.9},
 		{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.75},
 		{Provider: "mistral", Model: "mistral-saba-2502", Weight: 0.55},
 
-			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.8},
+			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.72},
 			{Provider: "ollama", Model: "devstral-small-2:24b", Weight: 0.8},
 			{Provider: "ollama", Model: "gemma4:31b", Weight: 0.8},
-			{Provider: "ollama", Model: "gemma3:27b", Weight: 0.8},
-			{Provider: "ollama", Model: "gemma3:12b", Weight: 0.8},
+			{Provider: "ollama", Model: "gemma3:27b", Weight: 0.62},
+			{Provider: "ollama", Model: "gemma3:12b", Weight: 0.58},
 			{Provider: "ollama", Model: "nemotron-3-nano:30b", Weight: 0.8},
-			{Provider: "ollama", Model: "gpt-oss:20b", Weight: 0.8},
+			{Provider: "ollama", Model: "gpt-oss:20b", Weight: 0.72},
 
 			{Provider: "kilo", Model: "kilo-auto/free", Weight: 0.8},
 			{Provider: "kilo", Model: "stepfun/step-3.5-flash:free", Weight: 0.8},
 			{Provider: "kilo", Model: "inclusionai/ling-2.6-flash:free", Weight: 0.8},
 
-			{Provider: "ollama", Model: "gemma3:4b", Weight: 0.7},
+			{Provider: "ollama", Model: "gemma3:4b", Weight: 0.45},
 			{Provider: "ollama", Model: "ministral-3:14b", Weight: 0.7},
 			{Provider: "ollama", Model: "ministral-3:8b", Weight: 0.7},
 			{Provider: "ollama", Model: "ministral-3:3b", Weight: 0.7},
@@ -51,8 +51,8 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cloudflare", Model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", Weight: 0.7},
 
 			{Provider: "cloudflare", Model: "@cf/ibm-granite/granite-4.0-h-micro", Weight: 0.6},
-			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-3b-instruct", Weight: 0.5},
-			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-1b-instruct", Weight: 0.5},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-3b-instruct", Weight: 0.42},
+			{Provider: "cloudflare", Model: "@cf/meta/llama-3.2-1b-instruct", Weight: 0.35},
 
 			{Provider: "opencode", Model: "big-pickle", Weight: 0.6},
 			{Provider: "opencode", Model: "deepseek-v4-flash-free", Weight: 0.6},
@@ -67,12 +67,11 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "cohere", Model: "command-r7b-12-2024", Weight: 0.5},
 
-			{Provider: "oci", Model: "google.gemini-2.5-pro",        Weight: 1.0},
-			{Provider: "oci", Model: "google.gemini-2.5-flash",      Weight: 1.0},
-			{Provider: "oci", Model: "google.gemini-2.5-flash-lite", Weight: 1.0},
-			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct",  Weight: 1.0},
-			{Provider: "oci", Model: "openai.gpt-oss-120b",          Weight: 1.0},
-			{Provider: "oci", Model: "openai.gpt-oss-20b",           Weight: 1.0},
+			{Provider: "oci", Model: "google.gemini-2.5-flash",       Weight: 0.90},
+			{Provider: "oci", Model: "openai.gpt-oss-20b",            Weight: 0.86},
+			{Provider: "oci", Model: "google.gemini-2.5-flash-lite",  Weight: 0.78},
+			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct",   Weight: 0.72},
+			{Provider: "ollama", Model: "llama3.3:70b",               Weight: 0.72},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -122,7 +121,9 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 
 			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.6},
 
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 1.0},
+			{Provider: "oci", Model: "openai.gpt-oss-120b",           Weight: 0.86},
+			{Provider: "oci", Model: "google.gemini-2.5-pro",         Weight: 0.82},
+			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct",   Weight: 0.78},
 
 		},
 		SLO: &types.TierSLO{
