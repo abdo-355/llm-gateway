@@ -88,9 +88,8 @@ func BuildProbes(cfg Config) []Probe {
 		},
 
 		{
-			Name:       "stream",
-			Applicable: supportsStreaming,
-			Fields:     []string{"stream", "stream_options.include_usage"},
+			Name:   "stream",
+			Fields: []string{"stream", "stream_options.include_usage"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:    combo.Model,
@@ -105,24 +104,34 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "json_object",
-			Applicable: supportsJSONOutput,
-			Fields:     []string{"response_format.type=json_object"},
+			Name:   "json_object",
+			Fields: []string{"response_format.type=json_object"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				caps := resolveCapabilities(combo)
+				supportsNative := caps.StructuredOutputs != "none" && caps.StructuredOutputs != "unknown"
+
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
-					Messages:            basicMessages("Return a JSON object with key ok set to true."),
 					Stream:              boolPtr(false),
-					ResponseFormat:      &types.ResponseFormat{Type: "json_object"},
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
+
+				if supportsNative {
+					req.Messages = basicMessages("Return a JSON object with key ok set to true.")
+					req.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
+				} else {
+					req.Messages = []types.OpenAIMessage{
+						{Role: "system", Content: "Respond in valid JSON format."},
+						{Role: "user", Content: "Return a JSON object with key ok set to true. No markdown, no explanation."},
+					}
+				}
+
 				return r.runJSONProbe(combo, "json_object", []string{"response_format.type=json_object"}, req, validateJSONObjectChat)
 			},
 		},
 		{
-			Name:       "json_schema_strict",
-			Applicable: supportsStrictJSON,
-			Fields:     []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
+			Name:   "json_schema_strict",
+			Fields: []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
@@ -135,9 +144,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "logprobs",
-			Applicable: supportsLogprobs,
-			Fields:     []string{"logprobs", "top_logprobs"},
+			Name:   "logprobs",
+			Fields: []string{"logprobs", "top_logprobs"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:       combo.Model,
@@ -150,9 +158,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "multiple_choices",
-			Applicable: supportsMultipleChoices,
-			Fields:     []string{"n"},
+			Name:   "multiple_choices",
+			Fields: []string{"n"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:     combo.Model,
@@ -164,9 +171,8 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:       "tools",
-			Applicable: supportsTools,
-			Fields:     []string{"tools", "tool_choice", "parallel_tool_calls"},
+			Name:   "tools",
+			Fields: []string{"tools", "tool_choice", "parallel_tool_calls"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
