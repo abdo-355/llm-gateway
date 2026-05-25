@@ -7,7 +7,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Tier: types.TierDefault,
 		Entries: []types.TierEntry{
 			{Provider: "cerebras", Model: "qwen-3-235b-a22b-instruct-2507", Weight: 1.0},
-		{Provider: "mistral", Model: "mistral-small-2506", Weight: 1.0},
+		{Provider: "mistral", Model: "mistral-small-2506", Weight: 0.9},
 		{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.45},
 		{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-thinking", Weight: 0.5},
 		{Provider: "nim", Model: "mistralai/mistral-large-3-675b-instruct-2512", Weight: 0.3},
