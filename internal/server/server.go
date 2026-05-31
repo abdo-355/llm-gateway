@@ -54,7 +54,7 @@ func New(svc Services) *Server {
 
 	completionsHandler := handlers.NewCompletionsHandler(svc.Router)
 	responsesHandler := handlers.NewResponsesHandler(svc.Router)
-	healthHandler := handlers.NewHealthHandler(svc.Health)
+	healthHandler := handlers.NewHealthHandler()
 
 	r.GET("/health", healthHandler.Handle)
 

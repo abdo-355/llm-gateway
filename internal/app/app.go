@@ -45,7 +45,7 @@ func New(ctx context.Context) (*App, error) {
 	handlers := &Handlers{
 		Completions: handlers.NewCompletionsHandler(routerSvc),
 		Responses:   handlers.NewResponsesHandler(routerSvc),
-		Health:      handlers.NewHealthHandler(healthSvc),
+		Health:      handlers.NewHealthHandler(),
 	}
 
 	srv := server.New(server.Services{
