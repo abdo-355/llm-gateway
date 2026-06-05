@@ -159,8 +159,8 @@ func TestRunPreservesNonRateLimitFailures(t *testing.T) {
 	}
 
 	report, err := runWithClient(context.Background(), Config{
-		Provider: "cerebras",
-		Model:    "qwen-3-235b-a22b-instruct-2507",
+		Provider: "groq",
+		Model:    "qwen/qwen3-32b",
 		Timeout:  time.Second,
 	}, client)
 
