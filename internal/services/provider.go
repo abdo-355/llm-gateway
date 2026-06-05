@@ -23,6 +23,8 @@ type ProviderService struct {
 	rawResponseLogs rawProviderResponseLogConfig
 }
 
+const upstreamProviderFailureMessage = "Upstream provider request failed"
+
 func NewProviderService() *ProviderService {
 	return &ProviderService{
 		httpClient: &http.Client{
@@ -307,11 +309,11 @@ func (s *ProviderService) convertToGatewayError(err error) *types.GatewayError {
 		return &types.GatewayError{
 			Type:    "provider_error",
 			Code:    "PROVIDER_ERROR",
-			Message: e.Message,
-			Details: map[string]any{"headers": e.Headers, "status_code": e.StatusCode},
+			Message: upstreamProviderFailureMessage,
+			Details: map[string]any{"status_code": e.StatusCode},
 		}
 	default:
-		return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: err.Error()}
+		return &types.GatewayError{Type: "provider_error", Code: "UNKNOWN", Message: upstreamProviderFailureMessage}
 	}
 }
 

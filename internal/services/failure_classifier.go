@@ -115,6 +115,11 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		decision.BackoffMs = c.calculateBackoff(ctx.AttemptIndex)
 		decision.Reason = "provider server error, retrying"
 
+	case types.CategoryProvider4xx:
+		decision.Action = types.ActionFailover
+		decision.IsRetryable = false
+		decision.Reason = "provider configuration or model availability issue, trying different provider"
+
 	case types.CategoryParse, types.CategoryEmpty:
 		decision.Action = types.ActionFailover
 		decision.Reason = "parsing/empty response issue, trying different provider"
@@ -155,7 +160,7 @@ func (c *DefaultFailureClassifier) isRetryable(category types.FailureCategory) b
 		return true
 	case types.CategoryRateLimit:
 		return true
-	case types.CategoryPayment, types.CategoryValidation:
+	case types.CategoryProvider4xx, types.CategoryPayment, types.CategoryValidation:
 		return false
 	default:
 		return true

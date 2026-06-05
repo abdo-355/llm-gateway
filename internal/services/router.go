@@ -217,9 +217,9 @@ func (r *Router) FilterCandidates(
 
 	// Phase 1: Non-Redis capability checks. Collect candidates that need Redis checks.
 	type redisCandidate struct {
-		candidate       types.RoutingCandidate
-		caps            types.ProviderCapabilities
-		modelLimits     types.ModelLimits
+		candidate   types.RoutingCandidate
+		caps        types.ProviderCapabilities
+		modelLimits types.ModelLimits
 	}
 	var redisCandidates []redisCandidate
 
@@ -320,7 +320,9 @@ func (r *Router) FilterCandidates(
 
 	// Batch circuit state check.
 	var circuitStates map[string]CircuitState
-	if hs, ok := r.healthService.(interface{ BatchCircuitStates(context.Context, []ProviderModelPair) map[string]CircuitState }); ok {
+	if hs, ok := r.healthService.(interface {
+		BatchCircuitStates(context.Context, []ProviderModelPair) map[string]CircuitState
+	}); ok {
 		circuitStates = hs.BatchCircuitStates(ctx, pairs)
 	}
 
@@ -412,7 +414,9 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 	}
 	batchResults := make([]batchHealthResult, len(candidates))
 
-	if hs, ok := r.healthService.(interface{ BatchGetHealthMetrics(context.Context, []ProviderModelPair) []HealthMetrics }); ok {
+	if hs, ok := r.healthService.(interface {
+		BatchGetHealthMetrics(context.Context, []ProviderModelPair) []HealthMetrics
+	}); ok {
 		pairs := make([]ProviderModelPair, len(candidates))
 		for i, c := range candidates {
 			pairs[i] = ProviderModelPair{ProviderID: c.Provider.ID, Model: c.Model}
@@ -617,6 +621,13 @@ func (r *Router) Execute(
 					Str("model", attempt.Model).
 					Err(err).
 					Msg("Concurrency slot unavailable")
+				attemptChain = append(attemptChain, map[string]any{
+					"provider":       attempt.ProviderID,
+					"model":          attempt.Model,
+					"failure_kind":   "concurrency_denied",
+					"failure_action": string(types.ActionFailover),
+					"failure_reason": "concurrency slot unavailable, trying different provider",
+				})
 				continue
 			}
 			concurrencyAcquired = true
@@ -639,24 +650,24 @@ func (r *Router) Execute(
 		cancel()
 
 		if concurrencyAcquired {
-			r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
+			r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 		}
 
 		latencyMs := time.Since(startTime).Milliseconds()
 
 		if err == nil {
-		r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
-		if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
-			cooldownSec := cooldownMs / 1000
-			if cooldownSec < 1 {
-				cooldownSec = 1
+			if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
+				cooldownSec := cooldownMs / 1000
+				if cooldownSec < 1 {
+					cooldownSec = 1
+				}
+				r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
 			}
-			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
-		}
 
-		tokensUsed := 0
-		var cloudflareStats *CloudflareUsageStats
+			tokensUsed := 0
+			var cloudflareStats *CloudflareUsageStats
 			if resp.Usage != nil {
 				tokensUsed = resp.Usage.TotalTokens
 			} else {
@@ -807,6 +818,12 @@ func (r *Router) Execute(
 		case types.CategoryNetwork:
 			status = "network_error"
 			errorType = "network"
+		case types.CategoryProvider4xx:
+			status = "provider_4xx"
+			errorType = "provider_4xx"
+		case types.CategoryProvider5xx:
+			status = "provider_5xx"
+			errorType = "provider_5xx"
 		case types.CategoryParse:
 			status = "parse_error"
 			errorType = "parse"
@@ -924,11 +941,11 @@ func (r *Router) ExecuteStream(
 		tier := metrics.GetTier(ctx)
 		strategy := metrics.GetStrategy(ctx)
 
-	var previousProvider string
-	var hadFailure bool
-	var chunksSent bool
-	var outputTokenCount int
-	var failureKinds []types.FailureCategory
+		var previousProvider string
+		var hadFailure bool
+		var chunksSent bool
+		var outputTokenCount int
+		var failureKinds []types.FailureCategory
 		var streamUsage *types.Usage
 
 		for i, attempt := range plan.Attempts {
@@ -955,9 +972,10 @@ func (r *Router) ExecuteStream(
 				}
 			}
 
-		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+			concurrencyAcquired := false
 
-		if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
+			if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
 				if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
 					logger.Warn().
 						Str("type", "router").
@@ -967,13 +985,11 @@ func (r *Router) ExecuteStream(
 						Str("model", attempt.Model).
 						Err(err).
 						Msg("Concurrency slot unavailable")
-				cancel()
-				continue
+					cancel()
+					continue
+				}
+				concurrencyAcquired = true
 			}
-			defer func() {
-				r.quotaService.ReleaseConcurrencySlot(ctx, attempt.ProviderID, attempt.Model)
-			}()
-		}
 
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
@@ -1007,27 +1023,33 @@ func (r *Router) ExecuteStream(
 				case chunks <- chunk:
 				case <-ctx.Done():
 					cancel()
+					if concurrencyAcquired {
+						r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+					}
 					return
 				}
 			}
 
-		err := <-result.Err
-		cancel()
-
-		latencyMs := time.Since(startTime).Milliseconds()
-
-		if err == nil {
-			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
-
-		if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
-			cooldownSec := cooldownMs / 1000
-			if cooldownSec < 1 {
-				cooldownSec = 1
-			}
-			r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
+			err := <-result.Err
+			cancel()
+			if concurrencyAcquired {
+				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 			}
 
-			tokensUsed := 0
+			latencyMs := time.Since(startTime).Milliseconds()
+
+			if err == nil {
+				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+
+				if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
+					cooldownSec := cooldownMs / 1000
+					if cooldownSec < 1 {
+						cooldownSec = 1
+					}
+					r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, "success", cooldownSec)
+				}
+
+				tokensUsed := 0
 				if streamUsage != nil && streamUsage.TotalTokens > 0 {
 					tokensUsed = streamUsage.TotalTokens
 				} else {
@@ -1142,6 +1164,12 @@ func (r *Router) ExecuteStream(
 			case types.CategoryTimeout:
 				status = "timeout"
 				errorType = "timeout"
+			case types.CategoryProvider4xx:
+				status = "provider_4xx"
+				errorType = "provider_4xx"
+			case types.CategoryProvider5xx:
+				status = "provider_5xx"
+				errorType = "provider_5xx"
 			default:
 				status = "error"
 				errorType = "unknown"
@@ -1159,13 +1187,13 @@ func (r *Router) ExecuteStream(
 				Str("model", attempt.Model).
 				Str("failure_category", string(decision.Category)).
 				Str("failure_action", string(decision.Action)).
-		Str("failure_reason", decision.Reason).
-		Err(err).
-		Msg("Provider attempt failed")
+				Str("failure_reason", decision.Reason).
+				Err(err).
+				Msg("Provider attempt failed")
 
-	failureKinds = append(failureKinds, decision.Category)
+			failureKinds = append(failureKinds, decision.Category)
 
-	ttfbRecorded = false
+			ttfbRecorded = false
 
 			if err.Code == "RATE_LIMITED" {
 				rateLimitErr := r.gatewayErrorToTypedError(err).(*errors.RateLimitError)
@@ -1227,22 +1255,22 @@ func (r *Router) ExecuteStream(
 					r.cooldownService.ApplyCooldownForReason(ctx, attempt.ProviderID, attempt.Model, reason, retryAfter)
 				}
 			}
-	}
+		}
 
-	if allStreamFailuresRateLimited(failureKinds) {
-		errChan <- &types.GatewayError{
-			Type:    "gateway_error",
-			Code:    "RATE_LIMITED",
-			Message: "All provider attempts failed due to rate limits or quota",
+		if allStreamFailuresRateLimited(failureKinds) {
+			errChan <- &types.GatewayError{
+				Type:    "gateway_error",
+				Code:    "RATE_LIMITED",
+				Message: "All provider attempts failed due to rate limits or quota",
+			}
+		} else {
+			errChan <- &types.GatewayError{
+				Type:    "gateway_error",
+				Code:    "ALL_ATTEMPTS_FAILED",
+				Message: "All provider attempts failed",
+			}
 		}
-	} else {
-		errChan <- &types.GatewayError{
-			Type:    "gateway_error",
-			Code:    "ALL_ATTEMPTS_FAILED",
-			Message: "All provider attempts failed",
-		}
-	}
-}()
+	}()
 
 	return types.StreamResult{
 		Chunks: chunks,
@@ -1308,6 +1336,19 @@ func (r *Router) gatewayErrorToTypedError(ge *types.GatewayError) error {
 			limitType = details
 		}
 		return errors.NewModelQuotaExceededError(ge.Message, providerID, model, limitType)
+	case "PROVIDER_ERROR":
+		statusCode := 500
+		if details, ok := ge.Details["status_code"].(int); ok && details > 0 {
+			statusCode = details
+		}
+		if details, ok := ge.Details["status_code"].(float64); ok && details > 0 {
+			statusCode = int(details)
+		}
+		return &errors.ProviderError{
+			Message:     upstreamProviderFailureMessage,
+			StatusCode:  statusCode,
+			IsRetryable: statusCode >= 500,
+		}
 	default:
 		// Provider errors - check if retryable based on code
 		isRetryable := ge.Code == "REQUEST_FAILED" || ge.Code == "STREAM_PARSE_FAILED"
@@ -1519,11 +1560,21 @@ func (r *Router) CreateGatewayError(err error, attempts int, requestID string) *
 				"attempts": attempts,
 			},
 		}
+	case *errors.ProviderError:
+		return &types.GatewayError{
+			Type:    "upstream_error",
+			Code:    "PROVIDER_ERROR",
+			Message: upstreamProviderFailureMessage,
+			Details: map[string]any{
+				"attempts":    attempts,
+				"status_code": e.StatusCode,
+			},
+		}
 	default:
 		return &types.GatewayError{
 			Type:    "upstream_error",
 			Code:    "PROVIDER_ERROR",
-			Message: err.Error(),
+			Message: upstreamProviderFailureMessage,
 			Details: map[string]any{
 				"attempts": attempts,
 			},
@@ -1612,6 +1663,12 @@ func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 		}
 	}
 	return 0
+}
+
+func (r *Router) releaseConcurrencySlot(providerID, model string) {
+	releaseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	r.quotaService.ReleaseConcurrencySlot(releaseCtx, providerID, model)
 }
 
 func (r *Router) lookupModelCooldownMs(providerID, model string) int {

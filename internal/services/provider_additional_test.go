@@ -163,6 +163,25 @@ func TestProviderCallProvider_RateLimitHeaderExtraction(t *testing.T) {
 	}
 }
 
+func TestProviderConvertToGatewayError_SanitizesProviderError(t *testing.T) {
+	svc := newProviderService()
+
+	gatewayErr := svc.convertToGatewayError(&errors.ProviderError{
+		Message:    `HTTP error 404: {"detail":"Function abc not found for account xyz"}`,
+		StatusCode: http.StatusNotFound,
+		Headers:    map[string]string{"x-request-id": "provider-request"},
+	})
+
+	require.NotNil(t, gatewayErr)
+	assert.Equal(t, "provider_error", gatewayErr.Type)
+	assert.Equal(t, "PROVIDER_ERROR", gatewayErr.Code)
+	assert.Equal(t, "Upstream provider request failed", gatewayErr.Message)
+	assert.Equal(t, http.StatusNotFound, gatewayErr.Details["status_code"])
+	assert.NotContains(t, gatewayErr.Message, "Function abc")
+	assert.NotContains(t, gatewayErr.Message, "account xyz")
+	assert.NotContains(t, gatewayErr.Details, "headers")
+}
+
 // ---------------------------------------------------------------------------
 // Streaming Provider Tests (from TypeScript - missing in Go)
 // ---------------------------------------------------------------------------

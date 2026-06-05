@@ -809,6 +809,39 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "provider-b", result.ProviderID)
 	})
 
+	t.Run("provider 4xx fails over", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+
+		providerErr := &errors.ProviderError{Message: "model unavailable", StatusCode: http.StatusNotFound, IsRetryable: false}
+		content := "ok"
+		resp := &types.ChatCompletionResponse{
+			ID: "id-4xx", Model: "model-3",
+			Usage:   &types.Usage{TotalTokens: 20},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		gomock.InOrder(
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr),
+			mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1"),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil),
+			mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any()),
+			mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 20).Return(nil),
+		)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-4xx")
+		require.NoError(t, err)
+		assert.Equal(t, 2, result.Attempts)
+		assert.Equal(t, "provider-b", result.ProviderID)
+	})
+
 	t.Run("all attempts fail", func(t *testing.T) {
 		r, _, mockHealth, mockProvider := newTestRouter(t)
 
@@ -853,6 +886,40 @@ func TestExecute(t *testing.T) {
 		gatewayErr, ok := err.(*types.GatewayError)
 		require.True(t, ok)
 		assert.Equal(t, "PAYMENT_REQUIRED", gatewayErr.Code)
+	})
+
+	t.Run("concurrency denied is included in attempt details", func(t *testing.T) {
+		cfg := testConfig()
+		maxConcurrent := 1
+		cfg.Providers[0].Models.Limits["model-1"] = types.ModelLimits{MaxConcurrent: &maxConcurrent}
+
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+
+		mockQuota.EXPECT().AcquireConcurrencySlot(gomock.Any(), "provider-a", "model-1", 1).Return(assert.AnError)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 1,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-concurrency")
+		assert.Nil(t, result)
+		require.Error(t, err)
+		gatewayErr, ok := err.(*types.GatewayError)
+		require.True(t, ok)
+		assert.Equal(t, "ALL_ATTEMPTS_FAILED", gatewayErr.Code)
+
+		attempts, ok := gatewayErr.Details["attempts"].([]map[string]any)
+		require.True(t, ok)
+		require.Len(t, attempts, 1)
+		assert.Equal(t, "concurrency_denied", attempts[0]["failure_kind"])
+		assert.Equal(t, string(types.ActionFailover), attempts[0]["failure_action"])
 	})
 }
 

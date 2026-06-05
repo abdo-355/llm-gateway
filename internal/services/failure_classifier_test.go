@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
@@ -87,4 +88,26 @@ func TestFailureClassifier_CategorizeRawContextCanceledAsTimeout(t *testing.T) {
 	assert.Equal(t, types.CategoryTimeout, decision.Category)
 	assert.Equal(t, types.ActionFailover, decision.Action)
 	assert.Equal(t, "provider request timed out, trying different provider", decision.Reason)
+}
+
+func TestFailureClassifier_ClassifyProvider4xxFailsOver(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+
+	for _, statusCode := range []int{401, 403, 404, 410} {
+		t.Run(fmt.Sprintf("status_%d", statusCode), func(t *testing.T) {
+			decision := classifier.Classify(&errors.ProviderError{
+				Message:    "raw upstream body",
+				StatusCode: statusCode,
+			}, types.FailureContext{
+				AttemptIndex:       0,
+				MaxAttempts:        2,
+				HasRemainingBudget: true,
+			})
+
+			assert.Equal(t, types.CategoryProvider4xx, decision.Category)
+			assert.Equal(t, types.ActionFailover, decision.Action)
+			assert.False(t, decision.IsRetryable)
+			assert.Equal(t, "provider configuration or model availability issue, trying different provider", decision.Reason)
+		})
+	}
 }

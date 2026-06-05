@@ -171,6 +171,8 @@ func writeExecutionError(c *gin.Context, err error) {
 		status = http.StatusServiceUnavailable
 	case "NETWORK_ERROR":
 		status = http.StatusBadGateway
+	case "PROVIDER_ERROR":
+		status = http.StatusBadGateway
 	case "PARSE_ERROR", "EMPTY_RESPONSE":
 		status = http.StatusBadGateway
 	case "PAYMENT_REQUIRED":

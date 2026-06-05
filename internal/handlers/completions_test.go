@@ -232,6 +232,25 @@ func TestCompletions_ExecuteGenericError(t *testing.T) {
 	assert.NotEmpty(t, errObj["request_id"])
 }
 
+func TestCompletions_ExecuteProviderError(t *testing.T) {
+	router := &mockRouter{
+		executeFn: func(_ context.Context, _ types.RoutingPlan, _ types.ChatCompletionRequest, _ string) (*types.ExecutionResult, error) {
+			return nil, &types.GatewayError{
+				Type:    "upstream_error",
+				Code:    "PROVIDER_ERROR",
+				Message: "Upstream provider request failed",
+			}
+		},
+	}
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(validRequestBody()))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+}
+
 func TestCompletions_TierResolution(t *testing.T) {
 	tierCalled := false
 	router := &mockRouter{

@@ -327,10 +327,11 @@ func TestCreateGatewayError_EdgeCases(t *testing.T) {
 		assert.Equal(t, "upstream_error", err.Type)
 	})
 
-	t.Run("preserves error message", func(t *testing.T) {
+	t.Run("sanitizes provider error message", func(t *testing.T) {
 		customErr := &errors.ProviderError{Message: "Custom error message", StatusCode: 500, IsRetryable: true}
 		gatewayErr := r.CreateGatewayError(customErr, 1, "req-123")
-		assert.Contains(t, gatewayErr.Message, "Custom error message")
+		assert.Equal(t, "Upstream provider request failed", gatewayErr.Message)
+		assert.NotContains(t, gatewayErr.Message, "Custom error message")
 	})
 
 	t.Run("includes attempts in details", func(t *testing.T) {
