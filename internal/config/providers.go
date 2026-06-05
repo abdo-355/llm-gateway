@@ -20,10 +20,20 @@ func GetProviders() []types.ProviderConfig {
 }
 
 func getGroqConfig() types.ProviderConfig {
+	rpm60 := 60
 	rpm30 := 30
+	rpd7000 := 7000
+	rpd14400 := 14400
 	rpd1000 := 1000
+	rpd250 := 250
+	tpm6000 := 6000
 	tpm8000 := 8000
+	tpm12000 := 12000
+	tpm30000 := 30000
+	tpm70000 := 70000
+	tpd100000 := 100000
 	tpd200000 := 200000
+	tpd500000 := 500000
 
 	return types.ProviderConfig{
 		ID:      "groq",
@@ -35,15 +45,31 @@ func getGroqConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"allam-2-7b",
+				"groq/compound",
+				"groq/compound-mini",
+				"llama-3.1-8b-instant",
+				"llama-3.3-70b-versatile",
+				"meta-llama/llama-4-scout-17b-16e-instruct",
 				"openai/gpt-oss-120b",
+				"openai/gpt-oss-20b",
+				"qwen/qwen3-32b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"openai/gpt-oss-120b": {
-					Rpm: &rpm30,
-					Rpd: &rpd1000,
-					Tpm: &tpm8000,
-					Tpd: &tpd200000,
-				},
+				"allam-2-7b":                                {Rpm: &rpm30, Rpd: &rpd7000, Tpm: &tpm6000, Tpd: &tpd500000},
+				"groq/compound":                             {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
+				"groq/compound-mini":                        {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
+				"llama-3.1-8b-instant":                      {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm6000, Tpd: &tpd500000},
+				"llama-3.3-70b-versatile":                   {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm12000, Tpd: &tpd100000},
+				"meta-llama/llama-4-scout-17b-16e-instruct": {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm30000, Tpd: &tpd500000},
+				"openai/gpt-oss-120b":                       {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
+				"openai/gpt-oss-20b":                        {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
+				"qwen/qwen3-32b":                            {Rpm: &rpm60, Rpd: &rpd1000, Tpm: &tpm6000, Tpd: &tpd500000},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"allam-2-7b":         {Tools: boolPtr(false), StructuredOutputs: strPtr("none")},
+				"groq/compound":      {StructuredOutputs: strPtr("none")},
+				"groq/compound-mini": {StructuredOutputs: strPtr("none")},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -67,8 +93,8 @@ func getGroqConfig() types.ProviderConfig {
 
 func getCerebrasConfig() types.ProviderConfig {
 	rpm5 := 5
-	rph900 := 900
-	rpd14400 := 14400
+	rph150 := 150
+	rpd2400 := 2400
 	tpm30000 := 30000
 	tph1000000 := 1000000
 	tpd1000000 := 1000000
@@ -83,17 +109,12 @@ func getCerebrasConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"qwen-3-235b-a22b-instruct-2507",
+				"gpt-oss-120b",
+				"zai-glm-4.7",
 			},
 			Limits: map[string]types.ModelLimits{
-				"qwen-3-235b-a22b-instruct-2507": {
-					Rpm: &rpm5,
-					Rph: &rph900,
-					Rpd: &rpd14400,
-					Tpm: &tpm30000,
-					Tph: &tph1000000,
-					Tpd: &tpd1000000,
-				},
+				"gpt-oss-120b": {Rpm: &rpm5, Rph: &rph150, Rpd: &rpd2400, Tpm: &tpm30000, Tph: &tph1000000, Tpd: &tpd1000000},
+				"zai-glm-4.7":  {Rpm: &rpm5, Rph: &rph150, Rpd: &rpd2400, Tpm: &tpm30000, Tph: &tph1000000, Tpd: &tpd1000000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -119,7 +140,6 @@ func getMistralConfig() types.ProviderConfig {
 	rpm5 := 5
 	rpm23 := 23
 	rpm25 := 25
-	rpm26 := 26
 	rpm30 := 30
 	rpm50 := 50
 	rpm60 := 60
@@ -128,12 +148,9 @@ func getMistralConfig() types.ProviderConfig {
 	tpm75000 := 75000
 	tpm356250 := 356250
 	tpm375000 := 375000
-	tpm600000 := 600000
 	tpm937500 := 937500
 	tpm2250000 := 2250000
-	tpmu4000000 := 4000000
 	tpmu1000000000 := 1000000000
-	tpmu200000000000 := 200000000000
 
 	return types.ProviderConfig{
 		ID:      "mistral",
@@ -148,29 +165,23 @@ func getMistralConfig() types.ProviderConfig {
 				"magistral-medium-2509",
 				"magistral-small-2509",
 				"ministral-14b-2512",
-				"mistral-large-2411",
 				"mistral-medium-2505",
 				"mistral-medium-2508",
 				"mistral-medium-3.5",
-				"mistral-saba-2502",
 				"mistral-small-2506",
 				"mistral-small-2603",
 				"open-mistral-nemo",
-				"pixtral-large-2411",
 			},
 			Limits: map[string]types.ModelLimits{
 				"magistral-medium-2509": {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
 				"magistral-small-2509":  {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
 				"ministral-14b-2512":    {Rpm: &rpm30, Tpm: &tpm937500},
-				"mistral-large-2411":    {Rpm: &rpm26, Tpm: &tpm600000, Tpmu: &tpmu200000000000},
 				"mistral-medium-2505":   {Rpm: &rpm25, Tpm: &tpm375000},
 				"mistral-medium-2508":   {Rpm: &rpm23, Tpm: &tpm356250},
-				"mistral-medium-3.5":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
-				"mistral-saba-2502":     {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
+				"mistral-medium-3.5":    {Rpm: &rpm50, Tpm: &tpm50000},
 				"mistral-small-2506":    {Rpm: &rpm300, Tpm: &tpm2250000},
 				"mistral-small-2603":    {Rpm: &rpm50, Tpm: &tpm50000},
 				"open-mistral-nemo":     {Rpm: &rpm30, Tpm: &tpm937500},
-				"pixtral-large-2411":    {Rpm: &rpm60, Tpm: &tpm50000, Tpmu: &tpmu4000000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -232,46 +243,32 @@ func getNIMConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"moonshotai/kimi-k2-instruct",
-				"moonshotai/kimi-k2-instruct-0905",
-				"moonshotai/kimi-k2.6",
-				"moonshotai/kimi-k2-thinking",
-				"qwen/qwen3-next-80b-a3b-thinking",
-				"qwen/qwen3-next-80b-a3b-instruct",
-				"qwen/qwen3.5-397b-a17b",
-				"qwen/qwen3.5-122b-a10b",
-				"mistralai/mistral-medium-3.5-128b",
-				"mistralai/devstral-2-123b-instruct-2512",
-			"mistralai/mistral-large-3-675b-instruct-2512",
-			"deepseek-ai/deepseek-v3.1-terminus",
-				"minimaxai/minimax-m2.5",
+				"bytedance/seed-oss-36b-instruct",
+				"meta/llama-3.1-70b-instruct",
+				"meta/llama-3.2-90b-vision-instruct",
+				"meta/llama-3.3-70b-instruct",
 				"minimaxai/minimax-m2.7",
-				"stepfun-ai/step-3.5-flash",
-				"z-ai/glm-5.1",
-				"z-ai/glm5",
-				"z-ai/glm4.7",
+				"mistralai/ministral-14b-instruct-2512",
+				"mistralai/mistral-nemotron",
+				"moonshotai/kimi-k2.6",
 				"openai/gpt-oss-120b",
+				"qwen/qwen3-next-80b-a3b-instruct",
+				"qwen/qwen3.5-122b-a10b",
+				"qwen/qwen3.5-397b-a17b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"moonshotai/kimi-k2-instruct":                  {Tpm: &tpm500000},
-				"moonshotai/kimi-k2-instruct-0905":             {Tpm: &tpm500000},
-				"moonshotai/kimi-k2.6":                         {Tpm: &tpm500000},
-				"moonshotai/kimi-k2-thinking":                  {Tpm: &tpm500000},
-				"qwen/qwen3-next-80b-a3b-thinking":             {Tpm: &tpm250000},
-				"qwen/qwen3-next-80b-a3b-instruct":             {Tpm: &tpm250000},
-				"qwen/qwen3.5-397b-a17b":                       {Tpm: &tpm250000},
-				"qwen/qwen3.5-122b-a10b":                       {Tpm: &tpm500000},
-				"mistralai/mistral-medium-3.5-128b":            {Tpm: &tpm250000},
-				"mistralai/devstral-2-123b-instruct-2512":      {Tpm: &tpm250000},
-			"mistralai/mistral-large-3-675b-instruct-2512": {Tpm: &tpm250000},
-			"deepseek-ai/deepseek-v3.1-terminus":           {Tpm: &tpm500000},
-				"minimaxai/minimax-m2.5":                       {Tpm: &tpm250000},
-				"minimaxai/minimax-m2.7":                       {Tpm: &tpm250000},
-				"stepfun-ai/step-3.5-flash":                    {Tpm: &tpm500000},
-				"z-ai/glm-5.1":                                 {Tpm: &tpm250000},
-				"z-ai/glm5":                                    {Tpm: &tpm250000},
-				"z-ai/glm4.7":                                  {Tpm: &tpm500000},
-				"openai/gpt-oss-120b":                          {Tpm: &tpm500000},
+				"bytedance/seed-oss-36b-instruct":       {Tpm: &tpm500000},
+				"meta/llama-3.1-70b-instruct":           {Tpm: &tpm250000},
+				"meta/llama-3.2-90b-vision-instruct":    {Tpm: &tpm250000},
+				"meta/llama-3.3-70b-instruct":           {Tpm: &tpm250000},
+				"minimaxai/minimax-m2.7":                {Tpm: &tpm250000},
+				"mistralai/ministral-14b-instruct-2512": {Tpm: &tpm500000},
+				"mistralai/mistral-nemotron":            {Tpm: &tpm250000},
+				"moonshotai/kimi-k2.6":                  {Tpm: &tpm500000},
+				"openai/gpt-oss-120b":                   {Tpm: &tpm500000},
+				"qwen/qwen3-next-80b-a3b-instruct":      {Tpm: &tpm250000},
+				"qwen/qwen3.5-122b-a10b":                {Tpm: &tpm500000},
+				"qwen/qwen3.5-397b-a17b":                {Tpm: &tpm250000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -507,45 +504,45 @@ func getOllamaConfig() types.ProviderConfig {
 				"minimax-m2.5",
 				"nemotron-3-super",
 				"cogito-2.1:671b",
-			"deepseek-v3.1:671b",
-			"gpt-oss:120b",
-			"glm-4.7",
-			"glm-4.6",
+				"deepseek-v3.1:671b",
+				"gpt-oss:120b",
+				"glm-4.7",
+				"glm-4.6",
 				"minimax-m2.1",
 				"minimax-m2",
-		"minimax-m2.7",
-		"mistral-large-3:675b",
-		},
+				"minimax-m2.7",
+				"mistral-large-3:675b",
+			},
 			Limits: map[string]types.ModelLimits{
-				"llama3.3:70b":              {MaxConcurrent: &conc1},
-				"qwen3-next:80b":            {MaxConcurrent: &conc1},
-				"devstral-small-2:24b":      {MaxConcurrent: &conc1},
-				"gemma4:31b":                {MaxConcurrent: &conc1},
-				"gemma3:27b":                {MaxConcurrent: &conc1},
-				"gemma3:12b":                {MaxConcurrent: &conc1},
-				"nemotron-3-nano:30b":       {MaxConcurrent: &conc1},
-				"gpt-oss:20b":               {MaxConcurrent: &conc1},
-				"gemma3:4b":                 {MaxConcurrent: &conc1},
-				"ministral-3:14b":           {MaxConcurrent: &conc1},
-				"ministral-3:8b":            {MaxConcurrent: &conc1},
-				"ministral-3:3b":            {MaxConcurrent: &conc1},
-				"rnj-1:8b":                  {MaxConcurrent: &conc1},
-				"deepseek-v3.2":             {MaxConcurrent: &conc1},
-				"qwen3-coder:480b":          {MaxConcurrent: &conc1},
-				"qwen3-coder-next":          {MaxConcurrent: &conc1},
-				"devstral-2:123b":           {MaxConcurrent: &conc1},
-				"minimax-m2.5":              {MaxConcurrent: &conc1},
-				"nemotron-3-super":          {MaxConcurrent: &conc1},
-				"cogito-2.1:671b":           {MaxConcurrent: &conc1},
-			"deepseek-v3.1:671b":        {MaxConcurrent: &conc1},
-			"gpt-oss:120b":              {MaxConcurrent: &conc1},
-			"glm-4.7":                   {MaxConcurrent: &conc1},
-			"glm-4.6":                   {MaxConcurrent: &conc1},
-				"minimax-m2.1":              {MaxConcurrent: &conc1},
-				"minimax-m2":                {MaxConcurrent: &conc1},
-		"minimax-m2.7":              {MaxConcurrent: &conc1},
-		"mistral-large-3:675b":      {MaxConcurrent: &conc1},
-		},
+				"llama3.3:70b":         {MaxConcurrent: &conc1},
+				"qwen3-next:80b":       {MaxConcurrent: &conc1},
+				"devstral-small-2:24b": {MaxConcurrent: &conc1},
+				"gemma4:31b":           {MaxConcurrent: &conc1},
+				"gemma3:27b":           {MaxConcurrent: &conc1},
+				"gemma3:12b":           {MaxConcurrent: &conc1},
+				"nemotron-3-nano:30b":  {MaxConcurrent: &conc1},
+				"gpt-oss:20b":          {MaxConcurrent: &conc1},
+				"gemma3:4b":            {MaxConcurrent: &conc1},
+				"ministral-3:14b":      {MaxConcurrent: &conc1},
+				"ministral-3:8b":       {MaxConcurrent: &conc1},
+				"ministral-3:3b":       {MaxConcurrent: &conc1},
+				"rnj-1:8b":             {MaxConcurrent: &conc1},
+				"deepseek-v3.2":        {MaxConcurrent: &conc1},
+				"qwen3-coder:480b":     {MaxConcurrent: &conc1},
+				"qwen3-coder-next":     {MaxConcurrent: &conc1},
+				"devstral-2:123b":      {MaxConcurrent: &conc1},
+				"minimax-m2.5":         {MaxConcurrent: &conc1},
+				"nemotron-3-super":     {MaxConcurrent: &conc1},
+				"cogito-2.1:671b":      {MaxConcurrent: &conc1},
+				"deepseek-v3.1:671b":   {MaxConcurrent: &conc1},
+				"gpt-oss:120b":         {MaxConcurrent: &conc1},
+				"glm-4.7":              {MaxConcurrent: &conc1},
+				"glm-4.6":              {MaxConcurrent: &conc1},
+				"minimax-m2.1":         {MaxConcurrent: &conc1},
+				"minimax-m2":           {MaxConcurrent: &conc1},
+				"minimax-m2.7":         {MaxConcurrent: &conc1},
+				"mistral-large-3:675b": {MaxConcurrent: &conc1},
+			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"cogito-2.1:671b":    {Tools: boolPtr(false)},
 				"deepseek-v3.1:671b": {Tools: boolPtr(false)},
@@ -553,8 +550,8 @@ func getOllamaConfig() types.ProviderConfig {
 				"gemma3:27b":         {Tools: boolPtr(false)},
 				"gemma3:4b":          {Tools: boolPtr(false)},
 				"glm-4.6":            {Tools: boolPtr(false)},
-			"glm-4.7":            {Tools: boolPtr(false)},
-			"minimax-m2.1":       {Tools: boolPtr(false)},
+				"glm-4.7":            {Tools: boolPtr(false)},
+				"minimax-m2.1":       {Tools: boolPtr(false)},
 				"rnj-1:8b":           {Tools: boolPtr(false)},
 			},
 		},
@@ -643,8 +640,8 @@ func getLLM7Config() types.ProviderConfig {
 				"default",
 			},
 			Limits: map[string]types.ModelLimits{
-			"fast":    {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
-			"default": {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
+				"fast":    {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
+				"default": {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
