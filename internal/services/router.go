@@ -308,7 +308,7 @@ func (r *Router) FilterCandidates(
 		redisCandidates = append(redisCandidates, redisCandidate{
 			candidate:   candidate,
 			caps:        caps,
-			modelLimits: provider.Models.Limits[model],
+			modelLimits: effectiveModelLimits(provider, model),
 		})
 	}
 
@@ -1656,13 +1656,62 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 	for _, p := range r.config.Providers {
 		if p.ID == providerID {
-			if limits, ok := p.Models.Limits[model]; ok && limits.MaxConcurrent != nil {
+			limits := effectiveModelLimits(p, model)
+			if limits.MaxConcurrent != nil {
 				return *limits.MaxConcurrent
 			}
 			return 0
 		}
 	}
 	return 0
+}
+
+func effectiveModelLimits(provider types.ProviderConfig, model string) types.ModelLimits {
+	limits := types.ModelLimits{
+		Rpm:           provider.Limits.Rpm,
+		Rph:           provider.Limits.Rph,
+		Rpd:           provider.Limits.Rpd,
+		Tpm:           provider.Limits.Tpm,
+		Tph:           provider.Limits.Tph,
+		Tpd:           provider.Limits.Tpd,
+		MaxConcurrent: provider.Limits.MaxConcurrent,
+	}
+	if limits.Rpd == nil {
+		limits.Rpd = provider.Limits.DailyRequests
+	}
+
+	modelLimits, ok := provider.Models.Limits[model]
+	if !ok {
+		return limits
+	}
+	if modelLimits.Rpm != nil {
+		limits.Rpm = modelLimits.Rpm
+	}
+	if modelLimits.Rph != nil {
+		limits.Rph = modelLimits.Rph
+	}
+	if modelLimits.Rpd != nil {
+		limits.Rpd = modelLimits.Rpd
+	}
+	if modelLimits.Tpm != nil {
+		limits.Tpm = modelLimits.Tpm
+	}
+	if modelLimits.Tph != nil {
+		limits.Tph = modelLimits.Tph
+	}
+	if modelLimits.Tpd != nil {
+		limits.Tpd = modelLimits.Tpd
+	}
+	if modelLimits.Tpmu != nil {
+		limits.Tpmu = modelLimits.Tpmu
+	}
+	if modelLimits.MaxConcurrent != nil {
+		limits.MaxConcurrent = modelLimits.MaxConcurrent
+	}
+	if modelLimits.CooldownAfterMs != nil {
+		limits.CooldownAfterMs = modelLimits.CooldownAfterMs
+	}
+	return limits
 }
 
 func (r *Router) releaseConcurrencySlot(providerID, model string) {

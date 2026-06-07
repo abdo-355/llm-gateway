@@ -561,6 +561,80 @@ func TestFilterCandidates_FiltersCloudflareWhenNeuronBudgetExceeded(t *testing.T
 	assert.Equal(t, "quota_exceeded_daily_neurons", filtered["cloudflare/@cf/openai/gpt-oss-20b"])
 }
 
+func TestFilterCandidates_UsesEffectiveProviderAndModelLimits(t *testing.T) {
+	ctx := context.Background()
+	providerRPM := 10
+	providerConcurrent := 2
+	modelTPM := 1000
+	modelRPM := 3
+
+	cfg := types.AppConfig{
+		Providers: []types.ProviderConfig{
+			{
+				ID:      "provider-a",
+				BaseURL: "https://api.provider-a.com/v1",
+				Auth:    types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"},
+				Models: types.ProviderModels{
+					Mode: "allowlist",
+					List: []string{"model-provider-limits", "model-override"},
+					Limits: map[string]types.ModelLimits{
+						"model-provider-limits": {Tpm: &modelTPM},
+						"model-override":        {Rpm: &modelRPM},
+					},
+				},
+				Capabilities: types.ProviderCapabilities{
+					Streaming:           true,
+					StructuredOutputs:   "json_schema_strict",
+					MaxTokens:           true,
+					MaxCompletionTokens: true,
+				},
+				Limits: types.ProviderLimits{Rpm: &providerRPM, MaxConcurrent: &providerConcurrent},
+			},
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	mockQuota := mocks.NewMockQuotaChecker(ctrl)
+	mockHealth := mocks.NewMockHealthChecker(ctrl)
+	mockProvider := mocks.NewMockProviderCaller(ctrl)
+	r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+
+	mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100)
+	mockHealth.EXPECT().CanExecute(gomock.Any(), "provider-a", "model-provider-limits").Return(true)
+	mockQuota.EXPECT().CheckModelQuota(
+		gomock.Any(),
+		"provider-a",
+		"model-provider-limits",
+		gomock.AssignableToTypeOf(types.ModelLimits{}),
+		100,
+	).DoAndReturn(func(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
+		require.NotNil(t, limits.Rpm)
+		assert.Equal(t, providerRPM, *limits.Rpm)
+		require.NotNil(t, limits.Tpm)
+		assert.Equal(t, modelTPM, *limits.Tpm)
+		return nil
+	})
+	mockQuota.EXPECT().CheckConcurrencyLimit(gomock.Any(), "provider-a", "model-provider-limits", providerConcurrent).Return(true)
+	mockHealth.EXPECT().CanExecute(gomock.Any(), "provider-a", "model-override").Return(true)
+	mockQuota.EXPECT().CheckModelQuota(
+		gomock.Any(),
+		"provider-a",
+		"model-override",
+		gomock.AssignableToTypeOf(types.ModelLimits{}),
+		100,
+	).DoAndReturn(func(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
+		require.NotNil(t, limits.Rpm)
+		assert.Equal(t, modelRPM, *limits.Rpm)
+		return nil
+	})
+	mockQuota.EXPECT().CheckConcurrencyLimit(gomock.Any(), "provider-a", "model-override", providerConcurrent).Return(true)
+
+	eligible, filtered := r.FilterCandidates(ctx, r.GenerateCandidates(), types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "forbidden"}, types.ChatCompletionRequest{}, nil)
+
+	assert.Len(t, eligible, 2)
+	assert.Empty(t, filtered)
+}
+
 // --- ScoreCandidates ---
 
 func TestScoreCandidates(t *testing.T) {
