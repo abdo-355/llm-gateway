@@ -5,11 +5,15 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/errors"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/abdo-355/llm-gateway/internal/services/mocks"
 	"github.com/abdo-355/llm-gateway/internal/types"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -155,6 +159,38 @@ func newTestRouter(t *testing.T) (*services.Router, *mocks.MockQuotaChecker, *mo
 	mockQuota.EXPECT().GetModelQuotaStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(services.QuotaStatus{}).AnyTimes()
 	r := services.NewRouterWithConfig(testConfig(), mockQuota, mockHealth, mockProvider)
 	return r, mockQuota, mockHealth, mockProvider
+}
+
+func newExternalTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	return client, mr
+}
+
+func testCooldownConfig() config.CooldownConfig {
+	return config.CooldownConfig{
+		Enabled:           true,
+		DefaultDuration:   30 * time.Second,
+		RateLimitDuration: 5 * time.Second,
+		PaymentDuration:   5 * time.Minute,
+		Error5xxDuration:  30 * time.Second,
+	}
+}
+
+func streamResult(err *types.GatewayError, chunks ...*types.SSEChunk) types.StreamResult {
+	chunkCh := make(chan *types.SSEChunk)
+	errCh := make(chan *types.GatewayError, 1)
+	go func() {
+		defer close(chunkCh)
+		defer close(errCh)
+		for _, chunk := range chunks {
+			chunkCh <- chunk
+		}
+		errCh <- err
+	}()
+	return types.StreamResult{Chunks: chunkCh, Err: errCh}
 }
 
 // --- DeriveRequirements ---
@@ -604,6 +640,17 @@ func TestFilterCandidates_UsesEffectiveProviderAndModelLimits(t *testing.T) {
 	mockQuota.EXPECT().CheckModelQuota(
 		gomock.Any(),
 		"provider-a",
+		"__provider__",
+		gomock.AssignableToTypeOf(types.ModelLimits{}),
+		100,
+	).DoAndReturn(func(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) error {
+		require.NotNil(t, limits.Rpm)
+		assert.Equal(t, providerRPM, *limits.Rpm)
+		return nil
+	}).Times(2)
+	mockQuota.EXPECT().CheckModelQuota(
+		gomock.Any(),
+		"provider-a",
 		"model-provider-limits",
 		gomock.AssignableToTypeOf(types.ModelLimits{}),
 		100,
@@ -850,6 +897,41 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "provider-a", result.ProviderID)
 	})
 
+	t.Run("records provider level quota usage", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+		cfg := testConfig()
+		cfg.Providers[0].Limits = types.ProviderLimits{Rpm: intPtr(10)}
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+
+		content := "response text"
+		resp := &types.ChatCompletionResponse{
+			ID: "test-provider-quota", Model: "model-1",
+			Usage:   &types.Usage{TotalTokens: 50},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-a", "model-1", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "model-1", 50).Return(nil)
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "__provider__", 50).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{{
+				ProviderID: "provider-a", Model: "model-1",
+				BaseURL: "https://a.com/v1", APIKey: "key",
+				TimeoutMs: 30000, Auth: types.ProviderAuth{Type: "bearer"},
+			}},
+			MaxAttempts: 1,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-provider-quota")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-a", result.ProviderID)
+	})
+
 	t.Run("first fails second succeeds", func(t *testing.T) {
 		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
 
@@ -881,6 +963,63 @@ func TestExecute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, result.Attempts)
 		assert.Equal(t, "provider-b", result.ProviderID)
+	})
+
+	t.Run("rate limited attempt applies cooldown and failover succeeds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+		cfg := testConfig()
+		cfg.Providers[0].Limits = types.ProviderLimits{Rpm: intPtr(10)}
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		redisClient, _ := newExternalTestRedis(t)
+		cooldowns := services.NewCooldownService(redisClient, "cooldown", testCooldownConfig())
+		r.SetCooldownService(cooldowns)
+
+		rateErr := errors.NewRateLimitError("limited", 60, "rpm")
+		content := "ok"
+		resp := &types.ChatCompletionResponse{
+			ID: "id-rate-limit", Model: "model-3",
+			Usage:   &types.Usage{TotalTokens: 24},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, rateErr)
+		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
+		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
+		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "__provider__", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 24).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-rate-limit")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-b", result.ProviderID)
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-2"))
+		assert.Equal(t, services.CooldownRateLimit, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
+		assert.GreaterOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 55*time.Second)
+
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), "provider-a", "model-1").Return(true)
+		eligible, filtered := r.FilterCandidates(
+			ctx,
+			[]types.RoutingCandidate{{Provider: cfg.Providers[0], Model: "model-1", ScoreBreakdown: map[string]float64{}}},
+			types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "forbidden"},
+			baseReq,
+			nil,
+		)
+		assert.Empty(t, eligible)
+		assert.Contains(t, filtered["provider-a/model-1"], "provider_cooldown_active:rate_limit")
 	})
 
 	t.Run("provider 4xx fails over", func(t *testing.T) {
@@ -995,6 +1134,45 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "concurrency_denied", attempts[0]["failure_kind"])
 		assert.Equal(t, string(types.ActionFailover), attempts[0]["failure_action"])
 	})
+}
+
+func TestExecuteStream_RateLimitedAttemptAppliesCooldown(t *testing.T) {
+	ctx := context.Background()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "hello"}}}
+	r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+	redisClient, _ := newExternalTestRedis(t)
+	cooldowns := services.NewCooldownService(redisClient, "cooldown", testCooldownConfig())
+	r.SetCooldownService(cooldowns)
+
+	rateLimited := &types.GatewayError{
+		Type:    "gateway_error",
+		Code:    "RATE_LIMITED",
+		Message: "limited",
+		Details: map[string]any{"retry_after": 60, "limit_type": "rpm"},
+	}
+
+	mockProvider.EXPECT().StreamProviderChannel(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(streamResult(rateLimited))
+	mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
+	mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
+	mockProvider.EXPECT().StreamProviderChannel(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(streamResult(nil))
+	mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())
+	mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 100).Return(nil)
+
+	plan := types.RoutingPlan{
+		Attempts: []types.RoutingAttempt{
+			{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+		},
+		MaxAttempts: 2,
+	}
+
+	result := r.ExecuteStream(ctx, plan, req, "req-stream-rate-limit")
+	for range result.Chunks {
+	}
+	streamErr := <-result.Err
+	require.Nil(t, streamErr)
+	assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
+	assert.Equal(t, services.CooldownRateLimit, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
 }
 
 // --- CreateGatewayError ---

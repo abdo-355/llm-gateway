@@ -15,6 +15,8 @@ import (
 	"github.com/abdo-355/llm-gateway/internal/types"
 )
 
+const providerQuotaScopeModel = "__provider__"
+
 type Router struct {
 	config          types.AppConfig
 	quotaService    QuotaChecker
@@ -392,6 +394,17 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
+		if providerLimits := providerLevelModelLimits(provider.Limits); hasModelLimits(providerLimits) {
+			if err := r.quotaService.CheckModelQuota(ctx, provider.ID, providerQuotaScopeModel, providerLimits, estimatedTokens); err != nil {
+				if quotaErr, ok := err.(*errors.ModelQuotaExceededError); ok {
+					filtered[key] = fmt.Sprintf("quota_exceeded_provider_%s", quotaErr.LimitType)
+				} else {
+					filtered[key] = "provider_quota_check_failed"
+				}
+				continue
+			}
+		}
+
 		if modelLimits.MaxConcurrent != nil && *modelLimits.MaxConcurrent > 0 {
 			if !r.quotaService.CheckConcurrencyLimit(ctx, provider.ID, model, *modelLimits.MaxConcurrent) {
 				filtered[key] = "concurrency_limit_exceeded"
@@ -673,7 +686,7 @@ func (r *Router) Execute(
 			} else {
 				tokensUsed = r.quotaService.EstimateTokens(req)
 			}
-			r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+			r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 			if attempt.ProviderID == cloudflareProviderID {
 				if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok && resp.Usage != nil {
 					stats, quotaErr := budgetMgr.RecordCloudflareNeuronUsage(ctx, attempt.Model, resp.Usage)
@@ -851,6 +864,8 @@ func (r *Router) Execute(
 			Err(err).
 			Msg("Provider attempt failed")
 
+		r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, err)
+
 		switch decision.Action {
 		case types.ActionAbort:
 			return nil, r.CreateGatewayError(err, i+1, requestID)
@@ -881,6 +896,9 @@ func (r *Router) Execute(
 			}
 		case types.ActionCooldown:
 			if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+				if decision.Category == types.CategoryRateLimit {
+					break
+				}
 				reason := r.failureCategoryToCooldownReason(decision.Category)
 				retryAfter := 0
 				if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
@@ -890,10 +908,6 @@ func (r *Router) Execute(
 			}
 		}
 
-		if rateLimitErr, ok := err.(*errors.RateLimitError); ok {
-			r.maybeMarkCloudflareDailyBudgetExhausted(ctx, attempt.ProviderID, rateLimitErr)
-			r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
-		}
 	}
 
 	metrics.RoutingAttemptsTotal.WithLabelValues(
@@ -1055,7 +1069,7 @@ func (r *Router) ExecuteStream(
 				} else {
 					tokensUsed = r.quotaService.EstimateTokens(req)
 				}
-				r.quotaService.RecordModelUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+				r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
 
 				if attempt.ProviderID == cloudflareProviderID && streamUsage != nil {
 					if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok {
@@ -1191,15 +1205,11 @@ func (r *Router) ExecuteStream(
 				Err(err).
 				Msg("Provider attempt failed")
 
+			r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
+
 			failureKinds = append(failureKinds, decision.Category)
 
 			ttfbRecorded = false
-
-			if err.Code == "RATE_LIMITED" {
-				rateLimitErr := r.gatewayErrorToTypedError(err).(*errors.RateLimitError)
-				r.maybeMarkCloudflareDailyBudgetExhausted(ctx, attempt.ProviderID, rateLimitErr)
-				r.quotaService.HandleProviderRateLimit(ctx, attempt.ProviderID, attempt.Model, buildRateLimitResponse(rateLimitErr))
-			}
 
 			// Don't retry if we already sent chunks to the client
 			if chunksSent {
@@ -1247,6 +1257,9 @@ func (r *Router) ExecuteStream(
 				}
 			case types.ActionCooldown:
 				if decision.CooldownSeconds > 0 && r.cooldownService != nil {
+					if decision.Category == types.CategoryRateLimit {
+						break
+					}
 					reason := r.failureCategoryToCooldownReason(decision.Category)
 					retryAfter := 0
 					if rateLimitErr, ok := typedErr.(*errors.RateLimitError); ok {
@@ -1653,6 +1666,94 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 	}
 }
 
+func (r *Router) handleRateLimitFailure(ctx context.Context, providerID, model string, err error) {
+	rateLimitErr, ok := err.(*errors.RateLimitError)
+	if !ok {
+		return
+	}
+
+	// A provider 429 means the provider/model is unavailable for routing now,
+	// even if our local quota counters have not reached their configured limit.
+	r.healthService.RecordFailure(ctx, providerID, model)
+	if r.cooldownService != nil {
+		r.applyRateLimitCooldown(ctx, providerID, model, rateLimitErr)
+	}
+	r.maybeMarkCloudflareDailyBudgetExhausted(ctx, providerID, rateLimitErr)
+	r.quotaService.HandleProviderRateLimit(ctx, providerID, model, buildRateLimitResponse(rateLimitErr))
+	if provider, ok := r.lookupProvider(providerID); ok && hasModelLimits(providerLevelModelLimits(provider.Limits)) {
+		r.quotaService.HandleProviderRateLimit(ctx, providerID, providerQuotaScopeModel, buildRateLimitResponse(rateLimitErr))
+	}
+}
+
+func (r *Router) applyRateLimitCooldown(ctx context.Context, providerID, model string, err *errors.RateLimitError) {
+	reason := rateLimitCooldownReason(err)
+	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, reason, err.RetryAfter)
+
+	provider, ok := r.lookupProvider(providerID)
+	if !ok || !providerLimitMatchesRateLimit(provider.Limits, err) {
+		return
+	}
+
+	for _, providerModel := range provider.Models.List {
+		if providerModel == model {
+			continue
+		}
+		r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, reason, err.RetryAfter)
+	}
+}
+
+func rateLimitCooldownReason(err *errors.RateLimitError) CooldownReason {
+	switch err.LimitSubtype {
+	case "quota_exhausted":
+		return CooldownQuota
+	case "overload":
+		return CooldownOverload
+	default:
+		return CooldownRateLimit
+	}
+}
+
+func providerLimitMatchesRateLimit(limits types.ProviderLimits, err *errors.RateLimitError) bool {
+	if err.LimitSubtype == "quota_exhausted" {
+		return hasModelLimits(providerLevelModelLimits(limits))
+	}
+
+	switch err.LimitType {
+	case "rpm":
+		return limits.Rpm != nil
+	case "rph":
+		return limits.Rph != nil
+	case "rpd":
+		return limits.Rpd != nil || limits.DailyRequests != nil
+	case "tpm":
+		return limits.Tpm != nil
+	case "tph":
+		return limits.Tph != nil
+	case "tpd":
+		return limits.Tpd != nil
+	default:
+		return false
+	}
+}
+
+func (r *Router) recordQuotaUsage(ctx context.Context, providerID, model string, tokensUsed int) {
+	r.quotaService.RecordModelUsage(ctx, providerID, model, tokensUsed)
+	provider, ok := r.lookupProvider(providerID)
+	if !ok || !hasModelLimits(providerLevelModelLimits(provider.Limits)) {
+		return
+	}
+	r.quotaService.RecordModelUsage(ctx, providerID, providerQuotaScopeModel, tokensUsed)
+}
+
+func (r *Router) lookupProvider(providerID string) (types.ProviderConfig, bool) {
+	for _, provider := range r.config.Providers {
+		if provider.ID == providerID {
+			return provider, true
+		}
+	}
+	return types.ProviderConfig{}, false
+}
+
 func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 	for _, p := range r.config.Providers {
 		if p.ID == providerID {
@@ -1712,6 +1813,32 @@ func effectiveModelLimits(provider types.ProviderConfig, model string) types.Mod
 		limits.CooldownAfterMs = modelLimits.CooldownAfterMs
 	}
 	return limits
+}
+
+func providerLevelModelLimits(limits types.ProviderLimits) types.ModelLimits {
+	providerLimits := types.ModelLimits{
+		Rpm:           limits.Rpm,
+		Rph:           limits.Rph,
+		Rpd:           limits.Rpd,
+		Tpm:           limits.Tpm,
+		Tph:           limits.Tph,
+		Tpd:           limits.Tpd,
+		MaxConcurrent: limits.MaxConcurrent,
+	}
+	if providerLimits.Rpd == nil {
+		providerLimits.Rpd = limits.DailyRequests
+	}
+	return providerLimits
+}
+
+func hasModelLimits(limits types.ModelLimits) bool {
+	return limits.Rpm != nil ||
+		limits.Rph != nil ||
+		limits.Rpd != nil ||
+		limits.Tpm != nil ||
+		limits.Tph != nil ||
+		limits.Tpd != nil ||
+		limits.Tpmu != nil
 }
 
 func (r *Router) releaseConcurrencySlot(providerID, model string) {
