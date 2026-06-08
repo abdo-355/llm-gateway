@@ -187,7 +187,7 @@ func writeExecutionError(c *gin.Context, err error) {
 		Str("request_id", gatewayErr.RequestID).
 		Str("error_code", gatewayErr.Code).
 		Int("status", status).
-		Str("message", gatewayErr.Message).
+		Str("error_message", gatewayErr.Message).
 		Msg("Request execution error")
 
 	c.JSON(status, gin.H{"error": gatewayErr})

@@ -383,6 +383,10 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 		request.PresencePenalty = nil
 	case "cerebras":
 		request.Metadata = nil
+	case "oci":
+		if request.Temperature != nil && *request.Temperature == 0 {
+			request.Temperature = nil
+		}
 	}
 
 	return request
@@ -410,6 +414,8 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "opencode"
 	case cloudflareAPITokenEnv:
 		return cloudflareProviderID
+	case "OCI_API_KEY":
+		return "oci"
 	}
 
 	switch {

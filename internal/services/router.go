@@ -507,12 +507,11 @@ func (r *Router) CompilePlan(
 	hints *types.RouterHints,
 	tierSLO *types.TierSLO,
 ) types.RoutingPlan {
-	// Determine max attempts
-	maxAttempts := 3
+	// Determine max attempts. Tier defaults should not truncate failover; if the
+	// client does not explicitly cap attempts, try every eligible candidate.
+	maxAttempts := len(candidates)
 	if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
 		maxAttempts = *hints.Fallback.MaxAttempts
-	} else if tierSLO != nil && tierSLO.MaxAttempts != nil {
-		maxAttempts = *tierSLO.MaxAttempts
 	}
 
 	if maxAttempts > len(candidates) {
@@ -865,6 +864,7 @@ func (r *Router) Execute(
 			Msg("Provider attempt failed")
 
 		r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, err)
+		r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, err)
 
 		switch decision.Action {
 		case types.ActionAbort:
@@ -928,7 +928,7 @@ func (r *Router) Execute(
 	return nil, &types.GatewayError{
 		Type:    "gateway_error",
 		Code:    "ALL_ATTEMPTS_FAILED",
-		Message: "All provider attempts failed",
+		Message: allAttemptsFailedMessage(attemptChain),
 		Details: map[string]any{
 			"attempts": attemptChain,
 		},
@@ -1206,6 +1206,7 @@ func (r *Router) ExecuteStream(
 				Msg("Provider attempt failed")
 
 			r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
+			r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 
 			failureKinds = append(failureKinds, decision.Category)
 
@@ -1661,9 +1662,35 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 		return CooldownBilling
 	case types.CategoryProvider5xx:
 		return CooldownOverload
+	case types.CategoryProvider4xx:
+		return CooldownAuth
 	default:
 		return CooldownDefault
 	}
+}
+
+func (r *Router) handleAuthFailure(ctx context.Context, providerID, model string, err error) {
+	if !isAuthProviderError(err) || r.cooldownService == nil {
+		return
+	}
+
+	provider, ok := r.lookupProvider(providerID)
+	if !ok {
+		r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, CooldownAuth, 0)
+		return
+	}
+
+	for _, providerModel := range provider.Models.List {
+		r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, CooldownAuth, 0)
+	}
+}
+
+func isAuthProviderError(err error) bool {
+	providerErr, ok := err.(*errors.ProviderError)
+	if !ok {
+		return false
+	}
+	return providerErr.StatusCode == http.StatusUnauthorized || providerErr.StatusCode == http.StatusForbidden
 }
 
 func (r *Router) handleRateLimitFailure(ctx context.Context, providerID, model string, err error) {
@@ -1870,6 +1897,24 @@ func allAttemptsRateLimited(chain []map[string]any) bool {
 		}
 	}
 	return true
+}
+
+func allAttemptsFailedMessage(chain []map[string]any) string {
+	if len(chain) == 0 {
+		return "All provider attempts failed"
+	}
+
+	last := chain[len(chain)-1]
+	reason, _ := last["failure_reason"].(string)
+	provider, _ := last["provider"].(string)
+	model, _ := last["model"].(string)
+	if reason == "" {
+		return "All provider attempts failed"
+	}
+	if provider == "" || model == "" {
+		return "All provider attempts failed: " + reason
+	}
+	return fmt.Sprintf("All provider attempts failed; last failure on %s/%s: %s", provider, model, reason)
 }
 
 func allStreamFailuresRateLimited(kinds []types.FailureCategory) bool {

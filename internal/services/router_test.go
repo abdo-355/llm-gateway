@@ -793,11 +793,12 @@ func TestCompilePlan(t *testing.T) {
 		assert.Equal(t, 5000, plan.Attempts[0].TimeoutMs)
 	})
 
-	t.Run("uses tier SLO", func(t *testing.T) {
+	t.Run("uses tier SLO timeout without capping attempts", func(t *testing.T) {
 		slo := &types.TierSLO{MaxLatencyMs: intPtr(10000), MaxAttempts: intPtr(2)}
 		plan := r.CompilePlan(candidates, nil, slo)
 		assert.Equal(t, 10000, plan.Attempts[0].TimeoutMs)
-		assert.Len(t, plan.Attempts, 2)
+		assert.Len(t, plan.Attempts, 3)
+		assert.Equal(t, 3, plan.MaxAttempts)
 	})
 
 	t.Run("custom retry policy", func(t *testing.T) {
@@ -1053,6 +1054,43 @@ func TestExecute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, result.Attempts)
 		assert.Equal(t, "provider-b", result.ProviderID)
+	})
+
+	t.Run("provider auth failure applies provider cooldown", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+		redisClient, _ := newExternalTestRedis(t)
+		cooldowns := services.NewCooldownService(redisClient, "cooldown", testCooldownConfig())
+		r.SetCooldownService(cooldowns)
+
+		providerErr := &errors.ProviderError{Message: "HTTP error 401: Unauthorized", StatusCode: http.StatusUnauthorized, IsRetryable: false}
+		content := "ok"
+		resp := &types.ChatCompletionResponse{
+			ID: "id-auth-failover", Model: "model-3",
+			Usage:   &types.Usage{TotalTokens: 20},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr)
+		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 20).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-auth-4xx")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-b", result.ProviderID)
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-2"))
+		assert.False(t, cooldowns.IsOnCooldown(ctx, "provider-b", "model-3"))
+		assert.Equal(t, services.CooldownAuth, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
 	})
 
 	t.Run("all attempts fail", func(t *testing.T) {

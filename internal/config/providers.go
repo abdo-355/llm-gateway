@@ -731,11 +731,11 @@ func getOciConfig() types.ProviderConfig {
 				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(20)},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(false)},
-				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(false)},
-				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(false)},
-				"openai.gpt-oss-120b":          {StructuredOutputs: strPtr("none")},
-				"openai.gpt-oss-20b":           {StructuredOutputs: strPtr("none")},
+				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(true)},
+				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(true)},
+				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false), MultipleChoices: boolPtr(true)},
+				"openai.gpt-oss-120b":          {StructuredOutputs: strPtr("json_schema")},
+				"openai.gpt-oss-20b":           {StructuredOutputs: strPtr("json_schema")},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
