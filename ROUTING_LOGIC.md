@@ -45,7 +45,7 @@ type ProviderPreferences struct {
 }
 
 type FallbackConfig struct {
-    MaxAttempts *int  // max providers to try (default: every eligible candidate)
+    MaxAttempts *int  // max providers to try (default: tier SLO, otherwise every eligible candidate)
     On429       *bool // retry on rate limit
     OnTimeout   *bool // retry on timeout
     On5xx       *bool // retry on server errors
