@@ -5,18 +5,11 @@ import (
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/db"
-	"github.com/abdo-355/llm-gateway/internal/handlers"
 	"github.com/abdo-355/llm-gateway/internal/logger"
 	"github.com/abdo-355/llm-gateway/internal/server"
 	"github.com/abdo-355/llm-gateway/internal/services"
 	"github.com/redis/go-redis/v9"
 )
-
-type Handlers struct {
-	Completions *handlers.CompletionsHandler
-	Responses   *handlers.ResponsesHandler
-	Health      *handlers.HealthHandler
-}
 
 type App struct {
 	Router   *services.Router
@@ -24,7 +17,6 @@ type App struct {
 	Quota    *services.QuotaService
 	Provider *services.ProviderService
 	Redis    *redis.Client
-	Handlers *Handlers
 	Server   *server.Server
 }
 
@@ -42,12 +34,6 @@ func New(ctx context.Context) (*App, error) {
 	cooldownSvc := services.NewCooldownService(redisClient, db.GetRedisKey("cooldown"), config.LoadCooldownConfig())
 	routerSvc.SetCooldownService(cooldownSvc)
 
-	handlers := &Handlers{
-		Completions: handlers.NewCompletionsHandler(routerSvc),
-		Responses:   handlers.NewResponsesHandler(routerSvc),
-		Health:      handlers.NewHealthHandler(),
-	}
-
 	srv := server.New(server.Services{
 		Router: routerSvc,
 		Health: healthSvc,
@@ -60,7 +46,6 @@ func New(ctx context.Context) (*App, error) {
 		Quota:    quotaSvc,
 		Provider: providerSvc,
 		Redis:    redisClient,
-		Handlers: handlers,
 		Server:   srv,
 	}, nil
 }
