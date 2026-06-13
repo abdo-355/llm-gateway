@@ -28,7 +28,6 @@ type EnvConfig struct {
 	CloudflareAPIToken  string
 	OpenCodeAPIKey      string
 	ZaiAPIKey           string
-	LLM7APIKey          string
 	CohereAPIKey        string
 	OciAPIKey           string
 
@@ -170,7 +169,6 @@ func LoadEnv() (*EnvConfig, error) {
 		CloudflareAPIToken:  os.Getenv("CLOUDFLARE_API_TOKEN"),
 		OpenCodeAPIKey:      os.Getenv("OPENCODE_ZEN_API_KEY"),
 		ZaiAPIKey:           os.Getenv("ZAI_API_KEY"),
-		LLM7APIKey:          os.Getenv("LLM7_API_KEY"),
 		CohereAPIKey:        os.Getenv("COHERE_API_KEY"),
 		OciAPIKey:           os.Getenv("OCI_API_KEY"),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),

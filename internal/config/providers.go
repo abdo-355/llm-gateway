@@ -13,7 +13,6 @@ func GetProviders() []types.ProviderConfig {
 		getOpenCodeConfig(),
 		getOllamaConfig(),
 		getZaiConfig(),
-		getLLM7Config(),
 		getCohereConfig(),
 		getOciConfig(),
 	}
@@ -208,8 +207,6 @@ func getMistralConfig() types.ProviderConfig {
 func GetCertifications() []types.Certification {
 	return []types.Certification{
 		{Provider: "kilo", Model: "kilo-auto/free", StrictSchema: true},
-		{Provider: "llm7", Model: "fast", StrictSchema: true},
-		{Provider: "llm7", Model: "default", StrictSchema: true},
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
 		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
@@ -597,51 +594,6 @@ func getZaiConfig() types.ProviderConfig {
 				"glm-4.7-flash":  {MaxConcurrent: &conc1},
 				"glm-4.5-flash":  {MaxConcurrent: &conc2},
 				"glm-4.6v-flash": {MaxConcurrent: &conc1},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits:       types.ProviderLimits{},
-		ProviderType: "openai",
-	}
-}
-
-func getLLM7Config() types.ProviderConfig {
-	rpm20 := 20
-	rph100 := 100
-	conc1 := 1
-	cooldown1s := 1000
-
-	return types.ProviderConfig{
-		ID:      "llm7",
-		BaseURL: "https://api.llm7.io/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "LLM7_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"fast",
-				"default",
-			},
-			Limits: map[string]types.ModelLimits{
-				"fast":    {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
-				"default": {Rpm: &rpm20, Rph: &rph100, MaxConcurrent: &conc1, CooldownAfterMs: &cooldown1s},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{

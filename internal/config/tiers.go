@@ -24,8 +24,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.66},
 			{Provider: "ollama", Model: "llama3.3:70b", Weight: 0.66},
 			{Provider: "kilo", Model: "kilo-auto/free", Weight: 0.62},
-			{Provider: "llm7", Model: "default", Weight: 0.60},
-			{Provider: "llm7", Model: "fast", Weight: 0.58},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
