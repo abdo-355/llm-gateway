@@ -45,7 +45,7 @@ type ProviderPreferences struct {
 }
 
 type FallbackConfig struct {
-    MaxAttempts *int  // max providers to try (default 3)
+    MaxAttempts *int  // max providers to try (default: every eligible candidate)
     On429       *bool // retry on rate limit
     OnTimeout   *bool // retry on timeout
     On5xx       *bool // retry on server errors
@@ -163,27 +163,32 @@ There are two ways to generate candidates:
 
 ### Path A: From Tier (Most Common)
 
-Uses the request tier (e.g., `default`) to select all provider models whose metadata matches that tier.
+Uses the request tier (e.g., `default`) to select provider/model entries from `internal/config/tiers.go`. Each entry has an explicit provider, model, and base weight. Entries that reference missing providers or models are skipped and logged.
 
 ```go
 func (r *Router) GenerateCandidatesForTier(tier Tier) []RoutingCandidate {
     var candidates []RoutingCandidate
 
-    for _, provider := range r.config.Providers {
-        for _, model := range provider.Models.List {
-            attrs, ok := provider.Models.Attributes[model]
-            if !ok || attrs.Tier != tier {
-                continue
-            }
+    tierConfig := config.GetTierConfig(tier)
+    if tierConfig == nil {
+        return candidates
+    }
 
-            isCertified := r.isCertifiedForStrictSchema(provider.ID, model)
-            candidates = append(candidates, RoutingCandidate{
-                Provider:                   provider,
-                Model:                      model,
-                IsCertifiedForStrictSchema: isCertified,
-                ScoreBreakdown:             map[string]float64{},
-            })
+    providerMap := mapProvidersByID(r.config.Providers)
+    for _, entry := range tierConfig.Entries {
+        provider, ok := providerMap[entry.Provider]
+        if !ok || !slices.Contains(provider.Models.List, entry.Model) {
+            continue
         }
+
+        isCertified := r.isCertifiedForStrictSchema(provider.ID, entry.Model)
+        candidates = append(candidates, RoutingCandidate{
+            Provider:                   provider,
+            Model:                      entry.Model,
+            IsCertifiedForStrictSchema: isCertified,
+            Score:                      entry.Weight,
+            ScoreBreakdown:             map[string]float64{},
+        })
     }
 
     return candidates
