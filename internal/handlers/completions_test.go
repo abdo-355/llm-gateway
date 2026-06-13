@@ -144,7 +144,7 @@ func TestCompletions_InvalidJSON(t *testing.T) {
 func TestCompletions_NoEligibleProviders(t *testing.T) {
 	router := &mockRouter{
 		filterCandidatesFn: func(_ context.Context, _ []types.RoutingCandidate, _ types.DerivedRequirements, _ types.ChatCompletionRequest, _ *types.RouterHints) ([]types.RoutingCandidate, map[string]string) {
-			return nil, map[string]string{"groq:llama-3.1-8b-instant": "circuit_open"}
+			return nil, map[string]string{"groq/llama-3.1-8b-instant": "provider_cooldown_active:rate_limit:59s"}
 		},
 	}
 
@@ -160,6 +160,16 @@ func TestCompletions_NoEligibleProviders(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "NO_ELIGIBLE_PROVIDER", errObj["code"])
+	details, ok := errObj["details"].(map[string]any)
+	require.True(t, ok)
+	summary, ok := details["reason_summary"].([]any)
+	require.True(t, ok)
+	require.Len(t, summary, 1)
+	summaryObj, ok := summary[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "cooldown", summaryObj["category"])
+	assert.Equal(t, true, summaryObj["retryable"])
+	assert.Equal(t, float64(59), summaryObj["retry_after_seconds"])
 }
 
 func TestCompletions_SuccessfulRequest(t *testing.T) {

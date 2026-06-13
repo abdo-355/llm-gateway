@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/logger"
@@ -76,6 +78,7 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 			Details: map[string]any{
 				"requirements":       requirements,
 				"filtered_providers": filtered,
+				"reason_summary":     summarizeFilteredProviders(filtered),
 			},
 		}
 	}
@@ -266,4 +269,76 @@ func filterCandidatesByModel(candidates []types.RoutingCandidate, model string) 
 		}
 	}
 	return filtered
+}
+
+type filterReasonSummary struct {
+	Category          string `json:"category"`
+	Reason            string `json:"reason"`
+	Count             int    `json:"count"`
+	Retryable         bool   `json:"retryable"`
+	RetryAfterSeconds *int   `json:"retry_after_seconds,omitempty"`
+}
+
+func summarizeFilteredProviders(filtered map[string]string) []filterReasonSummary {
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	byReason := make(map[string]filterReasonSummary)
+	for _, reason := range filtered {
+		category, retryable, retryAfter := classifyFilterReason(reason)
+		summary := byReason[reason]
+		if summary.Reason == "" {
+			summary = filterReasonSummary{
+				Category:          category,
+				Reason:            reason,
+				Retryable:         retryable,
+				RetryAfterSeconds: retryAfter,
+			}
+		}
+		summary.Count++
+		byReason[reason] = summary
+	}
+
+	summaries := make([]filterReasonSummary, 0, len(byReason))
+	for _, summary := range byReason {
+		summaries = append(summaries, summary)
+	}
+	sort.Slice(summaries, func(i, j int) bool {
+		if summaries[i].Category == summaries[j].Category {
+			return summaries[i].Reason < summaries[j].Reason
+		}
+		return summaries[i].Category < summaries[j].Category
+	})
+	return summaries
+}
+
+func classifyFilterReason(reason string) (string, bool, *int) {
+	if strings.HasPrefix(reason, "provider_cooldown_active:") {
+		parts := strings.Split(reason, ":")
+		if len(parts) >= 3 {
+			secondsText := strings.TrimSuffix(parts[2], "s")
+			if seconds, err := strconv.Atoi(secondsText); err == nil && seconds > 0 {
+				return "cooldown", true, &seconds
+			}
+		}
+		return "cooldown", true, nil
+	}
+
+	switch {
+	case strings.Contains(reason, "quota_exceeded"):
+		return "quota", false, nil
+	case strings.Contains(reason, "concurrency_limit"):
+		return "capacity", true, nil
+	case strings.Contains(reason, "circuit_breaker"):
+		return "health", true, nil
+	case strings.Contains(reason, "not_supported") || strings.Contains(reason, "not_certified"):
+		return "capability", false, nil
+	case strings.Contains(reason, "allowlist") || strings.Contains(reason, "denylist"):
+		return "routing_policy", false, nil
+	case strings.Contains(reason, "provider_unavailable"):
+		return "configuration", false, nil
+	default:
+		return "other", false, nil
+	}
 }
