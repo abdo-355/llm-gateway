@@ -220,6 +220,26 @@ func TestDeriveRequirements(t *testing.T) {
 		assert.Equal(t, "json_schema_strict", reqs.Output)
 	})
 
+	t.Run("JSON object from response_format", func(t *testing.T) {
+		req := types.ChatCompletionRequest{ResponseFormat: &types.ResponseFormat{Type: "json_object"}}
+		reqs := r.DeriveRequirements(req, nil)
+		assert.Equal(t, "json_object", reqs.Output)
+	})
+
+	t.Run("non-strict JSON schema from response_format", func(t *testing.T) {
+		req := types.ChatCompletionRequest{
+			ResponseFormat: &types.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &types.JSONSchema{
+					Name:   "test",
+					Strict: boolPtr(false),
+				},
+			},
+		}
+		reqs := r.DeriveRequirements(req, nil)
+		assert.Equal(t, "json_schema", reqs.Output)
+	})
+
 	t.Run("streaming required", func(t *testing.T) {
 		req := types.ChatCompletionRequest{Stream: boolPtr(true)}
 		reqs := r.DeriveRequirements(req, nil)
@@ -334,6 +354,22 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Contains(t, filtered, "provider-b/model-3")
 	})
 
+	t.Run("filters JSON object to structured output providers", func(t *testing.T) {
+		r, mockQuota, mockHealth, _ := newTestRouter(t)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		jsonReqs := types.DerivedRequirements{Output: "json_object", Streaming: "preferred", Tools: "forbidden"}
+		jsonReq := baseReq
+		jsonReq.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
+
+		eligible, filtered := r.FilterCandidates(ctx, r.GenerateCandidates(), jsonReqs, jsonReq, nil)
+		assert.Len(t, eligible, 2)
+		assert.Contains(t, filtered, "provider-b/model-3")
+		assert.Equal(t, "json_object_not_supported", filtered["provider-b/model-3"])
+	})
+
 	t.Run("filters by streaming requirement", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
@@ -408,7 +444,7 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Equal(t, "logprobs_not_supported", filtered["provider-b/model-3"])
 	})
 
-	t.Run("filters cerebras json_object streaming combination", func(t *testing.T) {
+	t.Run("allows cerebras json_object streaming via schema support", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockQuota := mocks.NewMockQuotaChecker(ctrl)
 		mockHealth := mocks.NewMockHealthChecker(ctrl)
@@ -439,8 +475,8 @@ func TestFilterCandidates(t *testing.T) {
 
 		candidates := r.GenerateCandidates()
 		eligible, filtered := r.FilterCandidates(ctx, candidates, types.DerivedRequirements{Output: "text", Streaming: "required", Tools: "forbidden"}, streamReq, nil)
-		assert.Empty(t, eligible)
-		assert.Equal(t, "json_object_streaming_not_supported", filtered["cerebras/model-1"])
+		assert.Len(t, eligible, 1)
+		assert.Empty(t, filtered)
 	})
 
 	t.Run("filters multiple choices when unsupported", func(t *testing.T) {

@@ -79,13 +79,18 @@ func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *type
 		Tools:     "forbidden",
 	}
 
-	// Detect strict JSON
+	// Detect structured output requirements.
 	if req.ResponseFormat != nil {
-		if req.ResponseFormat.Type == "json_schema" &&
-			req.ResponseFormat.JSONSchema != nil &&
-			req.ResponseFormat.JSONSchema.Strict != nil &&
-			*req.ResponseFormat.JSONSchema.Strict {
-			requirements.Output = "json_schema_strict"
+		switch req.ResponseFormat.Type {
+		case "json_object":
+			requirements.Output = "json_object"
+		case "json_schema":
+			requirements.Output = "json_schema"
+			if req.ResponseFormat.JSONSchema != nil &&
+				req.ResponseFormat.JSONSchema.Strict != nil &&
+				*req.ResponseFormat.JSONSchema.Strict {
+				requirements.Output = "json_schema_strict"
+			}
 		}
 	}
 
@@ -251,29 +256,9 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
-		// Check strict JSON requirement
-		if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" && !supportsJSONObject(caps) {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_output_not_supported"
+		if !supportsStructuredOutput(requirements.Output, caps, candidate.IsCertifiedForStrictSchema) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = structuredOutputFilterReason(requirements.Output)
 			continue
-		}
-
-		if provider.ID == "cerebras" && req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" && req.Stream != nil && *req.Stream {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_object_streaming_not_supported"
-			continue
-		}
-
-		if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_schema" && !supportsJSONSchema(caps) {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "json_schema_not_supported"
-			continue
-		}
-
-		if requirements.Output == "json_schema_strict" {
-			if !candidate.IsCertifiedForStrictSchema {
-				if caps.StructuredOutputs != "json_schema_strict" {
-					filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "not_certified_for_strict_json"
-					continue
-				}
-			}
 		}
 
 		if requirements.Streaming == "required" && !caps.Streaming {
@@ -1579,6 +1564,34 @@ func supportsJSONObject(caps types.ProviderCapabilities) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func supportsStructuredOutput(output string, caps types.ProviderCapabilities, strictCertified bool) bool {
+	switch output {
+	case "", "text":
+		return true
+	case "json_object":
+		return supportsJSONObject(caps) || strictCertified
+	case "json_schema":
+		return supportsJSONSchema(caps) || strictCertified
+	case "json_schema_strict":
+		return strictCertified || caps.StructuredOutputs == "json_schema_strict"
+	default:
+		return false
+	}
+}
+
+func structuredOutputFilterReason(output string) string {
+	switch output {
+	case "json_object":
+		return "json_object_not_supported"
+	case "json_schema":
+		return "json_schema_not_supported"
+	case "json_schema_strict":
+		return "not_certified_for_strict_json"
+	default:
+		return "structured_output_not_supported"
 	}
 }
 

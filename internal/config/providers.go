@@ -555,7 +555,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               true,
-			StructuredOutputs:   "none",
+			StructuredOutputs:   "json_schema",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,

@@ -24,6 +24,14 @@ func TestProviderRegistryInvariants(t *testing.T) {
 		"bearer": true,
 		"header": true,
 	}
+	validStructuredOutputs := map[string]bool{
+		"none":               true,
+		"json_object":        true,
+		"json_schema":        true,
+		"json_schema_strict": true,
+		"model_dependent":    true,
+		"unknown":            true,
+	}
 
 	providerIDs := make(map[string]struct{}, len(providers))
 	providerModels := make(map[string]map[string]struct{}, len(providers))
@@ -34,6 +42,7 @@ func TestProviderRegistryInvariants(t *testing.T) {
 			require.NotEmpty(t, provider.BaseURL)
 			assert.True(t, validProviderTypes[provider.ProviderType], "invalid provider type %q", provider.ProviderType)
 			assert.True(t, validAuthTypes[provider.Auth.Type], "invalid auth type %q", provider.Auth.Type)
+			assert.True(t, validStructuredOutputs[provider.Capabilities.StructuredOutputs], "invalid structured output value %q", provider.Capabilities.StructuredOutputs)
 			if provider.Auth.Type == "bearer" || provider.Auth.Type == "header" {
 				assert.NotEmpty(t, provider.Auth.Env)
 			}
@@ -64,6 +73,9 @@ func TestProviderRegistryInvariants(t *testing.T) {
 			}
 			for model := range provider.Models.Capabilities {
 				assert.Contains(t, models, model, "capability override references unknown model")
+				if structured := provider.Models.Capabilities[model].StructuredOutputs; structured != nil {
+					assert.True(t, validStructuredOutputs[*structured], "invalid structured output override %q", *structured)
+				}
 			}
 		})
 	}

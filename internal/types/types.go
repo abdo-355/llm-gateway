@@ -315,7 +315,7 @@ type RouterHints struct {
 }
 
 type RouterRequirements struct {
-	Output    *string `json:"output,omitempty"`    // text, json_schema_strict
+	Output    *string `json:"output,omitempty"`    // text, json_object, json_schema, json_schema_strict
 	Streaming *string `json:"streaming,omitempty"` // required, preferred, forbidden
 	Tools     *string `json:"tools,omitempty"`     // required, allowed, forbidden
 }
@@ -458,7 +458,7 @@ type ProviderModels struct {
 type ProviderCapabilities struct {
 	Streaming           bool   `json:"streaming"`
 	Tools               bool   `json:"tools"`
-	StructuredOutputs   string `json:"structuredOutputs"` // none, json_object, json_schema_strict, model_dependent, unknown
+	StructuredOutputs   string `json:"structuredOutputs"` // none, json_object, json_schema, json_schema_strict, model_dependent, unknown
 	Logprobs            bool   `json:"logprobs,omitempty"`
 	Metadata            bool   `json:"metadata,omitempty"`
 	Seed                bool   `json:"seed,omitempty"`
@@ -523,7 +523,7 @@ type AppConfig struct {
 }
 
 type DerivedRequirements struct {
-	Output    string `json:"output"`    // text, json_schema_strict
+	Output    string `json:"output"`    // text, json_object, json_schema, json_schema_strict
 	Streaming string `json:"streaming"` // required, preferred, forbidden
 	Tools     string `json:"tools"`     // required, allowed, forbidden
 }

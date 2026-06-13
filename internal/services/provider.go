@@ -333,7 +333,7 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 
 	request.Model = model
 	provider := detectProvider(baseURL, providerType, auth)
-	request = normalizeRequestForProvider(request, provider)
+	request = normalizeRequestForProvider(request, provider, model)
 	if err := validateRequestForProvider(request, provider); err != nil {
 		return nil, err
 	}
@@ -354,7 +354,7 @@ func validateRequestForProvider(request types.ChatCompletionRequest, provider st
 		return fmt.Errorf("cerebras does not support json_object with streaming")
 	}
 
-	if provider == "cerebras" && request.ResponseFormat.Type == "json_schema" && request.ResponseFormat.JSONSchema != nil {
+	if provider == "cerebras" && isStrictJSONSchema(request.ResponseFormat) {
 		if !schemaObjectsDisallowAdditionalProperties(request.ResponseFormat.JSONSchema.Schema) {
 			return fmt.Errorf("cerebras strict json_schema requires additionalProperties=false on every object")
 		}
@@ -363,7 +363,17 @@ func validateRequestForProvider(request types.ChatCompletionRequest, provider st
 	return nil
 }
 
-func normalizeRequestForProvider(request types.ChatCompletionRequest, provider string) types.ChatCompletionRequest {
+func isStrictJSONSchema(format *types.ResponseFormat) bool {
+	return format != nil &&
+		format.Type == "json_schema" &&
+		format.JSONSchema != nil &&
+		format.JSONSchema.Strict != nil &&
+		*format.JSONSchema.Strict
+}
+
+func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, model string) types.ChatCompletionRequest {
+	request = normalizeStructuredOutputForProvider(request, provider, model)
+
 	switch provider {
 	case "groq", "cerebras":
 		if request.MaxCompletionTokens == nil && request.MaxTokens != nil {
@@ -401,6 +411,47 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider s
 	}
 
 	return request
+}
+
+func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, provider, model string) types.ChatCompletionRequest {
+	if request.ResponseFormat == nil || request.ResponseFormat.Type != "json_object" {
+		return request
+	}
+
+	if providerUsesNativeJSONObject(provider, model) {
+		return request
+	}
+	if !providerUsesJSONSchemaForJSONObject(provider, model) {
+		return request
+	}
+
+	request.ResponseFormat = &types.ResponseFormat{
+		Type: "json_schema",
+		JSONSchema: &types.JSONSchema{
+			Name:        "response",
+			Description: "JSON object response",
+			Schema:      json.RawMessage(`{"type":"object","additionalProperties":true}`),
+		},
+	}
+	return request
+}
+
+func providerUsesNativeJSONObject(provider, model string) bool {
+	if provider == "oci" && strings.HasPrefix(model, "google.gemini-") {
+		return true
+	}
+	return false
+}
+
+func providerUsesJSONSchemaForJSONObject(provider, model string) bool {
+	switch provider {
+	case "cerebras", "groq", "mistral", "nim", "zai", "kilo":
+		return true
+	case "oci":
+		return !strings.HasPrefix(model, "google.gemini-")
+	default:
+		return false
+	}
 }
 
 func detectProvider(baseURL, providerType string, auth types.ProviderAuth) string {

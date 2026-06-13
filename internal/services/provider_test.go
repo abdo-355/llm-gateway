@@ -101,6 +101,43 @@ func TestPrepareRequest_GroqShaping(t *testing.T) {
 	assert.NotContains(t, payload, "presence_penalty")
 }
 
+func TestPrepareRequest_GroqConvertsJSONObjectToJSONSchema(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages:       []types.OpenAIMessage{{Role: "user", Content: "Return JSON."}},
+		ResponseFormat: &types.ResponseFormat{Type: "json_object"},
+	}
+
+	body, err := svc.prepareRequest(req, "llama-3.1-8b-instant", "https://api.groq.com/openai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	format, ok := payload["response_format"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "json_schema", format["type"])
+	schema, ok := format["json_schema"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "response", schema["name"])
+}
+
+func TestPrepareRequest_OCIGeminiKeepsNativeJSONObject(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages:       []types.OpenAIMessage{{Role: "user", Content: "Return JSON."}},
+		ResponseFormat: &types.ResponseFormat{Type: "json_object"},
+	}
+
+	body, err := svc.prepareRequest(req, "google.gemini-2.5-flash", "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/openai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "OCI_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	format, ok := payload["response_format"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "json_object", format["type"])
+}
+
 func TestPrepareRequest_OpenCodeShaping(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{
@@ -212,6 +249,24 @@ func TestPrepareRequest_CerebrasAllowsStrictSchemaWithAdditionalPropertiesFalse(
 	}
 
 	_, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
+	require.NoError(t, err)
+}
+
+func TestPrepareRequest_CerebrasAllowsNonStrictSchemaWithoutAdditionalPropertiesFalse(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "test",
+				Strict: boolPtr(false),
+				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}}}`),
+			},
+		},
+	}
+
+	_, err := svc.prepareRequest(req, "gpt-oss-120b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
 	require.NoError(t, err)
 }
 

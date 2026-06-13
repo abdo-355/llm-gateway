@@ -23,14 +23,14 @@ var _ = mocks.NewMockQuotaChecker
 func TestDeriveRequirements_EdgeCases(t *testing.T) {
 	r, _, _, _ := newTestRouter(t)
 
-	t.Run("json_object type defaults to text", func(t *testing.T) {
+	t.Run("json_object type requires json_object output", func(t *testing.T) {
 		req := types.ChatCompletionRequest{
 			ResponseFormat: &types.ResponseFormat{
 				Type: "json_object",
 			},
 		}
 		reqs := r.DeriveRequirements(req, nil)
-		assert.Equal(t, "text", reqs.Output)
+		assert.Equal(t, "json_object", reqs.Output)
 	})
 
 	t.Run("text type response format", func(t *testing.T) {
@@ -43,7 +43,7 @@ func TestDeriveRequirements_EdgeCases(t *testing.T) {
 		assert.Equal(t, "text", reqs.Output)
 	})
 
-	t.Run("json_schema strict false defaults to text", func(t *testing.T) {
+	t.Run("json_schema strict false requires schema output", func(t *testing.T) {
 		req := types.ChatCompletionRequest{
 			ResponseFormat: &types.ResponseFormat{
 				Type: "json_schema",
@@ -54,7 +54,7 @@ func TestDeriveRequirements_EdgeCases(t *testing.T) {
 			},
 		}
 		reqs := r.DeriveRequirements(req, nil)
-		assert.Equal(t, "text", reqs.Output)
+		assert.Equal(t, "json_schema", reqs.Output)
 	})
 
 	t.Run("empty tools array is forbidden", func(t *testing.T) {
