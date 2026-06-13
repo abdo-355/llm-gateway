@@ -1023,6 +1023,70 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, filtered["provider-a/model-1"], "provider_cooldown_active:rate_limit")
 	})
 
+	t.Run("retry policy disables failover on rate limit", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+
+		rateErr := errors.NewRateLimitError("limited", 60, "rpm")
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, rateErr)
+		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
+		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts:    2,
+			RetryOn429:     false,
+			RetryOnTimeout: true,
+			RetryOn5xx:     true,
+			RetryPolicySet: true,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-no-429-failover")
+		assert.Nil(t, result)
+		require.Error(t, err)
+		gatewayErr, ok := err.(*types.GatewayError)
+		require.True(t, ok)
+		assert.Equal(t, "RATE_LIMITED", gatewayErr.Code)
+	})
+
+	t.Run("hard timeout bounds provider attempt timeout", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+		hardTimeoutMs := 50
+		content := "ok"
+		resp := &types.ChatCompletionResponse{
+			ID:      "id-hard-timeout",
+			Model:   "model-1",
+			Usage:   &types.Usage{TotalTokens: 12},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(
+			gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		).DoAndReturn(func(baseURL, apiKey, model string, request types.ChatCompletionRequest, timeoutMs int, callCtx context.Context, providerType string, auth types.ProviderAuth, requestID string) (*types.ChatCompletionResponse, error) {
+			assert.Positive(t, timeoutMs)
+			assert.LessOrEqual(t, timeoutMs, hardTimeoutMs)
+			_, hasDeadline := callCtx.Deadline()
+			assert.True(t, hasDeadline)
+			return resp, nil
+		})
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-a", "model-1", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "model-1", 12).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts:   1,
+			HardTimeoutMs: &hardTimeoutMs,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-hard-timeout-bound")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-a", result.ProviderID)
+	})
+
 	t.Run("provider 4xx fails over", func(t *testing.T) {
 		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
 

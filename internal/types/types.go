@@ -343,7 +343,7 @@ type FallbackConfig struct {
 }
 
 type TraceConfig struct {
-	RequestID *string `json:"request_id,omitempty"`
+	RequestID *string  `json:"request_id,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
 }
 
@@ -351,38 +351,38 @@ type TraceConfig struct {
 type FailureAction string
 
 const (
-	ActionRetry              FailureAction = "retry"
-	ActionRetryWithBackoff   FailureAction = "retry_with_backoff"
-	ActionFailover           FailureAction = "failover"
+	ActionRetry               FailureAction = "retry"
+	ActionRetryWithBackoff    FailureAction = "retry_with_backoff"
+	ActionFailover            FailureAction = "failover"
 	ActionFailoverWithBackoff FailureAction = "failover_with_backoff"
-	ActionAbort              FailureAction = "abort"
-	ActionCooldown           FailureAction = "cooldown"
+	ActionAbort               FailureAction = "abort"
+	ActionCooldown            FailureAction = "cooldown"
 )
 
 // FailureCategory categorizes the type of failure
 type FailureCategory string
 
 const (
-	CategoryNetwork         FailureCategory = "network"
-	CategoryTimeout         FailureCategory = "timeout"
-	CategoryRateLimit       FailureCategory = "rate_limit"
-	CategoryProvider5xx     FailureCategory = "provider_5xx"
-	CategoryProvider4xx     FailureCategory = "provider_4xx"
-	CategoryParse           FailureCategory = "parse"
-	CategoryEmpty           FailureCategory = "empty_response"
-	CategoryCircuitBreaker  FailureCategory = "circuit_breaker"
-	CategoryQuota           FailureCategory = "quota"
-	CategoryPayment         FailureCategory = "payment"
-	CategoryValidation      FailureCategory = "validation"
-	CategoryUnknown         FailureCategory = "unknown"
+	CategoryNetwork        FailureCategory = "network"
+	CategoryTimeout        FailureCategory = "timeout"
+	CategoryRateLimit      FailureCategory = "rate_limit"
+	CategoryProvider5xx    FailureCategory = "provider_5xx"
+	CategoryProvider4xx    FailureCategory = "provider_4xx"
+	CategoryParse          FailureCategory = "parse"
+	CategoryEmpty          FailureCategory = "empty_response"
+	CategoryCircuitBreaker FailureCategory = "circuit_breaker"
+	CategoryQuota          FailureCategory = "quota"
+	CategoryPayment        FailureCategory = "payment"
+	CategoryValidation     FailureCategory = "validation"
+	CategoryUnknown        FailureCategory = "unknown"
 )
 
 // FailureContext provides additional context for failure decisions
 type FailureContext struct {
-	AttemptIndex      int
-	MaxAttempts       int
-	ProviderID        string
-	Model             string
+	AttemptIndex       int
+	MaxAttempts        int
+	ProviderID         string
+	Model              string
 	HasRemainingBudget bool
 }
 
@@ -501,8 +501,8 @@ type ProviderLimits struct {
 
 type ModelLimits struct {
 	Rpm             *int `json:"rpm,omitempty"`
-	Rph             *int `json:"rph,omitempty"`             // Requests per hour
-	Rpd             *int `json:"rpd,omitempty"`             // Requests per day
+	Rph             *int `json:"rph,omitempty"` // Requests per hour
+	Rpd             *int `json:"rpd,omitempty"` // Requests per day
 	Tpm             *int `json:"tpm,omitempty"`
 	Tph             *int `json:"tph,omitempty"`             // Tokens per hour
 	Tpd             *int `json:"tpd,omitempty"`             // Tokens per day
@@ -554,6 +554,7 @@ type RoutingPlan struct {
 	RetryOn429     bool             `json:"retryOn429"`
 	RetryOnTimeout bool             `json:"retryOnTimeout"`
 	RetryOn5xx     bool             `json:"retryOn5xx"`
+	RetryPolicySet bool             `json:"-"`
 }
 
 type ExecutionResult struct {

@@ -215,7 +215,18 @@ func (s *ProviderService) StreamProviderChannel(
 
 		provider := detectProvider(baseURL, providerType, auth)
 		if err := s.parseSSEStreamChannel(ctx, resp.Body, chunks, provider, model, requestID); err != nil {
-			errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
+			if timeoutErr, ok := err.(*errors.TimeoutError); ok {
+				errChan <- &types.GatewayError{
+					Type:    "timeout_error",
+					Code:    "TIMEOUT",
+					Message: timeoutErr.Message,
+					Details: map[string]any{"timeout_type": timeoutErr.TimeoutType},
+				}
+			} else if err == context.DeadlineExceeded || err == context.Canceled {
+				errChan <- requestTimeoutGatewayError(ctx)
+			} else {
+				errChan <- &types.GatewayError{Type: "provider_error", Code: "STREAM_PARSE_FAILED", Message: err.Error()}
+			}
 		} else {
 			errChan <- nil
 		}
@@ -765,6 +776,11 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 	if value := headers.Get("Retry-After"); value != "" {
 		if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
 			retryAfter = seconds
+		} else if retryAt, err := http.ParseTime(value); err == nil {
+			seconds := int(time.Until(retryAt).Seconds())
+			if seconds > 0 {
+				retryAfter = seconds
+			}
 		}
 	}
 
@@ -932,6 +948,10 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 				return nil
 			}
 
+			if streamErr := parseProviderSSEError(data); streamErr != nil {
+				return streamErr
+			}
+
 			var chunk types.SSEChunk
 			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 				logger.Error().
@@ -972,4 +992,23 @@ func shouldSkipChunk(chunk types.SSEChunk) bool {
 	}
 
 	return true
+}
+
+func parseProviderSSEError(data string) error {
+	var payload struct {
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Code    any    `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(data), &payload); err != nil || payload.Error.Message == "" {
+		return nil
+	}
+
+	return &errors.ProviderError{
+		Message:     payload.Error.Message,
+		StatusCode:  500,
+		IsRetryable: true,
+	}
 }

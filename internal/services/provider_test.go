@@ -164,6 +164,20 @@ func TestParseRateLimitDetails_CloudflareDailyAllocationExhausted(t *testing.T) 
 	assert.Equal(t, "quota_exhausted", limitSubtype)
 }
 
+func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
+	retryAt := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
+	retryAfter, limitType, limitSubtype := parseRateLimitDetails(
+		"openai",
+		http.Header{"Retry-After": []string{retryAt}},
+		[]byte(`{"error":{"message":"rate limited"}}`),
+	)
+
+	assert.GreaterOrEqual(t, retryAfter, 80)
+	assert.LessOrEqual(t, retryAfter, 90)
+	assert.Equal(t, "rpm", limitType)
+	assert.Equal(t, "rate_limit", limitSubtype)
+}
+
 func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{

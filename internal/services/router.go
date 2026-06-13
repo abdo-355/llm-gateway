@@ -574,6 +574,7 @@ func (r *Router) CompilePlan(
 		RetryOn429:     retryOn429,
 		RetryOnTimeout: retryOnTimeout,
 		RetryOn5xx:     retryOn5xx,
+		RetryPolicySet: true,
 	}
 }
 
@@ -606,10 +607,9 @@ func (r *Router) Execute(
 			continue
 		}
 
-		if plan.HardTimeoutMs != nil {
-			if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
-				return nil, errors.NewTimeoutError("Hard timeout exceeded", "request")
-			}
+		attemptTimeoutMs, hardTimeoutErr := boundedAttemptTimeoutMs(plan, startTime, attempt.TimeoutMs)
+		if hardTimeoutErr != nil {
+			return nil, hardTimeoutErr
 		}
 
 		logger.Info().
@@ -645,14 +645,14 @@ func (r *Router) Execute(
 			concurrencyAcquired = true
 		}
 
-		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attemptTimeoutMs)*time.Millisecond)
 
 		resp, err := r.providerService.CallProvider(
 			attempt.BaseURL,
 			attempt.APIKey,
 			attempt.Model,
 			req,
-			attempt.TimeoutMs,
+			attemptTimeoutMs,
 			attemptCtx,
 			attempt.ProviderType,
 			attempt.Auth,
@@ -798,13 +798,15 @@ func (r *Router) Execute(
 			string(decision.Category), string(decision.Action),
 		).Inc()
 
-		attemptChain = append(attemptChain, map[string]any{
+		attemptFailure := map[string]any{
 			"provider":       attempt.ProviderID,
 			"model":          attempt.Model,
 			"failure_kind":   string(decision.Category),
 			"failure_action": string(decision.Action),
 			"failure_reason": decision.Reason,
-		})
+		}
+		enrichAttemptFailureDetails(attemptFailure, err)
+		attemptChain = append(attemptChain, attemptFailure)
 
 		var status string
 		var errorType string
@@ -866,6 +868,10 @@ func (r *Router) Execute(
 		r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, err)
 		r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, err)
 
+		if !r.failureAllowedByPlan(err, plan, i) {
+			return nil, r.CreateGatewayError(err, i+1, requestID)
+		}
+
 		switch decision.Action {
 		case types.ActionAbort:
 			return nil, r.CreateGatewayError(err, i+1, requestID)
@@ -879,19 +885,15 @@ func (r *Router) Execute(
 					Str("request_id", requestID).
 					Dur("backoff", backoffDuration).
 					Msg("Applying backoff before retry")
-				select {
-				case <-time.After(backoffDuration):
-				case <-ctx.Done():
-					return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
+				if err := waitWithHardTimeout(ctx, startTime, plan, backoffDuration); err != nil {
+					return nil, err
 				}
 			}
 		case types.ActionFailover, types.ActionFailoverWithBackoff:
 			if decision.BackoffMs > 0 {
 				backoffDuration := r.backoffStrategy.CalculateBackoff(i)
-				select {
-				case <-time.After(backoffDuration):
-				case <-ctx.Done():
-					return nil, errors.NewTimeoutError("Context cancelled during backoff", "request")
+				if err := waitWithHardTimeout(ctx, startTime, plan, backoffDuration); err != nil {
+					return nil, err
 				}
 			}
 		case types.ActionCooldown:
@@ -914,15 +916,8 @@ func (r *Router) Execute(
 		tier, strategy,
 	).Observe(float64(len(plan.Attempts)))
 
-	if allAttemptsRateLimited(attemptChain) {
-		return nil, &types.GatewayError{
-			Type:    "gateway_error",
-			Code:    "RATE_LIMITED",
-			Message: "All provider attempts failed due to rate limits or quota",
-			Details: map[string]any{
-				"attempts": attemptChain,
-			},
-		}
+	if gatewayErr := aggregateRateLimitError(attemptChain); gatewayErr != nil {
+		return nil, gatewayErr
 	}
 
 	return nil, &types.GatewayError{
@@ -959,7 +954,7 @@ func (r *Router) ExecuteStream(
 		var hadFailure bool
 		var chunksSent bool
 		var outputTokenCount int
-		var failureKinds []types.FailureCategory
+		var attemptChain []map[string]any
 		var streamUsage *types.Usage
 
 		for i, attempt := range plan.Attempts {
@@ -975,18 +970,13 @@ func (r *Router) ExecuteStream(
 				continue
 			}
 
-			if plan.HardTimeoutMs != nil {
-				if int(time.Since(startTime).Milliseconds()) > *plan.HardTimeoutMs {
-					errChan <- &types.GatewayError{
-						Type:    "gateway_error",
-						Code:    "HARD_TIMEOUT",
-						Message: "Hard timeout exceeded",
-					}
-					return
-				}
+			attemptTimeoutMs, hardTimeoutErr := boundedAttemptTimeoutMs(plan, startTime, attempt.TimeoutMs)
+			if hardTimeoutErr != nil {
+				errChan <- hardTimeoutErr
+				return
 			}
 
-			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attempt.TimeoutMs)*time.Millisecond)
+			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attemptTimeoutMs)*time.Millisecond)
 			concurrencyAcquired := false
 
 			if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
@@ -999,6 +989,13 @@ func (r *Router) ExecuteStream(
 						Str("model", attempt.Model).
 						Err(err).
 						Msg("Concurrency slot unavailable")
+					attemptChain = append(attemptChain, map[string]any{
+						"provider":       attempt.ProviderID,
+						"model":          attempt.Model,
+						"failure_kind":   "concurrency_denied",
+						"failure_action": string(types.ActionFailover),
+						"failure_reason": "concurrency slot unavailable, trying different provider",
+					})
 					cancel()
 					continue
 				}
@@ -1010,7 +1007,7 @@ func (r *Router) ExecuteStream(
 				attempt.APIKey,
 				attempt.Model,
 				req,
-				attempt.TimeoutMs,
+				attemptTimeoutMs,
 				attemptCtx,
 				attempt.ProviderType,
 				attempt.Auth,
@@ -1208,12 +1205,25 @@ func (r *Router) ExecuteStream(
 			r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 			r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 
-			failureKinds = append(failureKinds, decision.Category)
+			attemptFailure := map[string]any{
+				"provider":       attempt.ProviderID,
+				"model":          attempt.Model,
+				"failure_kind":   string(decision.Category),
+				"failure_action": string(decision.Action),
+				"failure_reason": decision.Reason,
+			}
+			enrichAttemptFailureDetails(attemptFailure, typedErr)
+			attemptChain = append(attemptChain, attemptFailure)
 
 			ttfbRecorded = false
 
 			// Don't retry if we already sent chunks to the client
 			if chunksSent {
+				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
+				return
+			}
+
+			if !r.failureAllowedByPlan(typedErr, plan, i) {
 				errChan <- r.CreateGatewayError(typedErr, i+1, requestID)
 				return
 			}
@@ -1232,10 +1242,8 @@ func (r *Router) ExecuteStream(
 						Str("request_id", requestID).
 						Dur("backoff", backoffDuration).
 						Msg("Backing off before retry")
-					select {
-					case <-time.After(backoffDuration):
-					case <-ctx.Done():
-						errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+					if err := waitWithHardTimeout(ctx, startTime, plan, backoffDuration); err != nil {
+						errChan <- gatewayErrorFromError(err)
 						return
 					}
 				}
@@ -1249,10 +1257,8 @@ func (r *Router) ExecuteStream(
 						Str("request_id", requestID).
 						Dur("backoff", backoffDuration).
 						Msg("Backing off before failover")
-					select {
-					case <-time.After(backoffDuration):
-					case <-ctx.Done():
-						errChan <- &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: "Context cancelled during backoff"}
+					if err := waitWithHardTimeout(ctx, startTime, plan, backoffDuration); err != nil {
+						errChan <- gatewayErrorFromError(err)
 						return
 					}
 				}
@@ -1271,17 +1277,16 @@ func (r *Router) ExecuteStream(
 			}
 		}
 
-		if allStreamFailuresRateLimited(failureKinds) {
-			errChan <- &types.GatewayError{
-				Type:    "gateway_error",
-				Code:    "RATE_LIMITED",
-				Message: "All provider attempts failed due to rate limits or quota",
-			}
+		if gatewayErr := aggregateRateLimitError(attemptChain); gatewayErr != nil {
+			errChan <- gatewayErr
 		} else {
 			errChan <- &types.GatewayError{
 				Type:    "gateway_error",
 				Code:    "ALL_ATTEMPTS_FAILED",
 				Message: "All provider attempts failed",
+				Details: map[string]any{
+					"attempts": attemptChain,
+				},
 			}
 		}
 	}()
@@ -1299,15 +1304,25 @@ func (r *Router) gatewayErrorToTypedError(ge *types.GatewayError) error {
 	}
 
 	switch ge.Code {
-	case "RATE_LIMITED":
+	case "RATE_LIMITED", "QUOTA_EXHAUSTED", "PROVIDER_OVERLOADED":
 		retryAfter := 60
 		limitType := "rpm"
+		limitSubtype := "rate_limit"
+		if ge.Code == "QUOTA_EXHAUSTED" {
+			limitSubtype = "quota_exhausted"
+		}
+		if ge.Code == "PROVIDER_OVERLOADED" {
+			limitSubtype = "overload"
+		}
 		headers := map[string]string{}
 		if details, ok := ge.Details["retry_after"].(int); ok {
 			retryAfter = details
 		}
 		if details, ok := ge.Details["limit_type"].(string); ok && details != "" {
 			limitType = details
+		}
+		if details, ok := ge.Details["limit_subtype"].(string); ok && details != "" {
+			limitSubtype = details
 		}
 		if details, ok := ge.Details["headers"].(map[string]any); ok {
 			for key, value := range details {
@@ -1317,7 +1332,7 @@ func (r *Router) gatewayErrorToTypedError(ge *types.GatewayError) error {
 		if details, ok := ge.Details["headers"].(map[string]string); ok {
 			headers = details
 		}
-		err := errors.NewRateLimitError(ge.Message, retryAfter, limitType)
+		err := errors.NewRateLimitErrorWithSubtype(ge.Message, retryAfter, limitType, limitSubtype, headers)
 		err.Headers = headers
 		return err
 	case "TIMEOUT", "HARD_TIMEOUT":
@@ -1407,6 +1422,87 @@ func (r *Router) ShouldRetry(err error, plan types.RoutingPlan, attemptIndex int
 	default:
 		return false
 	}
+}
+
+func (r *Router) failureAllowedByPlan(err error, plan types.RoutingPlan, attemptIndex int) bool {
+	if !plan.RetryPolicySet {
+		return true
+	}
+
+	switch e := err.(type) {
+	case *errors.RateLimitError:
+		return plan.RetryOn429
+	case *errors.TimeoutError:
+		return plan.RetryOnTimeout
+	case *errors.ProviderError:
+		if e.StatusCode >= 500 || e.IsRetryable {
+			return plan.RetryOn5xx
+		}
+	}
+
+	return true
+}
+
+func boundedAttemptTimeoutMs(plan types.RoutingPlan, start time.Time, attemptTimeoutMs int) (int, *types.GatewayError) {
+	if plan.HardTimeoutMs == nil {
+		return attemptTimeoutMs, nil
+	}
+
+	elapsedMs := int(time.Since(start).Milliseconds())
+	remainingMs := *plan.HardTimeoutMs - elapsedMs
+	if remainingMs <= 0 {
+		return 0, hardTimeoutGatewayError()
+	}
+	if attemptTimeoutMs <= 0 || attemptTimeoutMs > remainingMs {
+		return remainingMs, nil
+	}
+	return attemptTimeoutMs, nil
+}
+
+func waitWithHardTimeout(ctx context.Context, start time.Time, plan types.RoutingPlan, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
+	}
+
+	if plan.HardTimeoutMs != nil {
+		remaining := time.Duration(*plan.HardTimeoutMs)*time.Millisecond - time.Since(start)
+		if remaining <= 0 {
+			return hardTimeoutGatewayError()
+		}
+		if duration > remaining {
+			duration = remaining
+		}
+	}
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		if plan.HardTimeoutMs != nil && time.Since(start) >= time.Duration(*plan.HardTimeoutMs)*time.Millisecond {
+			return hardTimeoutGatewayError()
+		}
+		return nil
+	case <-ctx.Done():
+		return errors.NewTimeoutError("Context cancelled during backoff", "request")
+	}
+}
+
+func hardTimeoutGatewayError() *types.GatewayError {
+	return &types.GatewayError{
+		Type:    "timeout_error",
+		Code:    "HARD_TIMEOUT",
+		Message: "Hard timeout exceeded",
+	}
+}
+
+func gatewayErrorFromError(err error) *types.GatewayError {
+	if gatewayErr, ok := err.(*types.GatewayError); ok {
+		return gatewayErr
+	}
+	if timeoutErr, ok := err.(*errors.TimeoutError); ok {
+		return &types.GatewayError{Type: "timeout_error", Code: "TIMEOUT", Message: timeoutErr.Message}
+	}
+	return &types.GatewayError{Type: "gateway_error", Code: "EXECUTION_ERROR", Message: err.Error()}
 }
 
 func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
@@ -1897,6 +1993,63 @@ func allAttemptsRateLimited(chain []map[string]any) bool {
 		}
 	}
 	return true
+}
+
+func enrichAttemptFailureDetails(entry map[string]any, err error) {
+	switch e := err.(type) {
+	case *errors.RateLimitError:
+		entry["retry_after"] = e.RetryAfter
+		entry["limit_type"] = e.LimitType
+		entry["limit_subtype"] = e.LimitSubtype
+	case *errors.ModelQuotaExceededError:
+		entry["limit_type"] = e.LimitType
+	}
+}
+
+func aggregateRateLimitError(chain []map[string]any) *types.GatewayError {
+	if !allAttemptsRateLimited(chain) {
+		return nil
+	}
+
+	code := "RATE_LIMITED"
+	message := "All provider attempts failed due to rate limits or quota"
+	allQuotaExhausted := true
+	allOverloaded := true
+	retryAfter := 0
+
+	for _, entry := range chain {
+		kind, _ := entry["failure_kind"].(string)
+		subtype, _ := entry["limit_subtype"].(string)
+		if kind != "quota" && subtype != "quota_exhausted" {
+			allQuotaExhausted = false
+		}
+		if subtype != "overload" {
+			allOverloaded = false
+		}
+		if value, ok := entry["retry_after"].(int); ok && value > retryAfter {
+			retryAfter = value
+		}
+	}
+
+	if allQuotaExhausted {
+		code = "QUOTA_EXHAUSTED"
+		message = "All provider attempts failed due to exhausted quota"
+	} else if allOverloaded {
+		code = "PROVIDER_OVERLOADED"
+		message = "All provider attempts failed because providers are overloaded"
+	}
+
+	details := map[string]any{"attempts": chain}
+	if retryAfter > 0 {
+		details["retry_after"] = retryAfter
+	}
+
+	return &types.GatewayError{
+		Type:    "gateway_error",
+		Code:    code,
+		Message: message,
+		Details: details,
+	}
 }
 
 func allAttemptsFailedMessage(chain []map[string]any) string {

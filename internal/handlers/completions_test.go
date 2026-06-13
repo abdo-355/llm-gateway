@@ -192,6 +192,7 @@ func TestCompletions_ExecuteError(t *testing.T) {
 				Type:    "gateway_error",
 				Code:    "RATE_LIMITED",
 				Message: "rate limited by provider",
+				Details: map[string]any{"retry_after": 42},
 			}
 		},
 	}
@@ -208,6 +209,7 @@ func TestCompletions_ExecuteError(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "RATE_LIMITED", errObj["code"])
+	assert.Equal(t, "42", w.Header().Get("Retry-After"))
 }
 
 func TestCompletions_ExecuteGenericError(t *testing.T) {

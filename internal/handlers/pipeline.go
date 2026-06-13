@@ -163,7 +163,7 @@ func writeExecutionError(c *gin.Context, err error) {
 		status = http.StatusUnprocessableEntity
 	case "ALL_ATTEMPTS_FAILED":
 		status = http.StatusBadGateway
-	case "TIMEOUT":
+	case "TIMEOUT", "HARD_TIMEOUT":
 		status = http.StatusGatewayTimeout
 	case "PROVIDER_OVERLOADED":
 		status = http.StatusServiceUnavailable
@@ -179,6 +179,10 @@ func writeExecutionError(c *gin.Context, err error) {
 		status = http.StatusPaymentRequired
 	case "VALIDATION_ERROR":
 		status = http.StatusBadRequest
+	}
+
+	if retryAfter, ok := gatewayErr.Details["retry_after"].(int); ok && retryAfter > 0 {
+		c.Header("Retry-After", strconv.Itoa(retryAfter))
 	}
 
 	logger.Warn().
@@ -238,9 +242,10 @@ func writeSSEError(c *gin.Context, err *types.GatewayError) {
 	chunkJSON, _ := json.Marshal(errorChunk)
 	fmt.Fprintf(c.Writer, "data: %s\n\n", chunkJSON)
 
-	// Then emit the gateway error details as a separate event
-	errJSON, _ := json.Marshal(err)
-	fmt.Fprintf(c.Writer, "data: %s\n\n", errJSON)
+	// Then emit the gateway error details as a typed event with the same envelope
+	// shape used by non-streaming responses.
+	errJSON, _ := json.Marshal(gin.H{"error": err})
+	fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errJSON)
 	c.Writer.Flush()
 }
 
