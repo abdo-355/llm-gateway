@@ -87,16 +87,17 @@ func printFailures(w io.Writer, report *Report) {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tHTTP\tLATENCY\tTOKENS\tFAILURE\tretries")
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tCONFIGURED\tHTTP\tLATENCY\tTOKENS\tFAILURE\tretries")
 	for _, result := range failures {
 		_, _ = fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\tretries=%d\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\tretries=%d\n",
 			result.Provider,
 			result.Model,
 			result.Endpoint,
 			emptyDash(result.Phase),
 			result.Probe,
+			emptyDash(result.Configured),
 			result.HTTPStatus,
 			result.Latency.Round(time.Millisecond),
 			emptyDash(result.TokensUsed),
@@ -123,16 +124,17 @@ func printSkipped(w io.Writer, report *Report) {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tHTTP\tFAILURE")
+	_, _ = fmt.Fprintln(tw, "PROVIDER\tMODEL\tENDPOINT\tPHASE\tPROBE\tCONFIGURED\tHTTP\tFAILURE")
 	for _, result := range skips {
 		_, _ = fmt.Fprintf(
 			tw,
-			"%s\t%s\t%s\t%s\t%s\t%d\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\n",
 			result.Provider,
 			result.Model,
 			result.Endpoint,
 			emptyDash(result.Phase),
 			result.Probe,
+			emptyDash(result.Configured),
 			result.HTTPStatus,
 			result.Failure,
 		)

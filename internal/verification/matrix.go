@@ -66,27 +66,94 @@ func BuildProbes(cfg Config) []Probe {
 			},
 		},
 		{
-			Name:   "field_acceptance",
-			Fields: []string{"temperature", "top_p", "max_completion_tokens", "presence_penalty", "frequency_penalty", "stop", "seed", "n", "user", "metadata"},
+			Name:   "max_tokens",
+			Fields: []string{"max_tokens"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:     combo.Model,
+					Messages:  basicMessages("Reply with OK only."),
+					MaxTokens: probeTokenPtr(cfg, 8),
+				}
+				return r.runJSONProbe(combo, "max_tokens", []string{"max_tokens"}, req, validateNonEmptyChatMessage)
+			},
+		},
+		{
+			Name:   "max_completion_tokens",
+			Fields: []string{"max_completion_tokens"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Reply with OK only."),
-					Temperature:         floatPtr(0),
-					TopP:                floatPtr(1),
 					MaxCompletionTokens: probeTokenPtr(cfg, 8),
-					PresencePenalty:     floatPtr(0),
-					FrequencyPenalty:    floatPtr(0),
-					Stop:                []string{"__probe_stop__"},
-					Seed:                intPtr(42),
-					N:                   intPtr(1),
-					User:                "verify-upstream",
-					Metadata:            map[string]string{"probe": "field_acceptance", "provider": combo.Provider.ID},
 				}
-				return r.runJSONProbe(combo, "field_acceptance", []string{"temperature", "top_p", "max_completion_tokens", "presence_penalty", "frequency_penalty", "stop", "seed", "n", "user", "metadata"}, req, validateNonEmptyChatMessage)
+				return r.runJSONProbe(combo, "max_completion_tokens", []string{"max_completion_tokens"}, req, validateNonEmptyChatMessage)
 			},
 		},
-
+		{
+			Name:   "metadata",
+			Fields: []string{"metadata"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:     combo.Model,
+					Messages:  basicMessages("Reply with OK only."),
+					MaxTokens: probeTokenPtr(cfg, 8),
+					Metadata:  map[string]string{"probe": "metadata", "provider": combo.Provider.ID},
+				}
+				return r.runJSONProbe(combo, "metadata", []string{"metadata"}, req, validateNonEmptyChatMessage)
+			},
+		},
+		{
+			Name:   "seed",
+			Fields: []string{"seed"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:     combo.Model,
+					Messages:  basicMessages("Reply with OK only."),
+					MaxTokens: probeTokenPtr(cfg, 8),
+					Seed:      intPtr(42),
+				}
+				return r.runJSONProbe(combo, "seed", []string{"seed"}, req, validateNonEmptyChatMessage)
+			},
+		},
+		{
+			Name:   "user",
+			Fields: []string{"user"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:     combo.Model,
+					Messages:  basicMessages("Reply with OK only."),
+					MaxTokens: probeTokenPtr(cfg, 8),
+					User:      "verify-upstream",
+				}
+				return r.runJSONProbe(combo, "user", []string{"user"}, req, validateNonEmptyChatMessage)
+			},
+		},
+		{
+			Name:   "frequency_penalty",
+			Fields: []string{"frequency_penalty"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:            combo.Model,
+					Messages:         basicMessages("Reply with OK only."),
+					MaxTokens:        probeTokenPtr(cfg, 8),
+					FrequencyPenalty: floatPtr(0),
+				}
+				return r.runJSONProbe(combo, "frequency_penalty", []string{"frequency_penalty"}, req, validateNonEmptyChatMessage)
+			},
+		},
+		{
+			Name:   "presence_penalty",
+			Fields: []string{"presence_penalty"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:           combo.Model,
+					Messages:        basicMessages("Reply with OK only."),
+					MaxTokens:       probeTokenPtr(cfg, 8),
+					PresencePenalty: floatPtr(0),
+				}
+				return r.runJSONProbe(combo, "presence_penalty", []string{"presence_penalty"}, req, validateNonEmptyChatMessage)
+			},
+		},
 		{
 			Name:   "stream",
 			Fields: []string{"stream", "stream_options.include_usage"},
@@ -107,26 +174,28 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "json_object",
 			Fields: []string{"response_format.type=json_object"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
-				caps := resolveCapabilities(combo)
-				supportsNative := caps.StructuredOutputs != "none" && caps.StructuredOutputs != "unknown"
-
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
+					Messages:            basicMessages("Return a JSON object with key ok set to true."),
 					Stream:              boolPtr(false),
+					ResponseFormat:      &types.ResponseFormat{Type: "json_object"},
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
-
-				if supportsNative {
-					req.Messages = basicMessages("Return a JSON object with key ok set to true.")
-					req.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
-				} else {
-					req.Messages = []types.OpenAIMessage{
-						{Role: "system", Content: "Respond in valid JSON format."},
-						{Role: "user", Content: "Return a JSON object with key ok set to true. No markdown, no explanation."},
-					}
-				}
-
 				return r.runJSONProbe(combo, "json_object", []string{"response_format.type=json_object"}, req, validateJSONObjectChat)
+			},
+		},
+		{
+			Name:   "json_schema",
+			Fields: []string{"response_format.type=json_schema"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:               combo.Model,
+					Messages:            basicMessages("Return JSON only with ok=true."),
+					Stream:              boolPtr(false),
+					ResponseFormat:      nonStrictJSONSchemaFormat(),
+					MaxCompletionTokens: probeTokenPtr(cfg, 12),
+				}
+				return r.runJSONProbe(combo, "json_schema", []string{"response_format.type=json_schema"}, req, validateStrictJSONChat)
 			},
 		},
 		{
@@ -172,17 +241,31 @@ func BuildProbes(cfg Config) []Probe {
 		},
 		{
 			Name:   "tools",
-			Fields: []string{"tools", "tool_choice", "parallel_tool_calls"},
+			Fields: []string{"tools", "tool_choice"},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				req := types.ChatCompletionRequest{
+					Model:      combo.Model,
+					Messages:   basicMessages("Call the get_status tool and nothing else."),
+					Tools:      probeTools(false),
+					ToolChoice: "required",
+					MaxTokens:  probeTokenPtr(cfg, 12),
+				}
+				return r.runJSONProbe(combo, "tools", []string{"tools", "tool_choice"}, req, validateToolCallChat)
+			},
+		},
+		{
+			Name:   "tool_schema",
+			Fields: []string{"tools.function.parameters", "tools.function.strict", "parallel_tool_calls"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Call the get_status tool and nothing else."),
-					Tools:               probeTools(),
+					Tools:               probeTools(true),
 					ToolChoice:          "required",
 					ParallelToolCalls:   boolPtr(false),
 					MaxCompletionTokens: probeTokenPtr(cfg, 12),
 				}
-				return r.runJSONProbe(combo, "tools", []string{"tools", "tool_choice", "parallel_tool_calls"}, req, validateToolCallChat)
+				return r.runJSONProbe(combo, "tool_schema", []string{"tools.function.parameters", "tools.function.strict", "parallel_tool_calls"}, req, validateToolCallChat)
 			},
 		},
 	}
@@ -267,10 +350,73 @@ func supportsMultipleChoices(combo Combo) bool {
 	return resolveCapabilities(combo).MultipleChoices
 }
 
+func configuredCapability(combo Combo, probe string) string {
+	caps := resolveCapabilities(combo)
+	switch probe {
+	case "stream":
+		return boolCapability(caps.Streaming)
+	case "json_object", "json_schema", "json_schema_strict":
+		if probe == "json_schema_strict" && combo.StrictJSONCertified {
+			return caps.StructuredOutputs + "+certified"
+		}
+		return caps.StructuredOutputs
+	case "logprobs":
+		return boolCapability(caps.Logprobs)
+	case "metadata":
+		return boolCapability(caps.Metadata)
+	case "seed":
+		return boolCapability(caps.Seed)
+	case "user":
+		return boolCapability(caps.User)
+	case "frequency_penalty":
+		return boolCapability(caps.FrequencyPenalty)
+	case "presence_penalty":
+		return boolCapability(caps.PresencePenalty)
+	case "max_tokens":
+		return boolCapability(caps.MaxTokens)
+	case "max_completion_tokens":
+		return boolCapability(caps.MaxCompletionTokens)
+	case "multiple_choices":
+		return boolCapability(caps.MultipleChoices)
+	case "tools":
+		return boolCapability(caps.Tools)
+	case "tool_schema":
+		return caps.ToolSchema
+	default:
+		return ""
+	}
+}
+
+func boolCapability(supported bool) string {
+	if supported {
+		return "true"
+	}
+	return "false"
+}
+
 func basicMessages(prompt string) []types.OpenAIMessage {
 	return []types.OpenAIMessage{
 		{Role: "system", Content: "You are a verification probe. Keep replies minimal and text-only."},
 		{Role: "user", Content: prompt},
+	}
+}
+
+func nonStrictJSONSchemaFormat() *types.ResponseFormat {
+	schema, _ := json.Marshal(map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"ok": map[string]any{"type": "boolean"},
+		},
+		"required":             []string{"ok"},
+		"additionalProperties": true,
+	})
+
+	return &types.ResponseFormat{
+		Type: "json_schema",
+		JSONSchema: &types.JSONSchema{
+			Name:   "probe_schema",
+			Schema: schema,
+		},
 	}
 }
 
@@ -294,7 +440,7 @@ func strictJSONSchemaFormat() *types.ResponseFormat {
 	}
 }
 
-func probeTools() []types.OpenAITool {
+func probeTools(strict bool) []types.OpenAITool {
 	params, _ := json.Marshal(map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -310,9 +456,16 @@ func probeTools() []types.OpenAITool {
 			Name:        "get_status",
 			Description: "Returns the status of a service.",
 			Parameters:  params,
-			Strict:      boolPtr(true),
+			Strict:      optionalBoolPtr(strict),
 		},
 	}}
+}
+
+func optionalBoolPtr(v bool) *bool {
+	if !v {
+		return nil
+	}
+	return &v
 }
 
 func validateNonEmptyChatMessage(resp *types.ChatCompletionResponse) error {

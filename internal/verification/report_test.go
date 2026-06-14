@@ -88,6 +88,64 @@ func TestSupportsStrictJSON(t *testing.T) {
 	assert.False(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "model_dependent"}}}))
 }
 
+func TestBuildProbesDiscoversAtomicCapabilities(t *testing.T) {
+	probes := BuildProbes(Config{})
+	names := make([]string, 0, len(probes))
+	for _, probe := range probes {
+		names = append(names, probe.Name)
+	}
+
+	assert.NotContains(t, names, "field_acceptance")
+	for _, name := range []string{
+		"basic_text",
+		"max_tokens",
+		"max_completion_tokens",
+		"metadata",
+		"seed",
+		"user",
+		"frequency_penalty",
+		"presence_penalty",
+		"stream",
+		"json_object",
+		"json_schema",
+		"json_schema_strict",
+		"logprobs",
+		"multiple_choices",
+		"tools",
+		"tool_schema",
+	} {
+		assert.Contains(t, names, name)
+	}
+}
+
+func TestJSONObjectProbeAlwaysUsesResponseFormat(t *testing.T) {
+	content := `{"ok":true}`
+	client := &fakeProbeClient{
+		callResult: requestResult{
+			HTTPStatus: 200,
+			Response: &types.ChatCompletionResponse{Choices: []types.Choice{{Message: types.ResponseMessage{
+				Content: &content,
+			}}}},
+			Attempted: true,
+		},
+	}
+
+	report, err := runWithClient(context.Background(), Config{
+		Provider: "kilo",
+		Model:    "openrouter/free",
+		Probe:    "json_object",
+		Timeout:  time.Second,
+	}, client)
+
+	assert.NoError(t, err)
+	assert.Len(t, report.Results, 1)
+	assert.Equal(t, "PASS", report.Results[0].Status)
+	assert.Equal(t, "none", report.Results[0].Configured)
+	if assert.Len(t, client.callRequests, 1) && assert.NotNil(t, client.callRequests[0].ResponseFormat) {
+		assert.Equal(t, "json_object", client.callRequests[0].ResponseFormat.Type)
+	}
+}
+
 func TestProbeTokenPtr(t *testing.T) {
 	assert.Equal(t, 8, *probeTokenPtr(Config{}, 8))
 	assert.Equal(t, 64, *probeTokenPtr(Config{ProbeMaxTokens: 64}, 8))
@@ -123,7 +181,7 @@ func TestRunSkipsRemainingProbesAfterRateLimit(t *testing.T) {
 	}, client)
 
 	assert.NoError(t, err)
-	assert.Len(t, report.Results, 9)
+	assert.Len(t, report.Results, len(BuildProbes(Config{}))+1)
 
 	assert.Equal(t, "basic_text", report.Results[0].Probe)
 	assert.Equal(t, "FAIL", report.Results[0].Status)
@@ -132,15 +190,16 @@ func TestRunSkipsRemainingProbesAfterRateLimit(t *testing.T) {
 	assert.Equal(t, 3, report.Results[0].Attempts)
 	assert.Equal(t, 3, report.Results[0].TransientHits)
 
-	for _, result := range report.Results[1:8] {
+	for _, result := range report.Results[1 : len(report.Results)-1] {
 		assert.Equal(t, "SKIP", result.Status)
 		assert.Equal(t, "deferred_after_transient_failures", result.Failure)
 	}
 
-	assert.Equal(t, "final_recovery_check", report.Results[8].Probe)
-	assert.Equal(t, "FAIL", report.Results[8].Status)
-	assert.Equal(t, 429, report.Results[8].HTTPStatus)
-	assert.Equal(t, "recovery", report.Results[8].Phase)
+	last := report.Results[len(report.Results)-1]
+	assert.Equal(t, "final_recovery_check", last.Probe)
+	assert.Equal(t, "FAIL", last.Status)
+	assert.Equal(t, 429, last.HTTPStatus)
+	assert.Equal(t, "recovery", last.Phase)
 
 	assert.Equal(t, 4, client.callCount)
 	assert.Equal(t, 0, client.streamCount)
@@ -165,7 +224,7 @@ func TestRunPreservesNonRateLimitFailures(t *testing.T) {
 	}, client)
 
 	assert.NoError(t, err)
-	assert.Len(t, report.Results, 8)
+	assert.Len(t, report.Results, len(BuildProbes(Config{})))
 	assert.Equal(t, "FAIL", report.Results[0].Status)
 	assert.Equal(t, 500, report.Results[0].HTTPStatus)
 	assert.Equal(t, "provider_error: status=500 message=boom", report.Results[0].Failure)
@@ -181,10 +240,12 @@ type fakeProbeClient struct {
 	streamResult requestResult
 	callCount    int
 	streamCount  int
+	callRequests []types.ChatCompletionRequest
 }
 
-func (f *fakeProbeClient) call(_ context.Context, _ Combo, _ types.ChatCompletionRequest) requestResult {
+func (f *fakeProbeClient) call(_ context.Context, _ Combo, req types.ChatCompletionRequest) requestResult {
 	f.callCount++
+	f.callRequests = append(f.callRequests, req)
 	return f.callResult
 }
 

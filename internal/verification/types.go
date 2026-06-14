@@ -50,6 +50,7 @@ type ProbeResult struct {
 	Endpoint      string
 	Probe         string
 	Fields        []string
+	Configured    string
 	Status        string
 	Retries       int
 	Latency       time.Duration
