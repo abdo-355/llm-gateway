@@ -22,7 +22,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "groq", Model: "openai/gpt-oss-20b", Weight: 0.68},
 			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.66},
 			{Provider: "ollama", Model: "llama3.3:70b", Weight: 0.66},
-			{Provider: "kilo", Model: "kilo-auto/free", Weight: 0.62},
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
@@ -48,7 +47,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "deepseek-v3.2", Weight: 0.76},
 			{Provider: "ollama", Model: "qwen3-coder:480b", Weight: 0.76},
 			{Provider: "ollama", Model: "gpt-oss:120b", Weight: 0.72},
-			{Provider: "kilo", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.68},
 			{Provider: "cohere", Model: "command-a-03-2025", Weight: 0.60},
 		},
 		SLO: &types.TierSLO{

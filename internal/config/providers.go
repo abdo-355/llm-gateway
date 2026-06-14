@@ -213,7 +213,6 @@ func getMistralConfig() types.ProviderConfig {
 
 func GetCertifications() []types.Certification {
 	return []types.Certification{
-		{Provider: "kilo", Model: "kilo-auto/free", StrictSchema: true},
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
 		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
@@ -314,22 +313,14 @@ func getKiloConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"kilo-auto/free",
-				"stepfun/step-3.5-flash:free",
-				"inclusionai/ling-2.6-flash:free",
+				"stepfun/step-3.7-flash:free",
+				"poolside/laguna-m.1:free",
+				"nvidia/nemotron-3-ultra-550b-a55b:free",
 				"openrouter/free",
-				"tencent/hy3-preview:free",
-				"nvidia/nemotron-3-super-120b-a12b:free",
-				"inclusionai/ling-2.6-1t:free",
 			},
 			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
 			Capabilities: map[string]types.ModelCapabilities{
-				// Models empirically verified to support tool calling
-				"inclusionai/ling-2.6-1t:free":           {Tools: boolPtr(true)},
-				"inclusionai/ling-2.6-flash:free":        {Tools: boolPtr(true)},
-				"kilo-auto/free":                         {Tools: boolPtr(true)},
-				"nvidia/nemotron-3-super-120b-a12b:free": {Tools: boolPtr(true)},
-				"openrouter/free":                        {Tools: boolPtr(true)},
+				"openrouter/free": {Tools: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
