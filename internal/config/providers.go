@@ -251,7 +251,6 @@ func getNIMConfig() types.ProviderConfig {
 				"minimaxai/minimax-m2.7",
 				"mistralai/ministral-14b-instruct-2512",
 				"mistralai/mistral-nemotron",
-				"moonshotai/kimi-k2.6",
 				"openai/gpt-oss-120b",
 				"qwen/qwen3-next-80b-a3b-instruct",
 				"qwen/qwen3.5-122b-a10b",
@@ -265,7 +264,6 @@ func getNIMConfig() types.ProviderConfig {
 				"minimaxai/minimax-m2.7":                {Tpm: &tpm250000},
 				"mistralai/ministral-14b-instruct-2512": {Tpm: &tpm500000},
 				"mistralai/mistral-nemotron":            {Tpm: &tpm250000},
-				"moonshotai/kimi-k2.6":                  {Tpm: &tpm500000},
 				"openai/gpt-oss-120b":                   {Tpm: &tpm500000},
 				"qwen/qwen3-next-80b-a3b-instruct":      {Tpm: &tpm250000},
 				"qwen/qwen3.5-122b-a10b":                {Tpm: &tpm500000},
@@ -591,12 +589,10 @@ func getZaiConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"glm-4.7-flash",
 				"glm-4.5-flash",
 				"glm-4.6v-flash",
 			},
 			Limits: map[string]types.ModelLimits{
-				"glm-4.7-flash":  {MaxConcurrent: &conc1},
 				"glm-4.5-flash":  {MaxConcurrent: &conc2},
 				"glm-4.6v-flash": {MaxConcurrent: &conc1},
 			},

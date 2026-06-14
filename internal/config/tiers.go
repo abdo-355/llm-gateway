@@ -18,7 +18,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "mistralai/mistral-nemotron", Weight: 0.80},
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 0.78},
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.76},
-			{Provider: "nim", Model: "moonshotai/kimi-k2.6", Weight: 0.74},
 			{Provider: "groq", Model: "qwen/qwen3-32b", Weight: 0.70},
 			{Provider: "groq", Model: "openai/gpt-oss-20b", Weight: 0.68},
 			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.66},
@@ -40,7 +39,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.92},
 			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 0.90},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.90},
-			{Provider: "nim", Model: "moonshotai/kimi-k2.6", Weight: 0.90},
 			{Provider: "oci", Model: "google.gemini-2.5-pro", Weight: 0.88},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.86},
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.82},
@@ -61,7 +59,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierMax: {
 		Tier: types.TierMax,
 		Entries: []types.TierEntry{
-			{Provider: "nim", Model: "moonshotai/kimi-k2.6", Weight: 1.00},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.96},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.92},
 			{Provider: "cerebras", Model: "zai-glm-4.7", Weight: 0.90},
