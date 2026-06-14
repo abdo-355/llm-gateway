@@ -757,14 +757,12 @@ func getGeminiConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"gemini-3.5-flash",
-				"gemini-3-flash",
 				"gemini-3.1-flash-lite",
 				"gemini-2.5-flash",
 				"gemini-2.5-flash-lite",
 			},
 			Limits: map[string]types.ModelLimits{
 				"gemini-3.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
-				"gemini-3-flash":        {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
 				"gemini-3.1-flash-lite": {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
 				"gemini-2.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
 				"gemini-2.5-flash-lite": {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
@@ -805,12 +803,10 @@ func getOpenRouterConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"moonshotai/kimi-k2.6:free",
-				"deepseek/deepseek-v4-flash:free",
-				"minimax/minimax-m2.5:free",
-				"google/gemma-4-31b-it:free",
 				"nvidia/nemotron-3-super-120b-a12b:free",
 				"openai/gpt-oss-120b:free",
+				"nvidia/nemotron-3-ultra-550b-a55b:free",
+				"qwen/qwen3-coder:free",
 			},
 			Limits: map[string]types.ModelLimits{},
 		},
