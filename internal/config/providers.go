@@ -15,6 +15,7 @@ func GetProviders() []types.ProviderConfig {
 		getZaiConfig(),
 		getCohereConfig(),
 	getOciConfig(),
+	getGeminiConfig(),
 	getOpenRouterConfig(),
 }
 }
@@ -729,6 +730,58 @@ func getOciConfig() types.ProviderConfig {
 			PresencePenalty:     false,
 			MaxTokens:           true,
 			MaxCompletionTokens: true,
+			MultipleChoices:     true,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getGeminiConfig() types.ProviderConfig {
+	rpm5 := 5
+	rpm10 := 10
+	rpm15 := 15
+	rpd20 := 20
+	rpd500 := 500
+	tpm250000 := 250000
+
+	return types.ProviderConfig{
+		ID:      "gemini",
+		BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "GEMINI_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"gemini-3.5-flash",
+				"gemini-3-flash",
+				"gemini-3.1-flash-lite",
+				"gemini-2.5-flash",
+				"gemini-2.5-flash-lite",
+			},
+			Limits: map[string]types.ModelLimits{
+				"gemini-3.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3-flash":        {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3.1-flash-lite": {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"gemini-2.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-2.5-flash-lite": {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
 			MultipleChoices:     true,
 			ToolSchema:          "json_schema",
 		},
