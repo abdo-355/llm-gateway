@@ -14,8 +14,9 @@ func GetProviders() []types.ProviderConfig {
 		getOllamaConfig(),
 		getZaiConfig(),
 		getCohereConfig(),
-		getOciConfig(),
-	}
+	getOciConfig(),
+	getOpenRouterConfig(),
+}
 }
 
 func getGroqConfig() types.ProviderConfig {
@@ -431,7 +432,7 @@ func getCloudflareConfig() types.ProviderConfig {
 }
 
 func getOpenCodeConfig() types.ProviderConfig {
-	rpm10 := 10
+	rpm60 := 60
 
 	return types.ProviderConfig{
 		ID:      "opencode",
@@ -445,26 +446,53 @@ func getOpenCodeConfig() types.ProviderConfig {
 			List: []string{
 				"big-pickle",
 				"deepseek-v4-flash-free",
+				"mimo-v2.5-free",
+				"nemotron-3-ultra-free",
+				"north-mini-code-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"big-pickle":             {Rpm: &rpm10},
-				"deepseek-v4-flash-free": {Rpm: &rpm10},
+				"big-pickle":              {Rpm: &rpm60},
+				"deepseek-v4-flash-free":  {Rpm: &rpm60},
+				"mimo-v2.5-free":          {Rpm: &rpm60},
+				"nemotron-3-ultra-free":   {Rpm: &rpm60},
+				"north-mini-code-free":    {Rpm: &rpm60},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"big-pickle": {
+					StructuredOutputs: strPtr("json_object"),
+					Logprobs:          boolPtr(true),
+				},
+				"deepseek-v4-flash-free": {
+					StructuredOutputs: strPtr("json_object"),
+					Logprobs:          boolPtr(true),
+				},
+				"mimo-v2.5-free": {
+					StructuredOutputs: strPtr("json_schema"),
+				},
+				"nemotron-3-ultra-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					ToolSchema:        strPtr("json_schema"),
+				},
+				"north-mini-code-free": {
+					Metadata: boolPtr(false),
+				},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               false,
-			StructuredOutputs:   "json_object",
-			Logprobs:            true,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            true,
+			Seed:                true,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
 			MaxTokens:           true,
-			MaxCompletionTokens: false,
+			MaxCompletionTokens: true,
 			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
+			ToolSchema:          "none",
 		},
 		Limits:       types.ProviderLimits{},
 		ProviderType: "openai",
@@ -714,6 +742,53 @@ func getOciConfig() types.ProviderConfig {
 			ToolSchema:          "json_schema",
 		},
 		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getOpenRouterConfig() types.ProviderConfig {
+	rpm20 := 20
+	rpd50 := 50
+
+	return types.ProviderConfig{
+		ID:      "openrouter",
+		BaseURL: "https://openrouter.ai/api/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "OPENROUTER_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"moonshotai/kimi-k2.6:free",
+				"deepseek/deepseek-v4-flash:free",
+				"minimax/minimax-m2.5:free",
+				"google/gemma-4-31b-it:free",
+				"nvidia/nemotron-3-super-120b-a12b:free",
+				"openai/gpt-oss-120b:free",
+			},
+			Limits: map[string]types.ModelLimits{},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               false,
+			StructuredOutputs:   "none",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "none",
+		},
+		Limits: types.ProviderLimits{
+			Rpm: &rpm20,
+			Rpd: &rpd50,
+		},
 		ProviderType: "openai",
 	}
 }
