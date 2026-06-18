@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -418,8 +419,15 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 		return request
 	}
 
-	if isStrictJSONSchema(request.ResponseFormat) {
-		request.ResponseFormat = nonStrictJSONSchemaFormat(request.ResponseFormat)
+	if request.ResponseFormat.Type == "json_schema" {
+		format := request.ResponseFormat
+		if providerRequiresStrictResponseSchemaDialect(provider, model) {
+			format = strictDialectJSONSchemaFormat(format)
+		}
+		if isStrictJSONSchema(format) {
+			format = nonStrictJSONSchemaFormat(format)
+		}
+		request.ResponseFormat = format
 		return request
 	}
 
@@ -452,6 +460,91 @@ func nonStrictJSONSchemaFormat(format *types.ResponseFormat) *types.ResponseForm
 	schema := *format.JSONSchema
 	schema.Strict = nil
 	return &types.ResponseFormat{Type: format.Type, JSONSchema: &schema}
+}
+
+func strictDialectJSONSchemaFormat(format *types.ResponseFormat) *types.ResponseFormat {
+	if format == nil || format.JSONSchema == nil || len(format.JSONSchema.Schema) == 0 {
+		return format
+	}
+
+	schema := *format.JSONSchema
+	schema.Schema = normalizeJSONSchemaForStrictDialect(schema.Schema)
+	return &types.ResponseFormat{Type: format.Type, JSONSchema: &schema}
+}
+
+func normalizeJSONSchemaForStrictDialect(raw json.RawMessage) json.RawMessage {
+	var schema any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return raw
+	}
+
+	normalized := normalizeStrictDialectSchemaNode(schema)
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return raw
+	}
+	return encoded
+}
+
+func normalizeStrictDialectSchemaNode(node any) any {
+	switch typed := node.(type) {
+	case map[string]any:
+		for key, value := range typed {
+			typed[key] = normalizeStrictDialectSchemaNode(value)
+		}
+
+		props, ok := typed["properties"].(map[string]any)
+		if !ok {
+			return typed
+		}
+
+		typed["additionalProperties"] = false
+		if len(props) == 0 {
+			return typed
+		}
+
+		required := make(map[string]struct{}, len(props))
+		if existing, ok := typed["required"].([]any); ok {
+			for _, item := range existing {
+				if value, ok := item.(string); ok {
+					required[value] = struct{}{}
+				}
+			}
+		}
+		for name := range props {
+			required[name] = struct{}{}
+		}
+
+		names := make([]string, 0, len(required))
+		for name := range required {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		requiredList := make([]any, 0, len(names))
+		for _, name := range names {
+			requiredList = append(requiredList, name)
+		}
+		typed["required"] = requiredList
+		return typed
+	case []any:
+		for i, value := range typed {
+			typed[i] = normalizeStrictDialectSchemaNode(value)
+		}
+		return typed
+	default:
+		return typed
+	}
+}
+
+func providerRequiresStrictResponseSchemaDialect(provider, model string) bool {
+	switch provider {
+	case "groq", "cerebras":
+		return true
+	case "oci":
+		return strings.HasPrefix(model, "openai.")
+	default:
+		return false
+	}
 }
 
 func providerUsesNativeJSONObject(provider, model string) bool {

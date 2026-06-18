@@ -50,6 +50,53 @@ func TestNormalizeStructuredOutputForProvider_StripsStrictJSONSchemaForUpstream(
 	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
 }
 
+func TestNormalizeStructuredOutputForProvider_NormalizesStrictDialectSchema(t *testing.T) {
+	strict := true
+	originalSchema := json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"experience":{
+				"type":"object",
+				"properties":{
+					"min":{"type":"number"},
+					"max":{"type":"number"}
+				}
+			},
+			"name":{"type":"string"}
+		},
+		"required":["name"]
+	}`)
+	req := types.ChatCompletionRequest{
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "response",
+				Schema: originalSchema,
+				Strict: &strict,
+			},
+		},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "groq", "openai/gpt-oss-20b")
+
+	require.NotNil(t, got.ResponseFormat)
+	require.NotNil(t, got.ResponseFormat.JSONSchema)
+	assert.Nil(t, got.ResponseFormat.JSONSchema.Strict)
+	var normalized map[string]any
+	require.NoError(t, json.Unmarshal(got.ResponseFormat.JSONSchema.Schema, &normalized))
+	assert.Equal(t, false, normalized["additionalProperties"])
+	assert.ElementsMatch(t, []any{"experience", "name"}, normalized["required"])
+
+	properties := normalized["properties"].(map[string]any)
+	experience := properties["experience"].(map[string]any)
+	assert.Equal(t, false, experience["additionalProperties"])
+	assert.ElementsMatch(t, []any{"max", "min"}, experience["required"])
+
+	assert.JSONEq(t, string(originalSchema), string(req.ResponseFormat.JSONSchema.Schema), "normalization must not mutate the client contract")
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
+}
+
 func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")
