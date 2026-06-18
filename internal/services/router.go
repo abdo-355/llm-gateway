@@ -1814,9 +1814,6 @@ func (r *Router) handleRateLimitFailure(ctx context.Context, providerID, model s
 		return
 	}
 
-	// A provider 429 means the provider/model is unavailable for routing now,
-	// even if our local quota counters have not reached their configured limit.
-	r.healthService.RecordFailure(ctx, providerID, model)
 	if r.cooldownService != nil {
 		r.applyRateLimitCooldown(ctx, providerID, model, rateLimitErr)
 	}

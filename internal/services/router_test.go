@@ -1113,7 +1113,6 @@ func TestExecute(t *testing.T) {
 		}
 
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, rateErr)
-		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
 		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
 		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "__provider__", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
@@ -1150,11 +1149,10 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("retry policy disables failover on rate limit", func(t *testing.T) {
-		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+		r, mockQuota, _, mockProvider := newTestRouter(t)
 
 		rateErr := errors.NewRateLimitError("limited", 60, "rpm")
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, rateErr)
-		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
 		mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
 
 		plan := types.RoutingPlan{
@@ -1261,7 +1259,6 @@ func TestExecute(t *testing.T) {
 		}
 
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr)
-		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil)
 		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())
 		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 20).Return(nil)
@@ -1307,11 +1304,10 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("non-retryable error stops immediately", func(t *testing.T) {
-		r, _, mockHealth, mockProvider := newTestRouter(t)
+		r, _, _, mockProvider := newTestRouter(t)
 
 		payErr := errors.NewPaymentRequiredError("payment required")
 		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr)
-		mockHealth.EXPECT().RecordFailure(gomock.Any(), gomock.Any(), gomock.Any())
 
 		plan := types.RoutingPlan{
 			Attempts: []types.RoutingAttempt{
@@ -1380,7 +1376,6 @@ func TestExecuteStream_RateLimitedAttemptAppliesCooldown(t *testing.T) {
 	}
 
 	mockProvider.EXPECT().StreamProviderChannel(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(streamResult(rateLimited))
-	mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
 	mockQuota.EXPECT().HandleProviderRateLimit(gomock.Any(), "provider-a", "model-1", gomock.Any()).Return(services.RateLimitInfo{IsRateLimited: true, RetryAfter: 60, LimitType: "rpm"})
 	mockProvider.EXPECT().StreamProviderChannel(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(streamResult(nil))
 	mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())

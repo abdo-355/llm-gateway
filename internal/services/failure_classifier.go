@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	stdErrors "errors"
+	"net/http"
 	"strings"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
@@ -116,6 +117,9 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		decision.Reason = "provider server error, retrying"
 
 	case types.CategoryProvider4xx:
+		if providerErr, ok := err.(*errors.ProviderError); ok && (providerErr.StatusCode == http.StatusUnauthorized || providerErr.StatusCode == http.StatusForbidden) {
+			decision.ShouldRecordFailure = false
+		}
 		decision.Action = types.ActionFailover
 		decision.IsRetryable = false
 		decision.Reason = "provider configuration or model availability issue, trying different provider"
@@ -125,6 +129,7 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 		decision.Reason = "parsing/empty response issue, trying different provider"
 
 	case types.CategoryPayment, types.CategoryValidation:
+		decision.ShouldRecordFailure = false
 		decision.Action = types.ActionAbort
 		decision.IsRetryable = false
 		decision.Reason = "non-retryable client error"

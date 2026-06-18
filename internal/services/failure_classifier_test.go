@@ -108,6 +108,28 @@ func TestFailureClassifier_ClassifyProvider4xxFailsOver(t *testing.T) {
 			assert.Equal(t, types.ActionFailover, decision.Action)
 			assert.False(t, decision.IsRetryable)
 			assert.Equal(t, "provider configuration or model availability issue, trying different provider", decision.Reason)
+			assert.Equal(t, statusCode != 401 && statusCode != 403, decision.ShouldRecordFailure)
+		})
+	}
+}
+
+func TestFailureClassifier_DoesNotRecordClientOrBillingFailures(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "validation", err: errors.NewValidationError("bad request", nil)},
+		{name: "payment", err: errors.NewPaymentRequiredError("payment required")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := classifier.Classify(tt.err, types.FailureContext{MaxAttempts: 1, HasRemainingBudget: true})
+
+			assert.Equal(t, types.ActionAbort, decision.Action)
+			assert.False(t, decision.ShouldRecordFailure)
 		})
 	}
 }
