@@ -486,6 +486,65 @@ func TestProviderCallProvider_MistralValidationError(t *testing.T) {
 	assert.Contains(t, validationErr.Message, "extra_forbidden")
 }
 
+func TestProviderCallProvider_NIMDegradedFunctionIsProviderError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"status":400,"title":"Bad Request","detail":"Function id 'abc': DEGRADED function cannot be invoked"}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "qwen/qwen3-next-80b-a3b-instruct", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "NIM_API_KEY"}, "")
+	require.Error(t, err)
+
+	var providerErr *errors.ProviderError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
+	assert.False(t, providerErr.IsRetryable)
+	assert.Contains(t, providerErr.Message, "DEGRADED function cannot be invoked")
+}
+
+func TestProviderCallProvider_ResponseFormatSchemaDialectErrorFailsOver(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"message":"invalid JSON schema for response_format: 'enrichment': /properties/experience/anyOf/0/required: ` + "`required`" + ` is required to be supplied and to be an array including every key in properties. The following properties must be listed in ` + "`required`" + `: max, min"}}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "openai/gpt-oss-20b", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"}, "")
+	require.Error(t, err)
+
+	var providerErr *errors.ProviderError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
+	assert.False(t, providerErr.IsRetryable)
+}
+
+func TestProviderCallProvider_RetiredModelIsProviderError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+		w.Write([]byte(`{"error":"qwen3-next:80b was retired at 2026-06-16 00:00:00 -0700 PDT"}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "qwen3-next:80b", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "OLLAMA_API_KEY"}, "")
+	require.Error(t, err)
+
+	var providerErr *errors.ProviderError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, http.StatusGone, providerErr.StatusCode)
+	assert.False(t, providerErr.IsRetryable)
+	assert.Contains(t, providerErr.Message, "was retired")
+}
+
 func TestProviderCallProvider_402_PaymentRequiredError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusPaymentRequired)

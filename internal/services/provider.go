@@ -755,18 +755,7 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		message := normalizeProviderErrorMessage(provider, resp.StatusCode, body)
-		if isValidationStatus(resp.StatusCode) {
-			validationErr := errors.NewValidationError(message, nil)
-			validationErr.StatusCode = resp.StatusCode
-			return nil, validationErr
-		}
-		return nil, &errors.ProviderError{
-			Message:     message,
-			StatusCode:  resp.StatusCode,
-			IsRetryable: resp.StatusCode >= 500,
-			Headers:     headers,
-		}
+		return nil, classifyProviderHTTPError(provider, resp.StatusCode, headers, body)
 	}
 
 	// Parse response
@@ -814,19 +803,55 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, prov
 	case http.StatusPaymentRequired:
 		return &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	default:
-		message := normalizeProviderErrorMessage(provider, resp.StatusCode, body)
-		if isValidationStatus(resp.StatusCode) {
-			validationErr := errors.NewValidationError(message, nil)
-			validationErr.StatusCode = resp.StatusCode
-			return validationErr
-		}
+		return classifyProviderHTTPError(provider, resp.StatusCode, headers, body)
+	}
+}
+
+func classifyProviderHTTPError(provider string, statusCode int, headers map[string]string, body []byte) error {
+	message := normalizeProviderErrorMessage(provider, statusCode, body)
+	if isProviderFailoverHTTPError(statusCode, message) {
 		return &errors.ProviderError{
 			Message:     message,
-			StatusCode:  resp.StatusCode,
-			IsRetryable: resp.StatusCode >= 500,
+			StatusCode:  statusCode,
+			IsRetryable: false,
 			Headers:     headers,
 		}
 	}
+	if isValidationStatus(statusCode) {
+		validationErr := errors.NewValidationError(message, nil)
+		validationErr.StatusCode = statusCode
+		return validationErr
+	}
+	return &errors.ProviderError{
+		Message:     message,
+		StatusCode:  statusCode,
+		IsRetryable: statusCode >= 500,
+		Headers:     headers,
+	}
+}
+
+func isProviderFailoverHTTPError(statusCode int, message string) bool {
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "degraded function cannot be invoked") {
+		return true
+	}
+	if strings.Contains(lower, "was retired") {
+		return true
+	}
+	return isProviderSchemaDialectRejection(statusCode, lower)
+}
+
+func isProviderSchemaDialectRejection(statusCode int, lowerMessage string) bool {
+	if !isValidationStatus(statusCode) || !strings.Contains(lowerMessage, "response_format") {
+		return false
+	}
+	if !strings.Contains(lowerMessage, "json schema") && !strings.Contains(lowerMessage, "json_schema") {
+		return false
+	}
+	return strings.Contains(lowerMessage, "`required` is required") ||
+		strings.Contains(lowerMessage, "must be listed in `required`") ||
+		strings.Contains(lowerMessage, "additionalproperties") ||
+		strings.Contains(lowerMessage, "additional properties")
 }
 
 func flattenHeaders(headers http.Header) map[string]string {
@@ -924,6 +949,7 @@ func extractProviderErrorMessage(provider string, body []byte) string {
 			Code    any    `json:"code"`
 		} `json:"error"`
 		Message any    `json:"message"`
+		Detail  any    `json:"detail"`
 		Type    string `json:"type"`
 		Code    any    `json:"code"`
 		Object  string `json:"object"`
@@ -945,6 +971,14 @@ func extractProviderErrorMessage(provider string, body []byte) string {
 			if detail, ok := msg["detail"]; ok {
 				return fmt.Sprintf("%v", detail)
 			}
+		}
+		switch detail := wrapped.Detail.(type) {
+		case string:
+			return detail
+		case map[string]any:
+			return fmt.Sprintf("%v", detail)
+		case []any:
+			return fmt.Sprintf("%v", detail)
 		}
 	}
 
