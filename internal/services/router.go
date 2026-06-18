@@ -18,13 +18,14 @@ import (
 const providerQuotaScopeModel = "__provider__"
 
 type Router struct {
-	config          types.AppConfig
-	quotaService    QuotaChecker
-	healthService   HealthChecker
-	providerService ProviderCaller
-	classifier      FailureClassifier
-	backoffStrategy BackoffStrategy
-	cooldownService *CooldownService
+	config           types.AppConfig
+	quotaService     QuotaChecker
+	healthService    HealthChecker
+	providerService  ProviderCaller
+	classifier       FailureClassifier
+	backoffStrategy  BackoffStrategy
+	cooldownService  *CooldownService
+	providerDisabler *ProviderDisabler
 }
 
 func NewRouter(
@@ -35,13 +36,14 @@ func NewRouter(
 	cfg := config.LoadConfig()
 	metrics.RegisterModelInfo(cfg)
 	return &Router{
-		config:          cfg,
-		quotaService:    quotaSvc,
-		healthService:   healthSvc,
-		providerService: providerSvc,
-		classifier:      NewDefaultFailureClassifier(),
-		backoffStrategy: DefaultBackoffStrategy(),
-		cooldownService: nil,
+		config:           cfg,
+		quotaService:     quotaSvc,
+		healthService:    healthSvc,
+		providerService:  providerSvc,
+		classifier:       NewDefaultFailureClassifier(),
+		backoffStrategy:  DefaultBackoffStrategy(),
+		cooldownService:  nil,
+		providerDisabler: NewDefaultProviderDisabler(),
 	}
 }
 
@@ -53,19 +55,24 @@ func NewRouterWithConfig(
 ) *Router {
 	metrics.RegisterModelInfo(cfg)
 	return &Router{
-		config:          cfg,
-		quotaService:    quotaSvc,
-		healthService:   healthSvc,
-		providerService: providerSvc,
-		classifier:      NewDefaultFailureClassifier(),
-		backoffStrategy: DefaultBackoffStrategy(),
-		cooldownService: nil,
+		config:           cfg,
+		quotaService:     quotaSvc,
+		healthService:    healthSvc,
+		providerService:  providerSvc,
+		classifier:       NewDefaultFailureClassifier(),
+		backoffStrategy:  DefaultBackoffStrategy(),
+		cooldownService:  nil,
+		providerDisabler: NewDefaultProviderDisabler(),
 	}
 }
 
 // SetCooldownService sets the cooldown service (called after construction)
 func (r *Router) SetCooldownService(cs *CooldownService) {
 	r.cooldownService = cs
+}
+
+func (r *Router) SetProviderDisabler(disabler *ProviderDisabler) {
+	r.providerDisabler = disabler
 }
 
 // DeriveRequirements normalizes the raw request fields (response_format, stream, tools, tool_choice)
@@ -607,6 +614,11 @@ func (r *Router) Execute(
 	var attemptChain []map[string]any
 
 	for i, attempt := range plan.Attempts {
+		if r.providerDisabled(attempt.ProviderID) {
+			attemptChain = append(attemptChain, disabledProviderAttempt(attempt))
+			continue
+		}
+
 		if quotaErr := r.checkCloudflareAttemptBudget(ctx, attempt, req); quotaErr != nil {
 			logger.Warn().
 				Str("type", "router").
@@ -976,6 +988,11 @@ func (r *Router) ExecuteStream(
 		var streamUsage *types.Usage
 
 		for i, attempt := range plan.Attempts {
+			if r.providerDisabled(attempt.ProviderID) {
+				attemptChain = append(attemptChain, disabledProviderAttempt(attempt))
+				continue
+			}
+
 			if quotaErr := r.checkCloudflareAttemptBudget(ctx, attempt, req); quotaErr != nil {
 				logger.Warn().
 					Str("type", "router").
@@ -1524,6 +1541,10 @@ func gatewayErrorFromError(err error) *types.GatewayError {
 }
 
 func (r *Router) providerAvailable(provider types.ProviderConfig) bool {
+	if r.providerDisabled(provider.ID) {
+		return false
+	}
+
 	if provider.ProviderType == cloudflareProviderType && os.Getenv(cloudflareAccountIDEnv) == "" {
 		return false
 	}
@@ -1812,7 +1833,21 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 }
 
 func (r *Router) handleAuthFailure(ctx context.Context, providerID, model string, err error) {
-	if !isAuthProviderError(err) || r.cooldownService == nil {
+	if !isAuthProviderError(err) {
+		return
+	}
+
+	if disabled, reason := r.providerDisabler.RecordAuthFailure(providerID, model); disabled {
+		logger.Warn().
+			Str("type", "router").
+			Str("event", "provider.disabled").
+			Str("provider", providerID).
+			Str("model", model).
+			Str("reason", reason).
+			Msg("Provider disabled after auth failure")
+	}
+
+	if r.cooldownService == nil {
 		return
 	}
 
@@ -1824,6 +1859,20 @@ func (r *Router) handleAuthFailure(ctx context.Context, providerID, model string
 
 	for _, providerModel := range provider.Models.List {
 		r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, CooldownAuth, 0)
+	}
+}
+
+func (r *Router) providerDisabled(providerID string) bool {
+	return r.providerDisabler != nil && r.providerDisabler.IsDisabled(providerID)
+}
+
+func disabledProviderAttempt(attempt types.RoutingAttempt) map[string]any {
+	return map[string]any{
+		"provider":       attempt.ProviderID,
+		"model":          attempt.Model,
+		"failure_kind":   "provider_disabled",
+		"failure_action": string(types.ActionFailover),
+		"failure_reason": "provider disabled after auth failure",
 	}
 }
 

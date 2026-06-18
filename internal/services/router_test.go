@@ -346,6 +346,23 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Contains(t, filtered, "provider-b/model-3")
 	})
 
+	t.Run("filters disabled providers", func(t *testing.T) {
+		r, mockQuota, mockHealth, _ := newTestRouter(t)
+		disabler := services.NewProviderDisabler(1, nil)
+		disabler.RecordAuthFailure("provider-a", "model-1")
+		r.SetProviderDisabler(disabler)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		candidates := r.GenerateCandidates()
+		eligible, filtered := r.FilterCandidates(ctx, candidates, textReqs, baseReq, nil)
+		assert.Len(t, eligible, 1)
+		assert.Equal(t, "provider-b", eligible[0].Provider.ID)
+		assert.Equal(t, "provider_unavailable", filtered["provider-a/model-1"])
+		assert.Equal(t, "provider_unavailable", filtered["provider-a/model-2"])
+	})
+
 	t.Run("filters by strict JSON requirement", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
