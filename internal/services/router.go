@@ -492,13 +492,11 @@ func (r *Router) CompilePlan(
 	hints *types.RouterHints,
 	tierSLO *types.TierSLO,
 ) types.RoutingPlan {
-	// Determine max attempts. Client hints take precedence; otherwise tier SLOs
-	// define the default failover breadth for that routing tier.
+	// Determine max attempts. Client hints can cap failover breadth, otherwise
+	// all eligible candidates are tried until the request timeout is reached.
 	maxAttempts := len(candidates)
 	if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
 		maxAttempts = *hints.Fallback.MaxAttempts
-	} else if tierSLO != nil && tierSLO.MaxAttempts != nil {
-		maxAttempts = *tierSLO.MaxAttempts
 	}
 
 	if maxAttempts > len(candidates) {

@@ -829,12 +829,12 @@ func TestCompilePlan(t *testing.T) {
 		assert.Equal(t, 5000, plan.Attempts[0].TimeoutMs)
 	})
 
-	t.Run("uses tier SLO timeout and max attempts", func(t *testing.T) {
+	t.Run("uses tier SLO timeout without capping attempts", func(t *testing.T) {
 		slo := &types.TierSLO{MaxLatencyMs: intPtr(10000), MaxAttempts: intPtr(2)}
 		plan := r.CompilePlan(candidates, nil, slo)
 		assert.Equal(t, 10000, plan.Attempts[0].TimeoutMs)
-		assert.Len(t, plan.Attempts, 2)
-		assert.Equal(t, 2, plan.MaxAttempts)
+		assert.Len(t, plan.Attempts, 3)
+		assert.Equal(t, 3, plan.MaxAttempts)
 	})
 
 	t.Run("custom retry policy", func(t *testing.T) {

@@ -29,7 +29,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(15000),
-			MaxAttempts:  intPtr(2),
 		},
 	},
 	types.TierPro: {
@@ -63,7 +62,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(30000),
-			MaxAttempts:  intPtr(3),
 		},
 	},
 	types.TierMax: {
@@ -88,7 +86,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		},
 		SLO: &types.TierSLO{
 			MaxLatencyMs: intPtr(60000),
-			MaxAttempts:  intPtr(3),
 		},
 	},
 }
