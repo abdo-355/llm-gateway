@@ -414,7 +414,16 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, 
 }
 
 func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, provider, model string) types.ChatCompletionRequest {
-	if request.ResponseFormat == nil || request.ResponseFormat.Type != "json_object" {
+	if request.ResponseFormat == nil {
+		return request
+	}
+
+	if isStrictJSONSchema(request.ResponseFormat) {
+		request.ResponseFormat = nonStrictJSONSchemaFormat(request.ResponseFormat)
+		return request
+	}
+
+	if request.ResponseFormat.Type != "json_object" {
 		return request
 	}
 
@@ -434,6 +443,15 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 		},
 	}
 	return request
+}
+
+func nonStrictJSONSchemaFormat(format *types.ResponseFormat) *types.ResponseFormat {
+	if format == nil || format.JSONSchema == nil {
+		return format
+	}
+	schema := *format.JSONSchema
+	schema.Strict = nil
+	return &types.ResponseFormat{Type: format.Type, JSONSchema: &schema}
 }
 
 func providerUsesNativeJSONObject(provider, model string) bool {

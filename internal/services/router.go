@@ -653,6 +653,12 @@ func (r *Router) Execute(
 		latencyMs := time.Since(startTime).Milliseconds()
 
 		if err == nil {
+			if validationErr := validateStructuredOutputResponse(req, resp, attempt.ProviderID, attempt.Model); validationErr != nil {
+				err = validationErr
+			}
+		}
+
+		if err == nil {
 			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
 			if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
@@ -1574,7 +1580,7 @@ func supportsStructuredOutput(output string, caps types.ProviderCapabilities, st
 	case "json_schema":
 		return supportsJSONSchema(caps) || strictCertified
 	case "json_schema_strict":
-		return strictCertified || caps.StructuredOutputs == "json_schema_strict"
+		return supportsJSONSchema(caps) || strictCertified
 	default:
 		return false
 	}

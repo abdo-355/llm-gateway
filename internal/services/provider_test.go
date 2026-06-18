@@ -28,6 +28,28 @@ func TestNewProviderService_DefaultTimeout(t *testing.T) {
 	assert.Equal(t, defaultRequestTimeout, svc.httpClient.Timeout)
 }
 
+func TestNormalizeStructuredOutputForProvider_StripsStrictJSONSchemaForUpstream(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "response",
+				Schema: json.RawMessage(`{"type":"object"}`),
+				Strict: &strict,
+			},
+		},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "groq", "openai/gpt-oss-20b")
+
+	require.NotNil(t, got.ResponseFormat)
+	require.NotNil(t, got.ResponseFormat.JSONSchema)
+	assert.Nil(t, got.ResponseFormat.JSONSchema.Strict)
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict, "normalization must not mutate the client contract")
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
+}
+
 func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")
@@ -215,7 +237,7 @@ func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
 	assert.Equal(t, "rate_limit", limitSubtype)
 }
 
-func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t *testing.T) {
+func TestPrepareRequest_CerebrasStrictSchemaIsDowngradedForUpstream(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
@@ -229,9 +251,15 @@ func TestPrepareRequest_CerebrasStrictSchemaRequiresAdditionalPropertiesFalse(t 
 		},
 	}
 
-	_, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "additionalProperties=false")
+	body, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
+	require.NoError(t, err)
+
+	var sent types.ChatCompletionRequest
+	require.NoError(t, json.Unmarshal(body, &sent))
+	require.NotNil(t, sent.ResponseFormat)
+	require.NotNil(t, sent.ResponseFormat.JSONSchema)
+	assert.Nil(t, sent.ResponseFormat.JSONSchema.Strict)
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict, "normalization must not mutate the client contract")
 }
 
 func TestPrepareRequest_CerebrasAllowsStrictSchemaWithAdditionalPropertiesFalse(t *testing.T) {

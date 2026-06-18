@@ -354,6 +354,45 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Contains(t, filtered, "provider-b/model-3")
 	})
 
+	t.Run("allows non-strict JSON schema providers for strict contract", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{
+			{
+				ID:      "schema-provider",
+				BaseURL: "https://schema.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"schema-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "json_schema",
+				},
+			},
+			{
+				ID:      "text-provider",
+				BaseURL: "https://text.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"text-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "none",
+				},
+			},
+		}}
+
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		strictReqs := types.DerivedRequirements{Output: "json_schema_strict", Streaming: "preferred", Tools: "forbidden"}
+		eligible, filtered := r.FilterCandidates(ctx, r.GenerateCandidates(), strictReqs, baseReq, nil)
+		require.Len(t, eligible, 1)
+		assert.Equal(t, "schema-provider", eligible[0].Provider.ID)
+		assert.Equal(t, "not_certified_for_strict_json", filtered["text-provider/text-model"])
+	})
+
 	t.Run("filters JSON object to structured output providers", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
@@ -1000,6 +1039,57 @@ func TestExecute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, result.Attempts)
 		assert.Equal(t, "provider-b", result.ProviderID)
+	})
+
+	t.Run("structured output validation failure fails over", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+
+		schema := []byte(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}`)
+		strict := true
+		req := baseReq
+		req.ResponseFormat = &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "person",
+				Schema: schema,
+				Strict: &strict,
+			},
+		}
+
+		badContent := `{"name":123}`
+		goodContent := `{"name":"Ada"}`
+		badResp := &types.ChatCompletionResponse{
+			ID:      "bad-structured",
+			Model:   "model-1",
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &badContent}}},
+		}
+		goodResp := &types.ChatCompletionResponse{
+			ID:      "good-structured",
+			Model:   "model-3",
+			Usage:   &types.Usage{TotalTokens: 42},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &goodContent}}},
+		}
+
+		gomock.InOrder(
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(badResp, nil),
+			mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1"),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(goodResp, nil),
+			mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any()),
+			mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 42).Return(nil),
+		)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2,
+		}
+
+		result, err := r.Execute(ctx, plan, req, "req-structured-failover")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-b", result.ProviderID)
+		assert.Equal(t, "good-structured", result.Response.ID)
 	})
 
 	t.Run("rate limited attempt applies cooldown and failover succeeds", func(t *testing.T) {
