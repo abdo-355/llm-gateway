@@ -17,7 +17,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "groq", Model: "meta-llama/llama-4-scout-17b-16e-instruct", Weight: 0.82},
 			{Provider: "oci", Model: "openai.gpt-oss-20b", Weight: 0.82},
 			{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.80},
-			{Provider: "nim", Model: "mistralai/mistral-nemotron", Weight: 0.80},
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 0.78},
 			{Provider: "gemini", Model: "gemini-2.5-flash-lite", Weight: 0.78},
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.76},

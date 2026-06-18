@@ -14,10 +14,10 @@ func GetProviders() []types.ProviderConfig {
 		getOllamaConfig(),
 		getZaiConfig(),
 		getCohereConfig(),
-	getOciConfig(),
-	getGeminiConfig(),
-	getOpenRouterConfig(),
-}
+		getOciConfig(),
+		getGeminiConfig(),
+		getOpenRouterConfig(),
+	}
 }
 
 func getGroqConfig() types.ProviderConfig {
@@ -251,7 +251,6 @@ func getNIMConfig() types.ProviderConfig {
 				"meta/llama-3.3-70b-instruct",
 				"minimaxai/minimax-m2.7",
 				"mistralai/ministral-14b-instruct-2512",
-				"mistralai/mistral-nemotron",
 				"openai/gpt-oss-120b",
 				"qwen/qwen3-next-80b-a3b-instruct",
 				"qwen/qwen3.5-122b-a10b",
@@ -264,7 +263,6 @@ func getNIMConfig() types.ProviderConfig {
 				"meta/llama-3.3-70b-instruct":           {Tpm: &tpm250000},
 				"minimaxai/minimax-m2.7":                {Tpm: &tpm250000},
 				"mistralai/ministral-14b-instruct-2512": {Tpm: &tpm500000},
-				"mistralai/mistral-nemotron":            {Tpm: &tpm250000},
 				"openai/gpt-oss-120b":                   {Tpm: &tpm500000},
 				"qwen/qwen3-next-80b-a3b-instruct":      {Tpm: &tpm250000},
 				"qwen/qwen3.5-122b-a10b":                {Tpm: &tpm500000},
@@ -272,7 +270,6 @@ func getNIMConfig() types.ProviderConfig {
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"mistralai/ministral-14b-instruct-2512": {StructuredOutputs: strPtr("none"), Tools: boolPtr(false)},
-				"mistralai/mistral-nemotron":            {Tools: boolPtr(false)},
 				"bytedance/seed-oss-36b-instruct":       {Tools: boolPtr(false)},
 				"qwen/qwen3.5-122b-a10b":                {MaxTokens: boolPtr(false), MultipleChoices: boolPtr(false)},
 				"qwen/qwen3.5-397b-a17b":                {PresencePenalty: boolPtr(false), MultipleChoices: boolPtr(false)},
@@ -443,11 +440,11 @@ func getOpenCodeConfig() types.ProviderConfig {
 				"north-mini-code-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"big-pickle":              {Rpm: &rpm60},
-				"deepseek-v4-flash-free":  {Rpm: &rpm60},
-				"mimo-v2.5-free":          {Rpm: &rpm60},
-				"nemotron-3-ultra-free":   {Rpm: &rpm60},
-				"north-mini-code-free":    {Rpm: &rpm60},
+				"big-pickle":             {Rpm: &rpm60},
+				"deepseek-v4-flash-free": {Rpm: &rpm60},
+				"mimo-v2.5-free":         {Rpm: &rpm60},
+				"nemotron-3-ultra-free":  {Rpm: &rpm60},
+				"north-mini-code-free":   {Rpm: &rpm60},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"big-pickle": {
