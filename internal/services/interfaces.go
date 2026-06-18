@@ -26,6 +26,12 @@ type ProviderQuotaSyncer interface {
 	SyncProviderQuotaLimit(ctx context.Context, providerID, model, limitType string, limit int) error
 }
 
+type QuotaReservationService interface {
+	CheckAndReserveQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) (*QuotaReservation, error)
+	ReleaseQuotaReservation(ctx context.Context, reservation *QuotaReservation) error
+	RecordTokenUsage(ctx context.Context, reservation *QuotaReservation, actualTokens int) error
+}
+
 type HealthChecker interface {
 	CanExecute(ctx context.Context, providerID, model string) bool
 	GetCircuitState(ctx context.Context, providerID, model string) CircuitState

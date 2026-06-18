@@ -484,6 +484,38 @@ func TestQuotaSyncProviderQuotaLimit_RPD(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestQuotaCheckAndReserveQuota_ReleasesReservation(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	reservation, err := svc.CheckAndReserveQuota(ctx, "provider-a", "model-1", types.ModelLimits{Rpd: intPtr(1), Tpd: intPtr(100)}, 25)
+	require.NoError(t, err)
+
+	status := svc.GetModelQuotaStatus(ctx, "provider-a", "model-1", nil)
+	assert.Equal(t, 1, status.Rpd)
+	assert.Equal(t, 25, status.Tpd)
+
+	require.NoError(t, svc.ReleaseQuotaReservation(ctx, reservation))
+	status = svc.GetModelQuotaStatus(ctx, "provider-a", "model-1", nil)
+	assert.Equal(t, 0, status.Rpd)
+	assert.Equal(t, 0, status.Tpd)
+}
+
+func TestQuotaCheckAndReserveQuota_RejectsAtomically(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	_, err := svc.CheckAndReserveQuota(ctx, "provider-a", "model-1", types.ModelLimits{Rpd: intPtr(1)}, 1)
+	require.NoError(t, err)
+	_, err = svc.CheckAndReserveQuota(ctx, "provider-a", "model-1", types.ModelLimits{Rpd: intPtr(1)}, 1)
+	require.Error(t, err)
+
+	status := svc.GetModelQuotaStatus(ctx, "provider-a", "model-1", nil)
+	assert.Equal(t, 1, status.Rpd)
+}
+
 func TestQuotaGetModelQuotaStatus(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")

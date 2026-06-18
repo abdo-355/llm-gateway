@@ -669,6 +669,15 @@ func (r *Router) Execute(
 			concurrencyAcquired = true
 		}
 
+		reservation, reservationErr := r.reserveAttemptQuota(ctx, attempt, req)
+		if reservationErr != nil {
+			if concurrencyAcquired {
+				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+			}
+			attemptChain = append(attemptChain, quotaReservationFailureAttempt(attempt, reservationErr))
+			continue
+		}
+
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attemptTimeoutMs)*time.Millisecond)
 
 		resp, err := r.providerService.CallProvider(
@@ -696,6 +705,9 @@ func (r *Router) Execute(
 				err = validationErr
 			}
 		}
+		if err != nil {
+			r.releaseQuotaReservation(ctx, reservation)
+		}
 
 		if err == nil {
 			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
@@ -715,7 +727,11 @@ func (r *Router) Execute(
 			} else {
 				tokensUsed = r.quotaService.EstimateTokens(req)
 			}
-			r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+			if reservation != nil {
+				r.recordReservedQuotaUsage(ctx, reservation, tokensUsed)
+			} else {
+				r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+			}
 			if attempt.ProviderID == cloudflareProviderID {
 				if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok && resp.Usage != nil {
 					stats, quotaErr := budgetMgr.RecordCloudflareNeuronUsage(ctx, attempt.Model, resp.Usage)
@@ -1037,6 +1053,16 @@ func (r *Router) ExecuteStream(
 				concurrencyAcquired = true
 			}
 
+			reservation, reservationErr := r.reserveAttemptQuota(ctx, attempt, req)
+			if reservationErr != nil {
+				if concurrencyAcquired {
+					r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+				}
+				attemptChain = append(attemptChain, quotaReservationFailureAttempt(attempt, reservationErr))
+				cancel()
+				continue
+			}
+
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
 				attempt.APIKey,
@@ -1081,6 +1107,9 @@ func (r *Router) ExecuteStream(
 			if concurrencyAcquired {
 				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 			}
+			if err != nil {
+				r.releaseQuotaReservation(ctx, reservation)
+			}
 
 			latencyMs := time.Since(startTime).Milliseconds()
 
@@ -1101,7 +1130,11 @@ func (r *Router) ExecuteStream(
 				} else {
 					tokensUsed = r.quotaService.EstimateTokens(req)
 				}
-				r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+				if reservation != nil {
+					r.recordReservedQuotaUsage(ctx, reservation, tokensUsed)
+				} else {
+					r.recordQuotaUsage(ctx, attempt.ProviderID, attempt.Model, tokensUsed)
+				}
 
 				if attempt.ProviderID == cloudflareProviderID && streamUsage != nil {
 					if budgetMgr, ok := r.quotaService.(CloudflareBudgetManager); ok {
@@ -1876,6 +1909,18 @@ func disabledProviderAttempt(attempt types.RoutingAttempt) map[string]any {
 	}
 }
 
+func quotaReservationFailureAttempt(attempt types.RoutingAttempt, err error) map[string]any {
+	entry := map[string]any{
+		"provider":       attempt.ProviderID,
+		"model":          attempt.Model,
+		"failure_kind":   string(types.CategoryQuota),
+		"failure_action": string(types.ActionFailover),
+		"failure_reason": "quota reservation denied",
+	}
+	enrichAttemptFailureDetails(entry, err)
+	return entry
+}
+
 func isAuthProviderError(err error) bool {
 	providerErr, ok := err.(*errors.ProviderError)
 	if !ok {
@@ -2072,6 +2117,58 @@ func (r *Router) releaseConcurrencySlot(providerID, model string) {
 	releaseCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	r.quotaService.ReleaseConcurrencySlot(releaseCtx, providerID, model)
+}
+
+func (r *Router) reserveAttemptQuota(ctx context.Context, attempt types.RoutingAttempt, req types.ChatCompletionRequest) (*QuotaReservation, error) {
+	reservationService, ok := r.quotaService.(QuotaReservationService)
+	if !ok {
+		return nil, nil
+	}
+	provider, ok := r.lookupProvider(attempt.ProviderID)
+	if !ok {
+		return nil, nil
+	}
+	limits := effectiveModelLimits(provider, attempt.Model)
+	if !hasModelLimits(limits) {
+		return nil, nil
+	}
+	estimatedTokens := r.quotaService.EstimateTokens(req)
+	return reservationService.CheckAndReserveQuota(ctx, attempt.ProviderID, attempt.Model, limits, estimatedTokens)
+}
+
+func (r *Router) releaseQuotaReservation(ctx context.Context, reservation *QuotaReservation) {
+	if reservation == nil {
+		return
+	}
+	reservationService, ok := r.quotaService.(QuotaReservationService)
+	if !ok {
+		return
+	}
+	if err := reservationService.ReleaseQuotaReservation(ctx, reservation); err != nil {
+		logger.Error().
+			Str("type", "router").
+			Str("event", "quota.reservation_release_failed").
+			Str("provider", reservation.ProviderID).
+			Str("model", reservation.Model).
+			Err(err).
+			Msg("Failed to release quota reservation")
+	}
+}
+
+func (r *Router) recordReservedQuotaUsage(ctx context.Context, reservation *QuotaReservation, actualTokens int) {
+	reservationService, ok := r.quotaService.(QuotaReservationService)
+	if !ok || reservation == nil {
+		return
+	}
+	if err := reservationService.RecordTokenUsage(ctx, reservation, actualTokens); err != nil {
+		logger.Error().
+			Str("type", "router").
+			Str("event", "quota.reservation_record_failed").
+			Str("provider", reservation.ProviderID).
+			Str("model", reservation.Model).
+			Err(err).
+			Msg("Failed to record reserved quota usage")
+	}
 }
 
 func (r *Router) lookupModelCooldownMs(providerID, model string) int {

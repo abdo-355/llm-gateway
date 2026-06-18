@@ -41,6 +41,15 @@ type QuotaStatus struct {
 	Tpmu int
 }
 
+type QuotaReservation struct {
+	ProviderID      string
+	Model           string
+	EstimatedTokens int
+	Keys            quotaKeys
+	RPMMember       string
+	TPMMember       string
+}
+
 type RateLimitInfo struct {
 	IsRateLimited     bool
 	RetryAfter        int
@@ -170,6 +179,177 @@ func (s *QuotaService) CheckModelQuota(ctx context.Context, providerID, model st
 	}
 
 	return nil
+}
+
+func (s *QuotaService) CheckAndReserveQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) (*QuotaReservation, error) {
+	now := time.Now().UTC()
+	keys := s.buildKeys(providerID, model, now)
+	timestamp := now.UnixMilli()
+	nonce := now.Nanosecond()
+	rpmMember := fmt.Sprintf("reserve:%d:%d", timestamp, nonce)
+	tpmMember := formatTokenWindowMember(timestamp, estimatedTokens, nonce)
+
+	limitValue := func(limit *int) int {
+		if limit == nil || *limit <= 0 {
+			return -1
+		}
+		return *limit
+	}
+
+	script := redis.NewScript(`
+		local rpm_key = KEYS[1]
+		local rph_key = KEYS[2]
+		local rpd_key = KEYS[3]
+		local tpm_key = KEYS[4]
+		local tph_key = KEYS[5]
+		local tpd_key = KEYS[6]
+		local tpmu_key = KEYS[7]
+
+		local now_ms = tonumber(ARGV[1])
+		local rpm_cutoff = tonumber(ARGV[2])
+		local tpm_cutoff = tonumber(ARGV[3])
+		local estimated_tokens = tonumber(ARGV[4])
+		local rpm_member = ARGV[5]
+		local tpm_member = ARGV[6]
+		local rpm_limit = tonumber(ARGV[7])
+		local rph_limit = tonumber(ARGV[8])
+		local rpd_limit = tonumber(ARGV[9])
+		local tpm_limit = tonumber(ARGV[10])
+		local tph_limit = tonumber(ARGV[11])
+		local tpd_limit = tonumber(ARGV[12])
+		local tpmu_limit = tonumber(ARGV[13])
+
+		redis.call('ZREMRANGEBYSCORE', rpm_key, 0, rpm_cutoff)
+		redis.call('ZREMRANGEBYSCORE', tpm_key, 0, tpm_cutoff)
+
+		local rpm = redis.call('ZCARD', rpm_key)
+		local rph = tonumber(redis.call('GET', rph_key) or '0')
+		local rpd = tonumber(redis.call('GET', rpd_key) or '0')
+		local tph = tonumber(redis.call('GET', tph_key) or '0')
+		local tpd = tonumber(redis.call('GET', tpd_key) or '0')
+		local tpmu = tonumber(redis.call('GET', tpmu_key) or '0')
+
+		local tpm = 0
+		local members = redis.call('ZRANGE', tpm_key, 0, -1)
+		for _, member in ipairs(members) do
+			local tokens = string.match(member, '^[^:]+:(%d+):')
+			if tokens then
+				tpm = tpm + tonumber(tokens)
+			end
+		end
+
+		local function check(limit, current, adding, name)
+			if limit > 0 and current + adding > limit then
+				return {0, name, current, limit}
+			end
+			return nil
+		end
+
+		local failed = check(rpm_limit, rpm, 1, 'rpm') or
+			check(rph_limit, rph, 1, 'rph') or
+			check(rpd_limit, rpd, 1, 'rpd') or
+			check(tpm_limit, tpm, estimated_tokens, 'tpm') or
+			check(tph_limit, tph, estimated_tokens, 'tph') or
+			check(tpd_limit, tpd, estimated_tokens, 'tpd') or
+			check(tpmu_limit, tpmu, estimated_tokens, 'tpmu')
+		if failed then
+			return failed
+		end
+
+		redis.call('ZADD', rpm_key, now_ms, rpm_member)
+		redis.call('EXPIRE', rpm_key, 60)
+		redis.call('INCR', rph_key)
+		redis.call('EXPIRE', rph_key, 7200)
+		redis.call('INCR', rpd_key)
+		redis.call('EXPIRE', rpd_key, 90000)
+		redis.call('ZADD', tpm_key, now_ms, tpm_member)
+		redis.call('EXPIRE', tpm_key, 60)
+		redis.call('INCRBY', tph_key, estimated_tokens)
+		redis.call('EXPIRE', tph_key, 7200)
+		redis.call('INCRBY', tpd_key, estimated_tokens)
+		redis.call('EXPIRE', tpd_key, 90000)
+		redis.call('INCRBY', tpmu_key, estimated_tokens)
+		redis.call('EXPIRE', tpmu_key, 2678400)
+
+		return {1, '', 0, 0}
+	`)
+
+	result, err := script.Run(ctx, s.redis, []string{keys.RPM, keys.RPH, keys.RPD, keys.TPM, keys.TPH, keys.TPD, keys.TPMU},
+		timestamp,
+		now.Add(-60*time.Second).UnixMilli(),
+		now.Add(-60*time.Second).UnixMilli(),
+		estimatedTokens,
+		rpmMember,
+		tpmMember,
+		limitValue(limits.Rpm),
+		limitValue(limits.Rph),
+		limitValue(limits.Rpd),
+		limitValue(limits.Tpm),
+		limitValue(limits.Tph),
+		limitValue(limits.Tpd),
+		limitValue(limits.Tpmu),
+	).Slice()
+	if err != nil {
+		return nil, err
+	}
+	if len(result) > 0 && int64Value(result[0]) == 0 {
+		limitType, _ := result[1].(string)
+		current := int(int64Value(result[2]))
+		limit := int(int64Value(result[3]))
+		metrics.QuotaRejectionsTotal.WithLabelValues(providerID, model, limitType).Inc()
+		return nil, errors.NewModelQuotaExceededError(
+			fmt.Sprintf("%s limit exceeded: %d/%d", strings.ToUpper(limitType), current, limit),
+			providerID, model, limitType,
+		)
+	}
+
+	return &QuotaReservation{
+		ProviderID:      providerID,
+		Model:           model,
+		EstimatedTokens: estimatedTokens,
+		Keys:            keys,
+		RPMMember:       rpmMember,
+		TPMMember:       tpmMember,
+	}, nil
+}
+
+func (s *QuotaService) ReleaseQuotaReservation(ctx context.Context, reservation *QuotaReservation) error {
+	if reservation == nil {
+		return nil
+	}
+
+	script := redis.NewScript(`
+		redis.call('ZREM', KEYS[1], ARGV[1])
+		local rph = redis.call('DECR', KEYS[2])
+		if rph < 0 then redis.call('SET', KEYS[2], 0) end
+		local rpd = redis.call('DECR', KEYS[3])
+		if rpd < 0 then redis.call('SET', KEYS[3], 0) end
+		redis.call('ZREM', KEYS[4], ARGV[2])
+		local estimated = tonumber(ARGV[3])
+		local tph = redis.call('DECRBY', KEYS[5], estimated)
+		if tph < 0 then redis.call('SET', KEYS[5], 0) end
+		local tpd = redis.call('DECRBY', KEYS[6], estimated)
+		if tpd < 0 then redis.call('SET', KEYS[6], 0) end
+		local tpmu = redis.call('DECRBY', KEYS[7], estimated)
+		if tpmu < 0 then redis.call('SET', KEYS[7], 0) end
+		return 1
+	`)
+
+	_, err := script.Run(ctx, s.redis, []string{reservation.Keys.RPM, reservation.Keys.RPH, reservation.Keys.RPD, reservation.Keys.TPM, reservation.Keys.TPH, reservation.Keys.TPD, reservation.Keys.TPMU}, reservation.RPMMember, reservation.TPMMember, reservation.EstimatedTokens).Result()
+	return err
+}
+
+func (s *QuotaService) RecordTokenUsage(ctx context.Context, reservation *QuotaReservation, actualTokens int) error {
+	if reservation == nil {
+		return nil
+	}
+	if actualTokens < 0 {
+		actualTokens = 0
+	}
+	if err := s.ReleaseQuotaReservation(ctx, reservation); err != nil {
+		return err
+	}
+	return s.RecordModelUsage(ctx, reservation.ProviderID, reservation.Model, actualTokens)
 }
 
 func (s *QuotaService) RecordModelUsage(ctx context.Context, providerID, model string, tokensUsed int) error {
