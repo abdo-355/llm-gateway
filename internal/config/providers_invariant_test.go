@@ -127,3 +127,47 @@ func TestTierRegistryInvariants(t *testing.T) {
 		})
 	}
 }
+
+func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
+	retired := map[string]struct{}{
+		"ollama/qwen3-next:80b": {},
+	}
+
+	for _, provider := range GetProviders() {
+		for _, model := range provider.Models.List {
+			_, found := retired[provider.ID+"/"+model]
+			assert.False(t, found, "retired model remains in provider allowlist")
+		}
+	}
+
+	for _, cfg := range GetAllTierConfigs() {
+		for _, entry := range cfg.Entries {
+			_, found := retired[entry.Provider+"/"+entry.Model]
+			assert.False(t, found, "retired model remains in tier registry")
+		}
+	}
+
+	for _, cert := range GetCertifications() {
+		_, found := retired[cert.Provider+"/"+cert.Model]
+		assert.False(t, found, "retired model remains certified")
+	}
+}
+
+func TestOCIModelConcurrencyLimit(t *testing.T) {
+	const expected = 15
+
+	for _, provider := range GetProviders() {
+		if provider.ID != "oci" {
+			continue
+		}
+
+		for _, model := range provider.Models.List {
+			limits := provider.Models.Limits[model]
+			require.NotNil(t, limits.MaxConcurrent, "OCI model %q must declare max concurrency", model)
+			assert.Equal(t, expected, *limits.MaxConcurrent, "OCI model %q max concurrency", model)
+		}
+		return
+	}
+
+	t.Fatal("OCI provider not found")
+}

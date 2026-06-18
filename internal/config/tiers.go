@@ -22,7 +22,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.76},
 			{Provider: "groq", Model: "qwen/qwen3-32b", Weight: 0.70},
 			{Provider: "groq", Model: "openai/gpt-oss-20b", Weight: 0.68},
-			{Provider: "ollama", Model: "qwen3-next:80b", Weight: 0.66},
 			{Provider: "ollama", Model: "llama3.3:70b", Weight: 0.66},
 			{Provider: "kilo", Model: "stepfun/step-3.7-flash:free", Weight: 0.60},
 			{Provider: "openrouter", Model: "openai/gpt-oss-120b:free", Weight: 0.40},

@@ -217,7 +217,6 @@ func GetCertifications() []types.Certification {
 		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
 		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
 		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
-		{Provider: "ollama", Model: "qwen3-next:80b", StrictSchema: true},
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
 	}
 }
@@ -502,7 +501,6 @@ func getOllamaConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"llama3.3:70b",
-				"qwen3-next:80b",
 				"devstral-small-2:24b",
 				"gemma4:31b",
 				"gemma3:27b",
@@ -532,7 +530,6 @@ func getOllamaConfig() types.ProviderConfig {
 			},
 			Limits: map[string]types.ModelLimits{
 				"llama3.3:70b":         {MaxConcurrent: &conc1},
-				"qwen3-next:80b":       {MaxConcurrent: &conc1},
 				"devstral-small-2:24b": {MaxConcurrent: &conc1},
 				"gemma4:31b":           {MaxConcurrent: &conc1},
 				"gemma3:27b":           {MaxConcurrent: &conc1},
@@ -699,12 +696,12 @@ func getOciConfig() types.ProviderConfig {
 				"openai.gpt-oss-20b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"google.gemini-2.5-pro":        {MaxConcurrent: intPtr(20)},
-				"google.gemini-2.5-flash":      {MaxConcurrent: intPtr(20)},
-				"google.gemini-2.5-flash-lite": {MaxConcurrent: intPtr(20)},
-				"meta.llama-3.3-70b-instruct":  {MaxConcurrent: intPtr(20)},
-				"openai.gpt-oss-120b":          {MaxConcurrent: intPtr(20)},
-				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(20)},
+				"google.gemini-2.5-pro":        {MaxConcurrent: intPtr(15)},
+				"google.gemini-2.5-flash":      {MaxConcurrent: intPtr(15)},
+				"google.gemini-2.5-flash-lite": {MaxConcurrent: intPtr(15)},
+				"meta.llama-3.3-70b-instruct":  {MaxConcurrent: intPtr(15)},
+				"openai.gpt-oss-120b":          {MaxConcurrent: intPtr(15)},
+				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(15)},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
