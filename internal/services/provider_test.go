@@ -97,6 +97,51 @@ func TestNormalizeStructuredOutputForProvider_NormalizesStrictDialectSchema(t *t
 	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
 }
 
+func TestNormalizeStructuredOutputForProvider_DowngradesGeminiSchemaToJSONObject(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Return status"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:        "status_response",
+				Description: "status payload",
+				Schema:      json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}},"additionalProperties":false}`),
+				Strict:      &strict,
+			},
+		},
+	}
+
+	for _, tc := range []struct {
+		name     string
+		provider string
+		model    string
+	}{
+		{name: "direct gemini", provider: "gemini", model: "gemini-2.5-flash"},
+		{name: "oci gemini", provider: "oci", model: "google.gemini-2.5-flash"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizeStructuredOutputForProvider(req, tc.provider, tc.model)
+
+			require.NotNil(t, got.ResponseFormat)
+			assert.Equal(t, "json_object", got.ResponseFormat.Type)
+			assert.Nil(t, got.ResponseFormat.JSONSchema)
+			require.Len(t, got.Messages, 2)
+			instruction, ok := got.Messages[0].Content.(string)
+			require.True(t, ok)
+			assert.Contains(t, instruction, "JSON Schema")
+			assert.Contains(t, instruction, "status_response")
+			assert.Contains(t, instruction, `"ok"`)
+			assert.Equal(t, "user", got.Messages[1].Role)
+		})
+	}
+
+	assert.Equal(t, "json_schema", req.ResponseFormat.Type, "normalization must not mutate the client contract")
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
+	assert.Len(t, req.Messages, 1)
+}
+
 func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")

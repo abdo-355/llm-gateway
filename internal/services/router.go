@@ -1607,7 +1607,7 @@ func supportsStructuredOutput(output string, caps types.ProviderCapabilities, st
 	case "json_schema":
 		return supportsJSONSchema(caps) || strictCertified
 	case "json_schema_strict":
-		return supportsJSONSchema(caps) || strictCertified
+		return supportsJSONObject(caps) || strictCertified
 	default:
 		return false
 	}

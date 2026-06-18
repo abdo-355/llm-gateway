@@ -763,7 +763,7 @@ func getGeminiConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               true,
-			StructuredOutputs:   "json_schema",
+			StructuredOutputs:   "json_object",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,

@@ -420,6 +420,12 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 	}
 
 	if request.ResponseFormat.Type == "json_schema" {
+		if providerUsesNativeJSONObject(provider, model) {
+			request.Messages = prependStructuredOutputSchemaInstruction(request.Messages, request.ResponseFormat.JSONSchema)
+			request.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
+			return request
+		}
+
 		format := request.ResponseFormat
 		if providerRequiresStrictResponseSchemaDialect(provider, model) {
 			format = strictDialectJSONSchemaFormat(format)
@@ -451,6 +457,26 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 		},
 	}
 	return request
+}
+
+func prependStructuredOutputSchemaInstruction(messages []types.OpenAIMessage, schema *types.JSONSchema) []types.OpenAIMessage {
+	if schema == nil || len(schema.Schema) == 0 {
+		return messages
+	}
+
+	instruction := "Return only a valid JSON object that matches this JSON Schema. Do not include markdown fences or prose."
+	if schema.Name != "" {
+		instruction += " Schema name: " + schema.Name + "."
+	}
+	if schema.Description != "" {
+		instruction += " Description: " + schema.Description + "."
+	}
+	instruction += "\nSchema:\n" + string(schema.Schema)
+
+	withInstruction := make([]types.OpenAIMessage, 0, len(messages)+1)
+	withInstruction = append(withInstruction, types.OpenAIMessage{Role: "system", Content: instruction})
+	withInstruction = append(withInstruction, messages...)
+	return withInstruction
 }
 
 func nonStrictJSONSchemaFormat(format *types.ResponseFormat) *types.ResponseFormat {
@@ -548,6 +574,9 @@ func providerRequiresStrictResponseSchemaDialect(provider, model string) bool {
 }
 
 func providerUsesNativeJSONObject(provider, model string) bool {
+	if provider == "gemini" {
+		return true
+	}
 	if provider == "oci" && strings.HasPrefix(model, "google.gemini-") {
 		return true
 	}

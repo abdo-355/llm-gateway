@@ -398,6 +398,45 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Equal(t, "not_certified_for_strict_json", filtered["text-provider/text-model"])
 	})
 
+	t.Run("allows JSON object providers for strict contract", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{
+			{
+				ID:      "json-provider",
+				BaseURL: "https://json.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"json-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "json_object",
+				},
+			},
+			{
+				ID:      "text-provider",
+				BaseURL: "https://text.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"text-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "none",
+				},
+			},
+		}}
+
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		strictReqs := types.DerivedRequirements{Output: "json_schema_strict", Streaming: "preferred", Tools: "forbidden"}
+		eligible, filtered := r.FilterCandidates(ctx, r.GenerateCandidates(), strictReqs, baseReq, nil)
+		require.Len(t, eligible, 1)
+		assert.Equal(t, "json-provider", eligible[0].Provider.ID)
+		assert.Equal(t, "not_certified_for_strict_json", filtered["text-provider/text-model"])
+	})
+
 	t.Run("filters JSON object to structured output providers", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
