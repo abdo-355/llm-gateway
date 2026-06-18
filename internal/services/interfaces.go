@@ -18,6 +18,10 @@ type QuotaChecker interface {
 	GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) QuotaStatus
 }
 
+type ConcurrencyUsageReader interface {
+	GetConcurrencyUsage(ctx context.Context, providerID, model string) (int, error)
+}
+
 type HealthChecker interface {
 	CanExecute(ctx context.Context, providerID, model string) bool
 	GetCircuitState(ctx context.Context, providerID, model string) CircuitState

@@ -28,6 +28,7 @@ type cloudflareQuotaStub struct {
 	estimatedCloudflareUnits int
 	cloudflareErr            error
 	markedExhausted          bool
+	concurrencyUsage         map[string]int
 }
 
 func (s *cloudflareQuotaStub) EstimateTokens(req types.ChatCompletionRequest) int {
@@ -54,6 +55,10 @@ func (s *cloudflareQuotaStub) ReleaseConcurrencySlot(ctx context.Context, provid
 
 func (s *cloudflareQuotaStub) CheckConcurrencyLimit(ctx context.Context, providerID, model string, maxConcurrent int) bool {
 	return true
+}
+
+func (s *cloudflareQuotaStub) GetConcurrencyUsage(ctx context.Context, providerID, model string) (int, error) {
+	return s.concurrencyUsage[providerID+"/"+model], nil
 }
 
 func (s *cloudflareQuotaStub) GetModelQuotaStatus(ctx context.Context, providerID, model string, limits *types.ModelLimits) services.QuotaStatus {
@@ -831,6 +836,50 @@ func TestScoreCandidates(t *testing.T) {
 
 		scored := r.ScoreCandidates(ctx, candidates, nil)
 		assert.InDelta(t, 1.55, scored[0].Score, 0.0001) // 1.0*0.5 + 0.6*0.5 + 0.75
+	})
+
+	t.Run("penalizes high concurrency utilization", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+		limit := 10
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{
+			{
+				ID:      "busy-provider",
+				BaseURL: "https://busy.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models: types.ProviderModels{
+					Mode:   "allowlist",
+					List:   []string{"busy-model"},
+					Limits: map[string]types.ModelLimits{"busy-model": {MaxConcurrent: &limit}},
+				},
+			},
+			{
+				ID:      "idle-provider",
+				BaseURL: "https://idle.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models: types.ProviderModels{
+					Mode:   "allowlist",
+					List:   []string{"idle-model"},
+					Limits: map[string]types.ModelLimits{"idle-model": {MaxConcurrent: &limit}},
+				},
+			},
+		}}
+		quotaStub := &cloudflareQuotaStub{concurrencyUsage: map[string]int{"busy-provider/busy-model": 9}}
+		r := services.NewRouterWithConfig(cfg, quotaStub, mockHealth, mockProvider)
+
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "busy-provider", "busy-model").Return(services.HealthMetrics{HealthScore: 1.0})
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "idle-provider", "idle-model").Return(services.HealthMetrics{HealthScore: 1.0})
+
+		candidates := []types.RoutingCandidate{
+			{Provider: cfg.Providers[0], Model: "busy-model", ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[1], Model: "idle-model", ScoreBreakdown: map[string]float64{}},
+		}
+
+		scored := r.ScoreCandidates(ctx, candidates, nil)
+		require.Len(t, scored, 2)
+		assert.Equal(t, "idle-provider", scored[0].Provider.ID)
+		assert.InDelta(t, 0.675, scored[1].ScoreBreakdown["concurrency_load_penalty"], 0.0001)
 	})
 }
 

@@ -296,6 +296,21 @@ func (s *QuotaService) CheckConcurrencyLimit(ctx context.Context, providerID, mo
 	return int(count) < maxConcurrent
 }
 
+func (s *QuotaService) GetConcurrencyUsage(ctx context.Context, providerID, model string) (int, error) {
+	key := fmt.Sprintf("%s:%s:%s:concurrent", s.prefix, providerID, model)
+	count, err := s.redis.Get(ctx, key).Int64()
+	if err != nil {
+		if err == redis.Nil {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if count < 0 {
+		return 0, nil
+	}
+	return int(count), nil
+}
+
 func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, model string, resp *http.Response) RateLimitInfo {
 	result := RateLimitInfo{}
 

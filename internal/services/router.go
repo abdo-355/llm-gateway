@@ -460,9 +460,13 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 		successRatioScore := batchResults[i].successRatioScore
 		candidate.ScoreBreakdown["health_score"] = healthScore
 		candidate.ScoreBreakdown["success_ratio"] = successRatioScore
+		concurrencyPenalty := r.concurrencyLoadPenalty(ctx, *candidate)
+		if concurrencyPenalty > 0 {
+			candidate.ScoreBreakdown["concurrency_load_penalty"] = concurrencyPenalty
+		}
 
 		// Combine scores
-		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score
+		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score - concurrencyPenalty
 	}
 
 	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
@@ -476,6 +480,29 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 	})
 
 	return candidates
+}
+
+func (r *Router) concurrencyLoadPenalty(ctx context.Context, candidate types.RoutingCandidate) float64 {
+	reader, ok := r.quotaService.(ConcurrencyUsageReader)
+	if !ok {
+		return 0
+	}
+
+	limits := effectiveModelLimits(candidate.Provider, candidate.Model)
+	if limits.MaxConcurrent == nil || *limits.MaxConcurrent <= 0 {
+		return 0
+	}
+
+	current, err := reader.GetConcurrencyUsage(ctx, candidate.Provider.ID, candidate.Model)
+	if err != nil || current <= 0 {
+		return 0
+	}
+
+	utilization := float64(current) / float64(*limits.MaxConcurrent)
+	if utilization > 1 {
+		utilization = 1
+	}
+	return utilization * 0.75
 }
 
 func calculateSuccessRatioScore(successCount, failureCount int) float64 {

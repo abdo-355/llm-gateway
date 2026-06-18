@@ -248,6 +248,26 @@ func TestQuotaRecordModelUsage(t *testing.T) {
 	assert.Equal(t, 150, status.Tpmu, "TPMU should be 150")
 }
 
+func TestQuotaGetConcurrencyUsage(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	usage, err := svc.GetConcurrencyUsage(ctx, "provider1", "model1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, usage)
+
+	require.NoError(t, svc.AcquireConcurrencySlot(ctx, "provider1", "model1", 2))
+	usage, err = svc.GetConcurrencyUsage(ctx, "provider1", "model1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, usage)
+
+	svc.ReleaseConcurrencySlot(ctx, "provider1", "model1")
+	usage, err = svc.GetConcurrencyUsage(ctx, "provider1", "model1")
+	require.NoError(t, err)
+	assert.Equal(t, 0, usage)
+}
+
 func TestCloudflareRecordNeuronUsage(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")
