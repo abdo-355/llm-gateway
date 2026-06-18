@@ -97,10 +97,14 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		tierName = string(tierConfig.Tier)
 	}
 
-	// TODO: Remove after debugging candidate filtering
 	filteredSummary := make(map[string]int)
 	for _, reason := range filtered {
 		filteredSummary[reason]++
+	}
+	retryPolicy := map[string]bool{
+		"on_429":     plan.RetryOn429,
+		"on_timeout": plan.RetryOnTimeout,
+		"on_5xx":     plan.RetryOn5xx,
 	}
 
 	logger.Info().
@@ -109,8 +113,13 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		Str("request_id", requestID).
 		Str("model", model).
 		Str("tier", tierName).
+		Interface("requirements", requirements).
 		Int("candidate_count", len(candidates)).
 		Int("eligible_count", len(eligible)).
+		Int("attempt_count", len(plan.Attempts)).
+		Int("max_attempts", plan.MaxAttempts).
+		Interface("retry_policy", retryPolicy).
+		Interface("top_attempts", summarizePlanAttempts(plan, 5)).
 		Interface("filtered_summary", filteredSummary).
 		Msg("Tier resolution complete")
 
@@ -279,6 +288,14 @@ type filterReasonSummary struct {
 	RetryAfterSeconds *int   `json:"retry_after_seconds,omitempty"`
 }
 
+type routingAttemptLogSummary struct {
+	Attempt    int     `json:"attempt"`
+	ProviderID string  `json:"provider_id"`
+	Model      string  `json:"model"`
+	Score      float64 `json:"score"`
+	TimeoutMs  int     `json:"timeout_ms"`
+}
+
 func summarizeFilteredProviders(filtered map[string]string) []filterReasonSummary {
 	if len(filtered) == 0 {
 		return nil
@@ -311,6 +328,28 @@ func summarizeFilteredProviders(filtered map[string]string) []filterReasonSummar
 		return summaries[i].Category < summaries[j].Category
 	})
 	return summaries
+}
+
+func summarizePlanAttempts(plan types.RoutingPlan, limit int) []routingAttemptLogSummary {
+	if len(plan.Attempts) == 0 || limit <= 0 {
+		return nil
+	}
+	if limit > len(plan.Attempts) {
+		limit = len(plan.Attempts)
+	}
+
+	summary := make([]routingAttemptLogSummary, 0, limit)
+	for i := 0; i < limit; i++ {
+		attempt := plan.Attempts[i]
+		summary = append(summary, routingAttemptLogSummary{
+			Attempt:    i + 1,
+			ProviderID: attempt.ProviderID,
+			Model:      attempt.Model,
+			Score:      attempt.Score,
+			TimeoutMs:  attempt.TimeoutMs,
+		})
+	}
+	return summary
 }
 
 func classifyFilterReason(reason string) (string, bool, *int) {
