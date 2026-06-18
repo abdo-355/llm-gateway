@@ -918,10 +918,18 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, prov
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
 		retryAfter, limitType, limitSubtype := parseRateLimitDetails(provider, resp.Header, body)
-		return errors.NewRateLimitErrorWithSubtype(
+		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
 			retryAfter, limitType, limitSubtype, headers,
 		)
+		if quota, ok := parseProviderQuotaDetails(body); ok {
+			err.LimitType = quota.LimitType
+			err.LimitSubtype = "quota_exhausted"
+			err.IsRetryable = false
+			err.ProviderQuotaLimit = quota.Limit
+			err.ProviderQuotaID = quota.ID
+		}
+		return err
 	case http.StatusPaymentRequired:
 		return &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	default:
@@ -1002,6 +1010,9 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 
 	bodyUpper := strings.ToUpper(string(body))
 	limitSubtype := "rate_limit"
+	if quota, ok := parseProviderQuotaDetails(body); ok {
+		return retryAfter, quota.LimitType, "quota_exhausted"
+	}
 
 	switch provider {
 	case "groq":
@@ -1028,6 +1039,7 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 
 	// Parse body for quota/billing exhaustion signals across all providers
 	if strings.Contains(bodyUpper, "QUOTA_EXCEEDED") ||
+		strings.Contains(bodyUpper, "RESOURCE_EXHAUSTED") ||
 		strings.Contains(bodyUpper, "MONTHLY") ||
 		strings.Contains(bodyUpper, "BILLING") ||
 		strings.Contains(bodyUpper, "INSUFFICIENT_QUOTA") ||
@@ -1043,6 +1055,86 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 	}
 
 	return retryAfter, "rpm", limitSubtype
+}
+
+type providerQuotaDetails struct {
+	LimitType string
+	Limit     int
+	ID        string
+}
+
+func parseProviderQuotaDetails(body []byte) (providerQuotaDetails, bool) {
+	var payload struct {
+		Error struct {
+			Details []json.RawMessage `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return providerQuotaDetails{}, false
+	}
+
+	for _, rawDetail := range payload.Error.Details {
+		var detail map[string]any
+		if err := json.Unmarshal(rawDetail, &detail); err != nil {
+			continue
+		}
+		violations, ok := detail["violations"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawViolation := range violations {
+			violation, ok := rawViolation.(map[string]any)
+			if !ok {
+				continue
+			}
+			quotaID, _ := violation["quotaId"].(string)
+			quotaMetric, _ := violation["quotaMetric"].(string)
+			limitType := quotaLimitType(quotaID, quotaMetric)
+			limit := quotaValueInt(violation["quotaValue"])
+			if limitType == "" || limit <= 0 {
+				continue
+			}
+			return providerQuotaDetails{LimitType: limitType, Limit: limit, ID: quotaID}, true
+		}
+	}
+
+	return providerQuotaDetails{}, false
+}
+
+func quotaLimitType(quotaID, quotaMetric string) string {
+	combined := strings.ToLower(quotaID + " " + quotaMetric)
+	switch {
+	case strings.Contains(combined, "perday") || strings.Contains(combined, "per_day") || strings.Contains(combined, "requestsperday"):
+		return "rpd"
+	case strings.Contains(combined, "perminute") || strings.Contains(combined, "per_minute") || strings.Contains(combined, "requestsperminute"):
+		if strings.Contains(combined, "token") {
+			return "tpm"
+		}
+		return "rpm"
+	case strings.Contains(combined, "token") && strings.Contains(combined, "day"):
+		return "tpd"
+	case strings.Contains(combined, "request") && strings.Contains(combined, "day"):
+		return "rpd"
+	case strings.Contains(combined, "request") && strings.Contains(combined, "minute"):
+		return "rpm"
+	default:
+		return ""
+	}
+}
+
+func quotaValueInt(value any) int {
+	switch typed := value.(type) {
+	case string:
+		parsed, err := strconv.Atoi(typed)
+		if err != nil {
+			return 0
+		}
+		return parsed
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
 }
 
 func normalizeProviderErrorMessage(provider string, statusCode int, body []byte) string {

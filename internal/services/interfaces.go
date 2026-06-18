@@ -22,6 +22,10 @@ type ConcurrencyUsageReader interface {
 	GetConcurrencyUsage(ctx context.Context, providerID, model string) (int, error)
 }
 
+type ProviderQuotaSyncer interface {
+	SyncProviderQuotaLimit(ctx context.Context, providerID, model, limitType string, limit int) error
+}
+
 type HealthChecker interface {
 	CanExecute(ctx context.Context, providerID, model string) bool
 	GetCircuitState(ctx context.Context, providerID, model string) CircuitState

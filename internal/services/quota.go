@@ -375,6 +375,47 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 	return result
 }
 
+func (s *QuotaService) SyncProviderQuotaLimit(ctx context.Context, providerID, model, limitType string, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	keys := s.buildKeys(providerID, model, now)
+	timestamp := now.UnixMilli()
+	pipe := s.redis.Pipeline()
+
+	switch limitType {
+	case "rpm":
+		entries := make([]redis.Z, 0, limit)
+		for i := 0; i < limit; i++ {
+			entries = append(entries, redis.Z{Score: float64(timestamp), Member: fmt.Sprintf("provider-quota-sync-%d-%d", timestamp, i)})
+		}
+		pipe.Del(ctx, keys.RPM)
+		pipe.ZAdd(ctx, keys.RPM, entries...)
+		pipe.Expire(ctx, keys.RPM, 60*time.Second)
+	case "rph":
+		pipe.Set(ctx, keys.RPH, limit, 2*time.Hour)
+	case "rpd":
+		pipe.Set(ctx, keys.RPD, limit, 25*time.Hour)
+	case "tpm":
+		pipe.Del(ctx, keys.TPM)
+		pipe.ZAdd(ctx, keys.TPM, redis.Z{Score: float64(timestamp), Member: formatTokenWindowMember(timestamp, limit, now.Nanosecond())})
+		pipe.Expire(ctx, keys.TPM, 60*time.Second)
+	case "tph":
+		pipe.Set(ctx, keys.TPH, limit, 2*time.Hour)
+	case "tpd":
+		pipe.Set(ctx, keys.TPD, limit, 25*time.Hour)
+	case "tpmu":
+		pipe.Set(ctx, keys.TPMU, limit, 31*24*time.Hour)
+	default:
+		return nil
+	}
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
 func parseRequestLimitHeaders(providerID string, headers http.Header) (int, int, string) {
 	switch providerID {
 	case "groq":

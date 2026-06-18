@@ -17,9 +17,11 @@ func (e *ProviderError) Error() string {
 // RateLimitError represents a rate limit error (429)
 type RateLimitError struct {
 	ProviderError
-	RetryAfter    int    // seconds until reset
-	LimitType     string // rpm, tpm, rpd, resource_exhausted
-	LimitSubtype  string // rate_limit, quota_exhausted, overload
+	RetryAfter         int    // seconds until reset
+	LimitType          string // rpm, tpm, rpd, resource_exhausted
+	LimitSubtype       string // rate_limit, quota_exhausted, overload
+	ProviderQuotaLimit int
+	ProviderQuotaID    string
 }
 
 func NewRateLimitError(message string, retryAfter int, limitType string) *RateLimitError {
@@ -211,10 +213,10 @@ func (e *NetworkError) Unwrap() error {
 // ParseError represents response parsing failures (JSON, SSE, etc.)
 type ParseError struct {
 	ProviderError
-	ParseType   string // json, sse, header
-	RawContent  string // Truncated raw content that failed to parse
-	ProviderID  string
-	Model       string
+	ParseType  string // json, sse, header
+	RawContent string // Truncated raw content that failed to parse
+	ProviderID string
+	Model      string
 }
 
 // NewParseError creates a new ParseError with context

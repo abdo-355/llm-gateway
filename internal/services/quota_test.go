@@ -471,6 +471,19 @@ func TestQuotaHandleProviderRateLimit_CerebrasDayHeaders(t *testing.T) {
 	assert.Equal(t, 25, status.Rpd)
 }
 
+func TestQuotaSyncProviderQuotaLimit_RPD(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	require.NoError(t, svc.SyncProviderQuotaLimit(ctx, "gemini", "gemini-2.5-flash", "rpd", 20))
+
+	status := svc.GetModelQuotaStatus(ctx, "gemini", "gemini-2.5-flash", nil)
+	assert.Equal(t, 20, status.Rpd)
+	err := svc.CheckModelQuota(ctx, "gemini", "gemini-2.5-flash", types.ModelLimits{Rpd: intPtr(20)}, 1)
+	require.Error(t, err)
+}
+
 func TestQuotaGetModelQuotaStatus(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")

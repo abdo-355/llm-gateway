@@ -1894,6 +1894,18 @@ func (r *Router) handleRateLimitFailure(ctx context.Context, providerID, model s
 		r.applyRateLimitCooldown(ctx, providerID, model, rateLimitErr)
 	}
 	r.maybeMarkCloudflareDailyBudgetExhausted(ctx, providerID, rateLimitErr)
+	if syncer, ok := r.quotaService.(ProviderQuotaSyncer); ok && rateLimitErr.ProviderQuotaLimit > 0 {
+		if err := syncer.SyncProviderQuotaLimit(ctx, providerID, model, rateLimitErr.LimitType, rateLimitErr.ProviderQuotaLimit); err != nil {
+			logger.Error().
+				Str("type", "router").
+				Str("event", "quota.provider_sync_failed").
+				Str("provider", providerID).
+				Str("model", model).
+				Str("limit_type", rateLimitErr.LimitType).
+				Err(err).
+				Msg("Failed to sync provider quota limit")
+		}
+	}
 	r.quotaService.HandleProviderRateLimit(ctx, providerID, model, buildRateLimitResponse(rateLimitErr))
 	if provider, ok := r.lookupProvider(providerID); ok && hasModelLimits(providerLevelModelLimits(provider.Limits)) {
 		r.quotaService.HandleProviderRateLimit(ctx, providerID, providerQuotaScopeModel, buildRateLimitResponse(rateLimitErr))

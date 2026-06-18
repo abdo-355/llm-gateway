@@ -329,6 +329,34 @@ func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
 	assert.Equal(t, "rate_limit", limitSubtype)
 }
 
+func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
+	body := []byte(`{
+		"error": {
+			"code": 429,
+			"status": "RESOURCE_EXHAUSTED",
+			"details": [{
+				"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+				"violations": [{
+					"quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+					"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+					"quotaValue": "20"
+				}]
+			}]
+		}
+	}`)
+
+	retryAfter, limitType, limitSubtype := parseRateLimitDetails("gemini", http.Header{}, body)
+	quota, ok := parseProviderQuotaDetails(body)
+
+	assert.True(t, ok)
+	assert.Equal(t, 60, retryAfter)
+	assert.Equal(t, "rpd", limitType)
+	assert.Equal(t, "quota_exhausted", limitSubtype)
+	assert.Equal(t, "rpd", quota.LimitType)
+	assert.Equal(t, 20, quota.Limit)
+	assert.Equal(t, "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quota.ID)
+}
+
 func TestPrepareRequest_CerebrasStrictSchemaIsDowngradedForUpstream(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{
