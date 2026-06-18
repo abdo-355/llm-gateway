@@ -9,7 +9,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: 0.96},
 			{Provider: "oci", Model: "google.gemini-2.5-flash", Weight: 0.92},
 			{Provider: "mistral", Model: "mistral-small-2506", Weight: 0.90},
-			{Provider: "nim", Model: "qwen/qwen3-next-80b-a3b-instruct", Weight: 0.90},
 			{Provider: "gemini", Model: "gemini-3.1-flash-lite", Weight: 0.86},
 			{Provider: "groq", Model: "llama-3.3-70b-versatile", Weight: 0.84},
 			{Provider: "gemini", Model: "gemini-2.5-flash", Weight: 0.84},
