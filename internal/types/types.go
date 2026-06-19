@@ -63,30 +63,31 @@ type JSONSchema struct {
 }
 
 type ChatCompletionRequest struct {
-	Model               string            `json:"model"`
-	Messages            []OpenAIMessage   `json:"messages"`
-	Temperature         *float64          `json:"temperature,omitempty"`
-	FrequencyPenalty    *float64          `json:"frequency_penalty,omitempty"`
-	LogitBias           map[string]int    `json:"logit_bias,omitempty"`
-	Logprobs            *bool             `json:"logprobs,omitempty"`
-	TopLogprobs         *int              `json:"top_logprobs,omitempty"`
-	MaxTokens           *int              `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int              `json:"max_completion_tokens,omitempty"`
-	N                   *int              `json:"n,omitempty"`
-	PresencePenalty     *float64          `json:"presence_penalty,omitempty"`
-	ResponseFormat      *ResponseFormat   `json:"response_format,omitempty"`
-	Seed                *int              `json:"seed,omitempty"`
-	RandomSeed          *int              `json:"random_seed,omitempty"`
-	Stop                any               `json:"stop,omitempty"` // string or []string
-	Stream              *bool             `json:"stream,omitempty"`
-	StreamOptions       *StreamOptions    `json:"stream_options,omitempty"`
-	TopP                *float64          `json:"top_p,omitempty"`
-	Tools               []OpenAITool      `json:"tools,omitempty"`
-	ToolChoice          any               `json:"tool_choice,omitempty"` // none, auto, required, or object
-	ParallelToolCalls   *bool             `json:"parallel_tool_calls,omitempty"`
-	User                string            `json:"user,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
-	Router              *RouterHints      `json:"router,omitempty"` // Internal gateway routing hints
+	Model                string               `json:"model"`
+	Messages             []OpenAIMessage      `json:"messages"`
+	Temperature          *float64             `json:"temperature,omitempty"`
+	FrequencyPenalty     *float64             `json:"frequency_penalty,omitempty"`
+	LogitBias            map[string]int       `json:"logit_bias,omitempty"`
+	Logprobs             *bool                `json:"logprobs,omitempty"`
+	TopLogprobs          *int                 `json:"top_logprobs,omitempty"`
+	MaxTokens            *int                 `json:"max_tokens,omitempty"`
+	MaxCompletionTokens  *int                 `json:"max_completion_tokens,omitempty"`
+	N                    *int                 `json:"n,omitempty"`
+	PresencePenalty      *float64             `json:"presence_penalty,omitempty"`
+	ResponseFormat       *ResponseFormat      `json:"response_format,omitempty"`
+	Seed                 *int                 `json:"seed,omitempty"`
+	RandomSeed           *int                 `json:"random_seed,omitempty"`
+	Stop                 any                  `json:"stop,omitempty"` // string or []string
+	Stream               *bool                `json:"stream,omitempty"`
+	StreamOptions        *StreamOptions       `json:"stream_options,omitempty"`
+	TopP                 *float64             `json:"top_p,omitempty"`
+	Tools                []OpenAITool         `json:"tools,omitempty"`
+	ToolChoice           any                  `json:"tool_choice,omitempty"` // none, auto, required, or object
+	ParallelToolCalls    *bool                `json:"parallel_tool_calls,omitempty"`
+	User                 string               `json:"user,omitempty"`
+	Metadata             map[string]string    `json:"metadata,omitempty"`
+	Router               *RouterHints         `json:"router,omitempty"` // Internal gateway routing hints
+	ProviderCapabilities ProviderCapabilities `json:"-"`
 }
 
 type StreamOptions struct {
@@ -537,14 +538,15 @@ type RoutingCandidate struct {
 }
 
 type RoutingAttempt struct {
-	ProviderID   string       `json:"providerId"`
-	Model        string       `json:"model"`
-	BaseURL      string       `json:"baseUrl"`
-	APIKey       string       `json:"apiKey"`
-	Score        float64      `json:"score"`
-	TimeoutMs    int          `json:"timeoutMs"`
-	ProviderType string       `json:"providerType"`
-	Auth         ProviderAuth `json:"auth"`
+	ProviderID   string               `json:"providerId"`
+	Model        string               `json:"model"`
+	BaseURL      string               `json:"baseUrl"`
+	APIKey       string               `json:"apiKey"`
+	Score        float64              `json:"score"`
+	TimeoutMs    int                  `json:"timeoutMs"`
+	ProviderType string               `json:"providerType"`
+	Auth         ProviderAuth         `json:"auth"`
+	Capabilities ProviderCapabilities `json:"-"`
 }
 
 type RoutingPlan struct {

@@ -418,9 +418,10 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 	if request.ResponseFormat == nil {
 		return request
 	}
+	structuredOutput := request.ProviderCapabilities.StructuredOutputs
 
 	if request.ResponseFormat.Type == "json_schema" {
-		if providerUsesNativeJSONObject(provider, model) {
+		if structuredOutput == "json_object" || providerUsesNativeJSONObject(provider, model) {
 			request.Messages = prependStructuredOutputSchemaInstruction(request.Messages, request.ResponseFormat.JSONSchema)
 			request.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
 			return request
@@ -441,10 +442,12 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 		return request
 	}
 
-	if providerUsesNativeJSONObject(provider, model) {
+	if structuredOutput == "json_object" || providerUsesNativeJSONObject(provider, model) {
 		return request
 	}
-	if !providerUsesJSONSchemaForJSONObject(provider, model) {
+	if structuredOutput == "json_schema" || structuredOutput == "json_schema_strict" {
+		// Continue below and express json_object through a permissive schema.
+	} else if !providerUsesJSONSchemaForJSONObject(provider, model) {
 		return request
 	}
 
@@ -968,7 +971,24 @@ func isProviderFailoverHTTPError(statusCode int, message string) bool {
 	if strings.Contains(lower, "was retired") {
 		return true
 	}
-	return isProviderSchemaDialectRejection(statusCode, lower)
+	return isProviderSchemaDialectRejection(statusCode, lower) || isProviderUnsupportedResponseFormat(statusCode, lower)
+}
+
+func isProviderUnsupportedResponseFormat(statusCode int, lowerMessage string) bool {
+	if !isValidationStatus(statusCode) {
+		return false
+	}
+	if !strings.Contains(lowerMessage, "response format") && !strings.Contains(lowerMessage, "response_format") {
+		return false
+	}
+	if !strings.Contains(lowerMessage, "json_schema") && !strings.Contains(lowerMessage, "json schema") &&
+		!strings.Contains(lowerMessage, "json_object") && !strings.Contains(lowerMessage, "json object") {
+		return false
+	}
+	return strings.Contains(lowerMessage, "does not support") ||
+		strings.Contains(lowerMessage, "not support") ||
+		strings.Contains(lowerMessage, "not supported") ||
+		strings.Contains(lowerMessage, "unsupported")
 }
 
 func isProviderSchemaDialectRejection(statusCode int, lowerMessage string) bool {

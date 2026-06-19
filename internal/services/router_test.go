@@ -1001,6 +1001,19 @@ func TestCompilePlan(t *testing.T) {
 		require.NotNil(t, plan.HardTimeoutMs)
 		assert.Equal(t, 60000, *plan.HardTimeoutMs)
 	})
+
+	t.Run("stores resolved model capabilities", func(t *testing.T) {
+		cfg := testConfig()
+		jsonObject := "json_object"
+		cfg.Providers[0].Models.Capabilities = map[string]types.ModelCapabilities{
+			"model-1": {StructuredOutputs: &jsonObject},
+		}
+		r := services.NewRouterWithConfig(cfg, nil, nil, nil)
+		plan := r.CompilePlan([]types.RoutingCandidate{{Provider: cfg.Providers[0], Model: "model-1"}}, nil, nil)
+
+		require.Len(t, plan.Attempts, 1)
+		assert.Equal(t, "json_object", plan.Attempts[0].Capabilities.StructuredOutputs)
+	})
 }
 
 // --- ShouldRetry ---
@@ -1076,6 +1089,41 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "test-id", result.Response.ID)
 		assert.Equal(t, 1, result.Attempts)
 		assert.Equal(t, "provider-a", result.ProviderID)
+	})
+
+	t.Run("passes attempt capabilities to provider request", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+
+		content := "response text"
+		resp := &types.ChatCompletionResponse{
+			ID: "test-id", Model: "model-1",
+			Usage:   &types.Usage{TotalTokens: 50},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(
+			gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		).DoAndReturn(func(_ string, _ string, _ string, gotReq types.ChatCompletionRequest, _ int, _ context.Context, _ string, _ types.ProviderAuth, _ string) (*types.ChatCompletionResponse, error) {
+			assert.Equal(t, "json_object", gotReq.ProviderCapabilities.StructuredOutputs)
+			return resp, nil
+		})
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-a", "model-1", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "model-1", 50).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{{
+				ProviderID: "provider-a", Model: "model-1",
+				BaseURL: "https://a.com/v1", APIKey: "key",
+				TimeoutMs:    30000,
+				Auth:         types.ProviderAuth{Type: "bearer"},
+				Capabilities: types.ProviderCapabilities{StructuredOutputs: "json_object"},
+			}},
+			MaxAttempts: 1,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-capabilities")
+		require.NoError(t, err)
+		assert.Equal(t, "test-id", result.Response.ID)
 	})
 
 	t.Run("records provider level quota usage", func(t *testing.T) {

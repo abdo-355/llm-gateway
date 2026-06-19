@@ -556,6 +556,7 @@ func (r *Router) CompilePlan(
 	for i := 0; i < maxAttempts && i < len(candidates); i++ {
 		candidate := candidates[i]
 		apiKey := r.resolveProviderAPIKey(candidate.Provider.Auth)
+		caps := r.resolveCapabilities(candidate.Provider, candidate.Model)
 
 		attempts = append(attempts, types.RoutingAttempt{
 			ProviderID:   candidate.Provider.ID,
@@ -566,6 +567,7 @@ func (r *Router) CompilePlan(
 			TimeoutMs:    timeoutMs,
 			ProviderType: candidate.Provider.ProviderType,
 			Auth:         candidate.Provider.Auth,
+			Capabilities: caps,
 		})
 	}
 
@@ -680,11 +682,14 @@ func (r *Router) Execute(
 
 		attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attemptTimeoutMs)*time.Millisecond)
 
+		attemptReq := req
+		attemptReq.ProviderCapabilities = attempt.Capabilities
+
 		resp, err := r.providerService.CallProvider(
 			attempt.BaseURL,
 			attempt.APIKey,
 			attempt.Model,
-			req,
+			attemptReq,
 			attemptTimeoutMs,
 			attemptCtx,
 			attempt.ProviderType,
@@ -1063,11 +1068,14 @@ func (r *Router) ExecuteStream(
 				continue
 			}
 
+			attemptReq := req
+			attemptReq.ProviderCapabilities = attempt.Capabilities
+
 			result := r.providerService.StreamProviderChannel(
 				attempt.BaseURL,
 				attempt.APIKey,
 				attempt.Model,
-				req,
+				attemptReq,
 				attemptTimeoutMs,
 				attemptCtx,
 				attempt.ProviderType,

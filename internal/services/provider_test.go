@@ -142,6 +142,63 @@ func TestNormalizeStructuredOutputForProvider_DowngradesGeminiSchemaToJSONObject
 	assert.Len(t, req.Messages, 1)
 }
 
+func TestNormalizeStructuredOutputForProvider_DowngradesSchemaForJSONObjectCapability(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Return status"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:        "status_response",
+				Description: "status payload",
+				Schema:      json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}`),
+				Strict:      &strict,
+			},
+		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_object"},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "some-provider", "json-only-model")
+
+	require.NotNil(t, got.ResponseFormat)
+	assert.Equal(t, "json_object", got.ResponseFormat.Type)
+	assert.Nil(t, got.ResponseFormat.JSONSchema)
+	require.Len(t, got.Messages, 2)
+	instruction, ok := got.Messages[0].Content.(string)
+	require.True(t, ok)
+	assert.Contains(t, instruction, "JSON Schema")
+	assert.Contains(t, instruction, "status_response")
+	assert.Contains(t, instruction, `"ok"`)
+	assert.Equal(t, "user", got.Messages[1].Role)
+
+	assert.Equal(t, "json_schema", req.ResponseFormat.Type, "normalization must not mutate the client contract")
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
+	assert.Len(t, req.Messages, 1)
+}
+
+func TestNormalizeStructuredOutputForProvider_KeepsSchemaForSchemaCapability(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "response",
+				Schema: json.RawMessage(`{"type":"object"}`),
+				Strict: &strict,
+			},
+		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema"},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "some-provider", "schema-model")
+
+	require.NotNil(t, got.ResponseFormat)
+	assert.Equal(t, "json_schema", got.ResponseFormat.Type)
+	require.NotNil(t, got.ResponseFormat.JSONSchema)
+	assert.Nil(t, got.ResponseFormat.JSONSchema.Strict)
+}
+
 func TestProviderServiceShouldLogRawProviderResponse_DisabledByDefault(t *testing.T) {
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSES", "")
 	t.Setenv("LOG_RAW_PROVIDER_RESPONSE_FILTERS", "mistral/magistral-*")
@@ -643,6 +700,28 @@ func TestProviderCallProvider_ResponseFormatSchemaDialectErrorFailsOver(t *testi
 	require.ErrorAs(t, err, &providerErr)
 	assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
 	assert.False(t, providerErr.IsRetryable)
+}
+
+func TestProviderCallProvider_UnsupportedResponseFormatFailsOver(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":{"message":"This model does not support response format ` + "`json_schema`" + `"}}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "json-object-model", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer"}, "")
+	require.Error(t, err)
+
+	var providerErr *errors.ProviderError
+	require.ErrorAs(t, err, &providerErr)
+	assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
+	assert.False(t, providerErr.IsRetryable)
+
+	var validationErr *errors.ValidationError
+	assert.NotErrorAs(t, err, &validationErr)
 }
 
 func TestProviderCallProvider_RetiredModelIsProviderError(t *testing.T) {
