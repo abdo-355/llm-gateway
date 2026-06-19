@@ -15,12 +15,13 @@ import (
 type CooldownReason string
 
 const (
-	CooldownRateLimit CooldownReason = "rate_limit"
-	CooldownOverload  CooldownReason = "overload"
-	CooldownBilling   CooldownReason = "billing"
-	CooldownAuth      CooldownReason = "auth"
-	CooldownQuota     CooldownReason = "quota"
-	CooldownDefault   CooldownReason = "default"
+	CooldownRateLimit        CooldownReason = "rate_limit"
+	CooldownOverload         CooldownReason = "overload"
+	CooldownBilling          CooldownReason = "billing"
+	CooldownAuth             CooldownReason = "auth"
+	CooldownQuota            CooldownReason = "quota"
+	CooldownStructuredOutput CooldownReason = "structured_output"
+	CooldownDefault          CooldownReason = "default"
 )
 
 // CooldownService manages provider cooldowns (separate from circuit breakers)

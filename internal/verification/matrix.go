@@ -331,7 +331,12 @@ func supportsStrictJSON(combo Combo) bool {
 	if combo.StrictJSONCertified {
 		return true
 	}
-	return resolveCapabilities(combo).StructuredOutputs == "json_schema_strict"
+	switch resolveCapabilities(combo).StructuredOutputs {
+	case "json_object", "json_schema", "json_schema_strict", "model_dependent":
+		return true
+	default:
+		return false
+	}
 }
 
 func supportsStreaming(combo Combo) bool {

@@ -22,7 +22,7 @@ type mockResponsesRouter struct {
 	generateCandidatesFn        func() []types.RoutingCandidate
 	generateCandidatesForTierFn func(tier types.Tier) []types.RoutingCandidate
 	filterCandidatesFn          func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, req types.ChatCompletionRequest, hints *types.RouterHints) ([]types.RoutingCandidate, map[string]string)
-	scoreCandidatesFn           func(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate
+	scoreCandidatesFn           func(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, hints *types.RouterHints) []types.RoutingCandidate
 	compilePlanFn               func(candidates []types.RoutingCandidate, hints *types.RouterHints, tierSLO *types.TierSLO) types.RoutingPlan
 	executeFn                   func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) (*types.ExecutionResult, error)
 	executeStreamFn             func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult
@@ -56,9 +56,9 @@ func (m *mockResponsesRouter) FilterCandidates(ctx context.Context, candidates [
 	return candidates, nil
 }
 
-func (m *mockResponsesRouter) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+func (m *mockResponsesRouter) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, hints *types.RouterHints) []types.RoutingCandidate {
 	if m.scoreCandidatesFn != nil {
-		return m.scoreCandidatesFn(ctx, candidates, hints)
+		return m.scoreCandidatesFn(ctx, candidates, requirements, hints)
 	}
 	return candidates
 }

@@ -411,7 +411,7 @@ func (r *Router) FilterCandidates(
 }
 
 // Stage 4: Score Candidates
-func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, hints *types.RouterHints) []types.RoutingCandidate {
+func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.RoutingCandidate, requirements types.DerivedRequirements, hints *types.RouterHints) []types.RoutingCandidate {
 	// Batch-read health metrics for all candidates in one pipeline.
 	type batchHealthResult struct {
 		healthScore       float64
@@ -471,9 +471,13 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 		if concurrencyPenalty > 0 {
 			candidate.ScoreBreakdown["concurrency_load_penalty"] = concurrencyPenalty
 		}
+		structuredOutputBonus := strictStructuredOutputScoreBonus(requirements, *candidate, r.resolveCapabilities(candidate.Provider, candidate.Model))
+		if structuredOutputBonus > 0 {
+			candidate.ScoreBreakdown["strict_structured_output_bonus"] = structuredOutputBonus
+		}
 
 		// Combine scores
-		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score - concurrencyPenalty
+		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score + structuredOutputBonus - concurrencyPenalty
 	}
 
 	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
@@ -487,6 +491,22 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 	})
 
 	return candidates
+}
+
+func strictStructuredOutputScoreBonus(requirements types.DerivedRequirements, candidate types.RoutingCandidate, caps types.ProviderCapabilities) float64 {
+	if requirements.Output != "json_schema_strict" {
+		return 0
+	}
+	if candidate.IsCertifiedForStrictSchema || caps.StructuredOutputs == "json_schema_strict" {
+		return 0.35
+	}
+	if caps.StructuredOutputs == "json_schema" {
+		return 0.20
+	}
+	if caps.StructuredOutputs == "model_dependent" {
+		return 0.10
+	}
+	return 0
 }
 
 func (r *Router) concurrencyLoadPenalty(ctx context.Context, candidate types.RoutingCandidate) float64 {
@@ -918,6 +938,7 @@ func (r *Router) Execute(
 
 		r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, err)
 		r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, err)
+		r.handleStructuredOutputFailure(ctx, attempt.ProviderID, attempt.Model, req, err)
 
 		if !r.failureAllowedByPlan(err, plan, i) {
 			return nil, r.CreateGatewayError(err, i+1, requestID)
@@ -1280,6 +1301,7 @@ func (r *Router) ExecuteStream(
 
 			r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 			r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
+			r.handleStructuredOutputFailure(ctx, attempt.ProviderID, attempt.Model, req, typedErr)
 
 			attemptFailure := map[string]any{
 				"provider":       attempt.ProviderID,
@@ -1862,6 +1884,8 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 		return CooldownRateLimit
 	case types.CategoryQuota:
 		return CooldownQuota
+	case types.CategoryParse, types.CategoryEmpty:
+		return CooldownStructuredOutput
 	case types.CategoryPayment:
 		return CooldownBilling
 	case types.CategoryProvider5xx:
@@ -1870,6 +1894,25 @@ func (r *Router) failureCategoryToCooldownReason(category types.FailureCategory)
 		return CooldownAuth
 	default:
 		return CooldownDefault
+	}
+}
+
+func (r *Router) handleStructuredOutputFailure(ctx context.Context, providerID, model string, req types.ChatCompletionRequest, err error) {
+	if r.cooldownService == nil || req.ResponseFormat == nil {
+		return
+	}
+	if !isStructuredOutputFailure(err) {
+		return
+	}
+	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, CooldownStructuredOutput, 0)
+}
+
+func isStructuredOutputFailure(err error) bool {
+	switch err.(type) {
+	case *errors.ParseError, *errors.EmptyResponseError:
+		return true
+	default:
+		return false
 	}
 }
 

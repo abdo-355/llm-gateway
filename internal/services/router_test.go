@@ -834,7 +834,7 @@ func TestScoreCandidates(t *testing.T) {
 		}
 		hints := &types.RouterHints{Providers: &types.ProviderPreferences{Prefer: []string{"provider-b"}}}
 
-		scored := r.ScoreCandidates(ctx, candidates, hints)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, hints)
 		assert.Equal(t, "model-3", scored[0].Model)
 		assert.Greater(t, scored[0].Score, scored[1].Score)
 		assert.Contains(t, scored[0].ScoreBreakdown, "preference_bonus")
@@ -850,7 +850,7 @@ func TestScoreCandidates(t *testing.T) {
 			{Provider: testConfig().Providers[1], Model: "model-3", ScoreBreakdown: map[string]float64{}},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		assert.Equal(t, "model-3", scored[0].Model)
 	})
 
@@ -872,7 +872,7 @@ func TestScoreCandidates(t *testing.T) {
 			{Provider: testConfig().Providers[1], Model: "model-3", ScoreBreakdown: map[string]float64{}},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		assert.Equal(t, "model-1", scored[0].Model)
 		assert.InDelta(t, 1.0, scored[0].ScoreBreakdown["success_ratio"], 0.0001)
 		assert.InDelta(t, 0.25, scored[1].ScoreBreakdown["success_ratio"], 0.0001)
@@ -890,7 +890,7 @@ func TestScoreCandidates(t *testing.T) {
 			{Provider: testConfig().Providers[0], Model: "model-1", ScoreBreakdown: map[string]float64{}},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		assert.InDelta(t, 1.55, scored[0].Score, 0.0001) // 1.0*0.5 + 0.6*0.5 + 0.75
 	})
 
@@ -932,10 +932,53 @@ func TestScoreCandidates(t *testing.T) {
 			{Provider: cfg.Providers[1], Model: "idle-model", ScoreBreakdown: map[string]float64{}},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		require.Len(t, scored, 2)
 		assert.Equal(t, "idle-provider", scored[0].Provider.ID)
 		assert.InDelta(t, 0.675, scored[1].ScoreBreakdown["concurrency_load_penalty"], 0.0001)
+	})
+
+	t.Run("prefers stronger structured output support for strict schema requests", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{
+			{
+				ID:      "json-provider",
+				BaseURL: "https://json.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"json-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "json_object",
+				},
+			},
+			{
+				ID:      "strict-provider",
+				BaseURL: "https://strict.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"strict-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "json_schema_strict",
+				},
+			},
+		}}
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "json-provider", "json-model").Return(services.HealthMetrics{HealthScore: 1.0})
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "strict-provider", "strict-model").Return(services.HealthMetrics{HealthScore: 1.0})
+
+		candidates := []types.RoutingCandidate{
+			{Provider: cfg.Providers[0], Model: "json-model", Score: 1.0, ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[1], Model: "strict-model", Score: 0.8, ScoreBreakdown: map[string]float64{}},
+		}
+
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "json_schema_strict"}, nil)
+
+		require.Len(t, scored, 2)
+		assert.Equal(t, "strict-provider", scored[0].Provider.ID)
+		assert.InDelta(t, 0.35, scored[0].ScoreBreakdown["strict_structured_output_bonus"], 0.0001)
+		assert.NotContains(t, scored[1].ScoreBreakdown, "strict_structured_output_bonus")
 	})
 }
 
@@ -1196,6 +1239,9 @@ func TestExecute(t *testing.T) {
 
 	t.Run("structured output validation failure fails over", func(t *testing.T) {
 		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+		redisClient, _ := newExternalTestRedis(t)
+		cooldowns := services.NewCooldownService(redisClient, "cooldown", testCooldownConfig())
+		r.SetCooldownService(cooldowns)
 
 		schema := []byte(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}`)
 		strict := true
@@ -1243,6 +1289,8 @@ func TestExecute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "provider-b", result.ProviderID)
 		assert.Equal(t, "good-structured", result.Response.ID)
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
+		assert.Equal(t, services.CooldownStructuredOutput, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
 	})
 
 	t.Run("rate limited attempt applies cooldown and failover succeeds", func(t *testing.T) {

@@ -84,8 +84,11 @@ func TestValidateStrictJSON(t *testing.T) {
 
 func TestSupportsStrictJSON(t *testing.T) {
 	assert.True(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema_strict"}}}))
+	assert.True(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema"}}}))
+	assert.True(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "json_object"}}}))
+	assert.True(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "model_dependent"}}}))
 	assert.True(t, supportsStrictJSON(Combo{StrictJSONCertified: true}))
-	assert.False(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "model_dependent"}}}))
+	assert.False(t, supportsStrictJSON(Combo{Provider: types.ProviderConfig{Capabilities: types.ProviderCapabilities{StructuredOutputs: "none"}}}))
 }
 
 func TestBuildProbesDiscoversAtomicCapabilities(t *testing.T) {

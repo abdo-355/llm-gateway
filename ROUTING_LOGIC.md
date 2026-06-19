@@ -250,17 +250,26 @@ if hints != nil && hints.Providers != nil {
 }
 ```
 
-**2. Strict JSON Requirement:**
+**2. Structured Output Requirement:**
 
 ```go
-if requirements.Output == "json_schema_strict" {
-    // First check: is this specific model certified for strict JSON?
-    if !candidate.IsCertifiedForStrictSchema {
-        // Second check: does provider guarantee strict JSON capability?
-        if provider.Capabilities.StructuredOutputs != "json_schema_strict" {
-            filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "not_certified_for_strict_json"
-            continue
-        }
+if !supportsStructuredOutput(requirements.Output, caps, candidate.IsCertifiedForStrictSchema) {
+    filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = structuredOutputFilterReason(requirements.Output)
+    continue
+}
+
+func supportsStructuredOutput(output string, caps ProviderCapabilities, strictCertified bool) bool {
+    switch output {
+    case "json_schema_strict":
+        // json_object providers are eligible as prompt-shaped fallbacks; router
+        // validates the final response against the client's strict schema locally.
+        return supportsJSONObject(caps) || strictCertified
+    case "json_schema":
+        return supportsJSONSchema(caps) || strictCertified
+    case "json_object":
+        return supportsJSONObject(caps) || strictCertified
+    default:
+        return true
     }
 }
 ```
@@ -322,7 +331,7 @@ if err := r.quotaService.CheckModelQuota(ctx, provider.ID, model, modelLimits, e
 ### Scoring Formula
 
 ```go
-score = (baseScore * 0.5) + (healthScore * 0.5) + successRatio + logicalModelWeight
+score = (baseScore * 0.5) + (healthScore * 0.5) + successRatio + logicalModelWeight + strictStructuredOutputBonus - concurrencyPenalty
 ```
 
 **Preference Bonus:**
@@ -358,6 +367,21 @@ if totalRequests > 0 {
     successRatio = float64(metrics.SuccessCount) / float64(totalRequests)
 }
 candidate.ScoreBreakdown["success_ratio"] = successRatio
+```
+
+**Strict Structured Output Bonus:**
+
+When `requirements.Output == "json_schema_strict"`, providers with stronger schema support are preferred without excluding JSON-object fallbacks:
+
+```go
+if candidate.IsCertifiedForStrictSchema || caps.StructuredOutputs == "json_schema_strict" {
+    bonus = 0.35
+} else if caps.StructuredOutputs == "json_schema" {
+    bonus = 0.20
+} else if caps.StructuredOutputs == "model_dependent" {
+    bonus = 0.10
+}
+candidate.ScoreBreakdown["strict_structured_output_bonus"] = bonus
 ```
 
 **Sorting:**

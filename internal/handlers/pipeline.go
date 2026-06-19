@@ -83,7 +83,7 @@ func (p *Pipeline) Route(ctx context.Context, model string, hints *types.RouterH
 		}
 	}
 
-	scored := p.router.ScoreCandidates(ctx, eligible, hints)
+	scored := p.router.ScoreCandidates(ctx, eligible, requirements, hints)
 
 	var slo *types.TierSLO
 	if tierConfig != nil {

@@ -124,7 +124,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 
 	t.Run("empty candidates array", func(t *testing.T) {
 		r, _, _, _ := newTestRouter(t)
-		scored := r.ScoreCandidates(ctx, []types.RoutingCandidate{}, nil)
+		scored := r.ScoreCandidates(ctx, []types.RoutingCandidate{}, types.DerivedRequirements{Output: "text"}, nil)
 		assert.Empty(t, scored)
 	})
 
@@ -135,7 +135,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 		candidates := []types.RoutingCandidate{
 			{Provider: testConfig().Providers[0], Model: "model-1", ScoreBreakdown: map[string]float64{}},
 		}
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		assert.Len(t, scored, 1)
 		assert.Equal(t, "model-1", scored[0].Model)
 		assert.InDelta(t, 1.0, scored[0].ScoreBreakdown["success_ratio"], 0.0001)
@@ -156,7 +156,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 			},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, hints)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, hints)
 
 		// First provider gets higher bonus
 		firstBonus := scored[0].ScoreBreakdown["preference_bonus"]
@@ -177,7 +177,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 			},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, hints)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, hints)
 		assert.NotContains(t, scored[0].ScoreBreakdown, "preference_bonus")
 	})
 
@@ -189,7 +189,7 @@ func TestScoreCandidates_EdgeCases(t *testing.T) {
 			{Provider: testConfig().Providers[0], Model: "model-1", Score: 5.0, ScoreBreakdown: map[string]float64{"existing": 5.0}},
 		}
 
-		scored := r.ScoreCandidates(ctx, candidates, nil)
+		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "text"}, nil)
 		assert.Greater(t, scored[0].Score, 5.0)
 		assert.Contains(t, scored[0].ScoreBreakdown, "existing")
 	})
