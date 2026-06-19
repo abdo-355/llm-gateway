@@ -38,6 +38,7 @@ func (c *client) call(ctx context.Context, combo Combo, request types.ChatComple
 	if err != nil {
 		return requestResult{Failure: err.Error()}
 	}
+	request.ProviderCapabilities = resolveCapabilities(combo)
 
 	started := time.Now()
 	resp, err := c.providerService.CallProvider(
@@ -69,6 +70,7 @@ func (c *client) stream(ctx context.Context, combo Combo, request types.ChatComp
 	if err != nil {
 		return requestResult{Failure: err.Error()}
 	}
+	request.ProviderCapabilities = resolveCapabilities(combo)
 
 	started := time.Now()
 	stream := c.providerService.StreamProviderChannel(
