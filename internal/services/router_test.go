@@ -454,6 +454,47 @@ func TestFilterCandidates(t *testing.T) {
 		assert.Equal(t, "not_certified_for_strict_json", filtered["text-provider/text-model"])
 	})
 
+	t.Run("filters JSON object fallback for strict streaming", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockQuota := mocks.NewMockQuotaChecker(ctrl)
+		mockHealth := mocks.NewMockHealthChecker(ctrl)
+		mockProvider := mocks.NewMockProviderCaller(ctrl)
+
+		cfg := types.AppConfig{Providers: []types.ProviderConfig{
+			{
+				ID:      "json-provider",
+				BaseURL: "https://json.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"json-model"}},
+				Capabilities: types.ProviderCapabilities{
+					Streaming:         true,
+					StructuredOutputs: "json_object",
+				},
+			},
+			{
+				ID:      "schema-provider",
+				BaseURL: "https://schema.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"schema-model"}},
+				Capabilities: types.ProviderCapabilities{
+					Streaming:         true,
+					StructuredOutputs: "json_schema",
+				},
+			},
+		}}
+
+		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
+		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
+		mockQuota.EXPECT().EstimateTokens(gomock.Any()).Return(100).AnyTimes()
+		mockQuota.EXPECT().CheckModelQuota(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+		strictStreamingReqs := types.DerivedRequirements{Output: "json_schema_strict", Streaming: "required", Tools: "forbidden"}
+		eligible, filtered := r.FilterCandidates(ctx, r.GenerateCandidates(), strictStreamingReqs, baseReq, nil)
+		require.Len(t, eligible, 1)
+		assert.Equal(t, "schema-provider", eligible[0].Provider.ID)
+		assert.Equal(t, "strict_streaming_requires_schema_support", filtered["json-provider/json-model"])
+	})
+
 	t.Run("filters JSON object to structured output providers", func(t *testing.T) {
 		r, mockQuota, mockHealth, _ := newTestRouter(t)
 		mockHealth.EXPECT().CanExecute(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
@@ -938,7 +979,7 @@ func TestScoreCandidates(t *testing.T) {
 		assert.InDelta(t, 0.675, scored[1].ScoreBreakdown["concurrency_load_penalty"], 0.0001)
 	})
 
-	t.Run("prefers stronger structured output support for strict schema requests", func(t *testing.T) {
+	t.Run("ranks strict schema support before adapter fallback", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockQuota := mocks.NewMockQuotaChecker(ctrl)
 		mockHealth := mocks.NewMockHealthChecker(ctrl)
@@ -954,6 +995,24 @@ func TestScoreCandidates(t *testing.T) {
 				},
 			},
 			{
+				ID:      "model-dependent-provider",
+				BaseURL: "https://model-dependent.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"model-dependent-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "model_dependent",
+				},
+			},
+			{
+				ID:      "schema-provider",
+				BaseURL: "https://schema.example/v1",
+				Auth:    types.ProviderAuth{Type: "bearer"},
+				Models:  types.ProviderModels{Mode: "allowlist", List: []string{"schema-model"}},
+				Capabilities: types.ProviderCapabilities{
+					StructuredOutputs: "json_schema",
+				},
+			},
+			{
 				ID:      "strict-provider",
 				BaseURL: "https://strict.example/v1",
 				Auth:    types.ProviderAuth{Type: "bearer"},
@@ -966,19 +1025,28 @@ func TestScoreCandidates(t *testing.T) {
 		r := services.NewRouterWithConfig(cfg, mockQuota, mockHealth, mockProvider)
 
 		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "json-provider", "json-model").Return(services.HealthMetrics{HealthScore: 1.0})
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "model-dependent-provider", "model-dependent-model").Return(services.HealthMetrics{HealthScore: 1.0})
+		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "schema-provider", "schema-model").Return(services.HealthMetrics{HealthScore: 1.0})
 		mockHealth.EXPECT().GetHealthMetrics(gomock.Any(), "strict-provider", "strict-model").Return(services.HealthMetrics{HealthScore: 1.0})
 
 		candidates := []types.RoutingCandidate{
-			{Provider: cfg.Providers[0], Model: "json-model", Score: 1.0, ScoreBreakdown: map[string]float64{}},
-			{Provider: cfg.Providers[1], Model: "strict-model", Score: 0.8, ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[0], Model: "json-model", Score: 2.5, ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[1], Model: "model-dependent-model", Score: 0.8, ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[2], Model: "schema-model", Score: 0.6, ScoreBreakdown: map[string]float64{}},
+			{Provider: cfg.Providers[3], Model: "strict-model", Score: 0.4, ScoreBreakdown: map[string]float64{}},
 		}
 
 		scored := r.ScoreCandidates(ctx, candidates, types.DerivedRequirements{Output: "json_schema_strict"}, nil)
 
-		require.Len(t, scored, 2)
+		require.Len(t, scored, 4)
 		assert.Equal(t, "strict-provider", scored[0].Provider.ID)
-		assert.InDelta(t, 0.35, scored[0].ScoreBreakdown["strict_structured_output_bonus"], 0.0001)
-		assert.NotContains(t, scored[1].ScoreBreakdown, "strict_structured_output_bonus")
+		assert.Equal(t, "schema-provider", scored[1].Provider.ID)
+		assert.Equal(t, "model-dependent-provider", scored[2].Provider.ID)
+		assert.Equal(t, "json-provider", scored[3].Provider.ID)
+		assert.InDelta(t, 3.0, scored[0].ScoreBreakdown["strict_structured_output_bonus"], 0.0001)
+		assert.InDelta(t, 2.0, scored[1].ScoreBreakdown["strict_structured_output_bonus"], 0.0001)
+		assert.InDelta(t, 1.0, scored[2].ScoreBreakdown["strict_structured_output_bonus"], 0.0001)
+		assert.InDelta(t, 2.0, scored[3].ScoreBreakdown["strict_structured_output_penalty"], 0.0001)
 	})
 }
 

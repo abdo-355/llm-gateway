@@ -263,8 +263,8 @@ func (r *Router) FilterCandidates(
 			continue
 		}
 
-		if !supportsStructuredOutput(requirements.Output, caps, candidate.IsCertifiedForStrictSchema) {
-			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = structuredOutputFilterReason(requirements.Output)
+		if !supportsStructuredOutput(requirements, caps, candidate.IsCertifiedForStrictSchema) {
+			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = structuredOutputFilterReason(requirements, caps, candidate.IsCertifiedForStrictSchema)
 			continue
 		}
 
@@ -471,13 +471,15 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 		if concurrencyPenalty > 0 {
 			candidate.ScoreBreakdown["concurrency_load_penalty"] = concurrencyPenalty
 		}
-		structuredOutputBonus := strictStructuredOutputScoreBonus(requirements, *candidate, r.resolveCapabilities(candidate.Provider, candidate.Model))
-		if structuredOutputBonus > 0 {
-			candidate.ScoreBreakdown["strict_structured_output_bonus"] = structuredOutputBonus
+		structuredOutputAdjustment := strictStructuredOutputScoreAdjustment(requirements, *candidate, r.resolveCapabilities(candidate.Provider, candidate.Model))
+		if structuredOutputAdjustment > 0 {
+			candidate.ScoreBreakdown["strict_structured_output_bonus"] = structuredOutputAdjustment
+		} else if structuredOutputAdjustment < 0 {
+			candidate.ScoreBreakdown["strict_structured_output_penalty"] = -structuredOutputAdjustment
 		}
 
 		// Combine scores
-		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score + structuredOutputBonus - concurrencyPenalty
+		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score + structuredOutputAdjustment - concurrencyPenalty
 	}
 
 	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
@@ -493,18 +495,21 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 	return candidates
 }
 
-func strictStructuredOutputScoreBonus(requirements types.DerivedRequirements, candidate types.RoutingCandidate, caps types.ProviderCapabilities) float64 {
+func strictStructuredOutputScoreAdjustment(requirements types.DerivedRequirements, candidate types.RoutingCandidate, caps types.ProviderCapabilities) float64 {
 	if requirements.Output != "json_schema_strict" {
 		return 0
 	}
 	if candidate.IsCertifiedForStrictSchema || caps.StructuredOutputs == "json_schema_strict" {
-		return 0.35
+		return 3.00
 	}
 	if caps.StructuredOutputs == "json_schema" {
-		return 0.20
+		return 2.00
 	}
 	if caps.StructuredOutputs == "model_dependent" {
-		return 0.10
+		return 1.00
+	}
+	if caps.StructuredOutputs == "json_object" {
+		return -2.00
 	}
 	return 0
 }
@@ -1682,8 +1687,8 @@ func supportsJSONObject(caps types.ProviderCapabilities) bool {
 	}
 }
 
-func supportsStructuredOutput(output string, caps types.ProviderCapabilities, strictCertified bool) bool {
-	switch output {
+func supportsStructuredOutput(requirements types.DerivedRequirements, caps types.ProviderCapabilities, strictCertified bool) bool {
+	switch requirements.Output {
 	case "", "text":
 		return true
 	case "json_object":
@@ -1691,19 +1696,25 @@ func supportsStructuredOutput(output string, caps types.ProviderCapabilities, st
 	case "json_schema":
 		return supportsJSONSchema(caps) || strictCertified
 	case "json_schema_strict":
+		if requirements.Streaming == "required" && caps.StructuredOutputs == "json_object" && !strictCertified {
+			return false
+		}
 		return supportsJSONObject(caps) || strictCertified
 	default:
 		return false
 	}
 }
 
-func structuredOutputFilterReason(output string) string {
-	switch output {
+func structuredOutputFilterReason(requirements types.DerivedRequirements, caps types.ProviderCapabilities, strictCertified bool) string {
+	switch requirements.Output {
 	case "json_object":
 		return "json_object_not_supported"
 	case "json_schema":
 		return "json_schema_not_supported"
 	case "json_schema_strict":
+		if requirements.Streaming == "required" && caps.StructuredOutputs == "json_object" && !strictCertified {
+			return "strict_streaming_requires_schema_support"
+		}
 		return "not_certified_for_strict_json"
 	default:
 		return "structured_output_not_supported"
