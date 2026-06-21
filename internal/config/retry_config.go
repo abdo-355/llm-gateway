@@ -27,13 +27,13 @@ type RetryConfig struct {
 // LoadRetryConfig loads retry configuration from environment
 func LoadRetryConfig() RetryConfig {
 	cfg := RetryConfig{
-		MaxAttempts:           3,
+		MaxAttempts:            3,
 		SameProviderMaxRetries: 1,
-		BaseDelayMs:           250,
-		MaxDelayMs:            8000,
-		Jitter:                0.5,
-		RespectRetryAfter:     true,
-		MaxRetryAfterMs:       60000,
+		BaseDelayMs:            250,
+		MaxDelayMs:             8000,
+		Jitter:                 0.5,
+		RespectRetryAfter:      true,
+		MaxRetryAfterMs:        60000,
 	}
 
 	if val := os.Getenv("RETRY_MAX_ATTEMPTS"); val != "" {
@@ -67,16 +67,22 @@ type CooldownConfig struct {
 	PaymentDuration time.Duration
 	// Error5xxDuration for server errors
 	Error5xxDuration time.Duration
+	// StructuredOutputDuration for invalid or empty structured output responses
+	StructuredOutputDuration time.Duration
+	// MaxRetryAfterDuration caps provider-supplied retry-after cooldowns
+	MaxRetryAfterDuration time.Duration
 }
 
 // LoadCooldownConfig loads cooldown configuration
 func LoadCooldownConfig() CooldownConfig {
 	cfg := CooldownConfig{
-		Enabled:             true,
-		DefaultDuration:     30 * time.Second,
-		RateLimitDuration:   5 * time.Second,
-		PaymentDuration:     300 * time.Second,
-		Error5xxDuration:    30 * time.Second,
+		Enabled:                  true,
+		DefaultDuration:          30 * time.Second,
+		RateLimitDuration:        5 * time.Second,
+		PaymentDuration:          300 * time.Second,
+		Error5xxDuration:         30 * time.Second,
+		StructuredOutputDuration: 10 * time.Minute,
+		MaxRetryAfterDuration:    24 * time.Hour,
 	}
 
 	if val := os.Getenv("COOLDOWN_ENABLED"); val != "" {

@@ -152,6 +152,11 @@ func (s *CooldownService) GetDurationForReason(reason CooldownReason) time.Durat
 		return s.config.PaymentDuration
 	case CooldownQuota:
 		return s.config.RateLimitDuration
+	case CooldownStructuredOutput:
+		if s.config.StructuredOutputDuration > 0 {
+			return s.config.StructuredOutputDuration
+		}
+		return s.config.DefaultDuration
 	default:
 		return s.config.DefaultDuration
 	}
@@ -164,9 +169,14 @@ func (s *CooldownService) ApplyCooldownForReason(ctx context.Context, providerID
 	// If provider gave us a retry-after, use that (capped at max)
 	if retryAfterSeconds > 0 {
 		retryDuration := time.Duration(retryAfterSeconds) * time.Second
-		if retryDuration > 0 && retryDuration < 60*time.Minute {
-			duration = retryDuration
+		maxRetryAfter := s.config.MaxRetryAfterDuration
+		if maxRetryAfter <= 0 {
+			maxRetryAfter = 24 * time.Hour
 		}
+		if retryDuration > maxRetryAfter {
+			retryDuration = maxRetryAfter
+		}
+		duration = retryDuration
 	}
 
 	s.ApplyCooldown(ctx, providerID, model, duration, reason)
