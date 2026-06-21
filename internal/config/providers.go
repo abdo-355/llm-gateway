@@ -188,9 +188,6 @@ func getMistralConfig() types.ProviderConfig {
 
 func GetCertifications() []types.Certification {
 	return []types.Certification{
-		{Provider: "ollama", Model: "gemma4:31b", StrictSchema: true},
-		{Provider: "ollama", Model: "gpt-oss:20b", StrictSchema: true},
-		{Provider: "ollama", Model: "nemotron-3-nano:30b", StrictSchema: true},
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
 	}
 }
@@ -544,7 +541,7 @@ func getOllamaConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               true,
-			StructuredOutputs:   "json_schema",
+			StructuredOutputs:   "none",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,

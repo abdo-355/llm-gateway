@@ -82,11 +82,25 @@ func TestProviderRegistryInvariants(t *testing.T) {
 
 	for _, cert := range GetCertifications() {
 		t.Run("certification/"+cert.Provider+"/"+cert.Model, func(t *testing.T) {
+			assert.NotEqual(t, "ollama", cert.Provider, "ollama strict schema certifications are not reliable")
 			models, ok := providerModels[cert.Provider]
 			require.True(t, ok, "certification references unknown provider")
 			assert.Contains(t, models, cert.Model, "certification references unknown model")
 		})
 	}
+}
+
+func TestOllamaDoesNotAdvertiseStructuredOutputs(t *testing.T) {
+	for _, provider := range GetProviders() {
+		if provider.ID != "ollama" {
+			continue
+		}
+
+		assert.Equal(t, "none", provider.Capabilities.StructuredOutputs)
+		return
+	}
+
+	t.Fatal("ollama provider not found")
 }
 
 func TestTierRegistryInvariants(t *testing.T) {
