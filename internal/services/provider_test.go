@@ -28,7 +28,7 @@ func TestNewProviderService_DefaultTimeout(t *testing.T) {
 	assert.Equal(t, defaultRequestTimeout, svc.httpClient.Timeout)
 }
 
-func TestNormalizeStructuredOutputForProvider_StripsStrictJSONSchemaForUpstream(t *testing.T) {
+func TestNormalizeStructuredOutputForProvider_KeepsStrictJSONSchemaForStrictCapability(t *testing.T) {
 	strict := true
 	req := types.ChatCompletionRequest{
 		ResponseFormat: &types.ResponseFormat{
@@ -39,9 +39,34 @@ func TestNormalizeStructuredOutputForProvider_StripsStrictJSONSchemaForUpstream(
 				Strict: &strict,
 			},
 		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema_strict"},
 	}
 
 	got := normalizeStructuredOutputForProvider(req, "groq", "openai/gpt-oss-20b")
+
+	require.NotNil(t, got.ResponseFormat)
+	require.NotNil(t, got.ResponseFormat.JSONSchema)
+	require.NotNil(t, got.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *got.ResponseFormat.JSONSchema.Strict)
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict, "normalization must not mutate the client contract")
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
+}
+
+func TestNormalizeStructuredOutputForProvider_StripsStrictJSONSchemaForNonStrictSchemaCapability(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "response",
+				Schema: json.RawMessage(`{"type":"object"}`),
+				Strict: &strict,
+			},
+		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema"},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "some-provider", "schema-model")
 
 	require.NotNil(t, got.ResponseFormat)
 	require.NotNil(t, got.ResponseFormat.JSONSchema)
@@ -75,13 +100,15 @@ func TestNormalizeStructuredOutputForProvider_NormalizesStrictDialectSchema(t *t
 				Strict: &strict,
 			},
 		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema_strict"},
 	}
 
 	got := normalizeStructuredOutputForProvider(req, "groq", "openai/gpt-oss-20b")
 
 	require.NotNil(t, got.ResponseFormat)
 	require.NotNil(t, got.ResponseFormat.JSONSchema)
-	assert.Nil(t, got.ResponseFormat.JSONSchema.Strict)
+	require.NotNil(t, got.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *got.ResponseFormat.JSONSchema.Strict)
 	var normalized map[string]any
 	require.NoError(t, json.Unmarshal(got.ResponseFormat.JSONSchema.Schema, &normalized))
 	assert.Equal(t, false, normalized["additionalProperties"])
@@ -97,7 +124,7 @@ func TestNormalizeStructuredOutputForProvider_NormalizesStrictDialectSchema(t *t
 	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
 }
 
-func TestNormalizeStructuredOutputForProvider_DowngradesGeminiSchemaToJSONObject(t *testing.T) {
+func TestNormalizeStructuredOutputForProvider_DowngradesDirectGeminiSchemaToJSONObject(t *testing.T) {
 	strict := true
 	req := types.ChatCompletionRequest{
 		Messages: []types.OpenAIMessage{{Role: "user", Content: "Return status"}},
@@ -110,36 +137,56 @@ func TestNormalizeStructuredOutputForProvider_DowngradesGeminiSchemaToJSONObject
 				Strict:      &strict,
 			},
 		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_object"},
 	}
 
-	for _, tc := range []struct {
-		name     string
-		provider string
-		model    string
-	}{
-		{name: "direct gemini", provider: "gemini", model: "gemini-2.5-flash"},
-		{name: "oci gemini", provider: "oci", model: "google.gemini-2.5-flash"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := normalizeStructuredOutputForProvider(req, tc.provider, tc.model)
+	got := normalizeStructuredOutputForProvider(req, "gemini", "gemini-2.5-flash")
 
-			require.NotNil(t, got.ResponseFormat)
-			assert.Equal(t, "json_object", got.ResponseFormat.Type)
-			assert.Nil(t, got.ResponseFormat.JSONSchema)
-			require.Len(t, got.Messages, 2)
-			instruction, ok := got.Messages[0].Content.(string)
-			require.True(t, ok)
-			assert.Contains(t, instruction, "JSON Schema")
-			assert.Contains(t, instruction, "status_response")
-			assert.Contains(t, instruction, `"ok"`)
-			assert.Equal(t, "user", got.Messages[1].Role)
-		})
-	}
+	require.NotNil(t, got.ResponseFormat)
+	assert.Equal(t, "json_object", got.ResponseFormat.Type)
+	assert.Nil(t, got.ResponseFormat.JSONSchema)
+	require.Len(t, got.Messages, 2)
+	instruction, ok := got.Messages[0].Content.(string)
+	require.True(t, ok)
+	assert.Contains(t, instruction, "JSON Schema")
+	assert.Contains(t, instruction, "status_response")
+	assert.Contains(t, instruction, `"ok"`)
+	assert.Equal(t, "user", got.Messages[1].Role)
 
 	assert.Equal(t, "json_schema", req.ResponseFormat.Type, "normalization must not mutate the client contract")
 	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict)
 	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
 	assert.Len(t, req.Messages, 1)
+}
+
+func TestNormalizeStructuredOutputForProvider_KeepsSchemaForStrictOCIGemini(t *testing.T) {
+	strict := true
+	req := types.ChatCompletionRequest{
+		Messages: []types.OpenAIMessage{{Role: "user", Content: "Return status"}},
+		ResponseFormat: &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:        "status_response",
+				Description: "status payload",
+				Schema:      json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}},"additionalProperties":false}`),
+				Strict:      &strict,
+			},
+		},
+		ProviderCapabilities: types.ProviderCapabilities{StructuredOutputs: "json_schema_strict"},
+	}
+
+	got := normalizeStructuredOutputForProvider(req, "oci", "google.gemini-2.5-flash")
+
+	require.NotNil(t, got.ResponseFormat)
+	assert.Equal(t, "json_schema", got.ResponseFormat.Type)
+	require.NotNil(t, got.ResponseFormat.JSONSchema)
+	require.NotNil(t, got.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *got.ResponseFormat.JSONSchema.Strict)
+	assert.Len(t, got.Messages, 1)
+
+	assert.Equal(t, "json_schema", req.ResponseFormat.Type, "normalization must not mutate the client contract")
+	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict)
+	assert.True(t, *req.ResponseFormat.JSONSchema.Strict)
 }
 
 func TestNormalizeStructuredOutputForProvider_DowngradesSchemaForJSONObjectCapability(t *testing.T) {

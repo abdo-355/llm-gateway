@@ -421,7 +421,7 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 	structuredOutput := request.ProviderCapabilities.StructuredOutputs
 
 	if request.ResponseFormat.Type == "json_schema" {
-		if structuredOutput == "json_object" || providerUsesNativeJSONObject(provider, model) {
+		if structuredOutput == "json_object" || (structuredOutput == "" && providerUsesNativeJSONObject(provider, model)) {
 			request.Messages = prependStructuredOutputSchemaInstruction(request.Messages, request.ResponseFormat.JSONSchema)
 			request.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
 			return request
@@ -431,7 +431,7 @@ func normalizeStructuredOutputForProvider(request types.ChatCompletionRequest, p
 		if providerRequiresStrictResponseSchemaDialect(provider, model) {
 			format = strictDialectJSONSchemaFormat(format)
 		}
-		if isStrictJSONSchema(format) {
+		if structuredOutput != "json_schema_strict" && isStrictJSONSchema(format) {
 			format = nonStrictJSONSchemaFormat(format)
 		}
 		request.ResponseFormat = format

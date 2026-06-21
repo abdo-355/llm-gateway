@@ -188,7 +188,12 @@ func getMistralConfig() types.ProviderConfig {
 
 func GetCertifications() []types.Certification {
 	return []types.Certification{
+		{Provider: "oci", Model: "google.gemini-2.5-pro", StrictSchema: true},
+		{Provider: "oci", Model: "google.gemini-2.5-flash", StrictSchema: true},
+		{Provider: "oci", Model: "google.gemini-2.5-flash-lite", StrictSchema: true},
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
+		{Provider: "oci", Model: "openai.gpt-oss-120b", StrictSchema: true},
+		{Provider: "oci", Model: "openai.gpt-oss-20b", StrictSchema: true},
 	}
 }
 
@@ -286,7 +291,16 @@ func getKiloConfig() types.ProviderConfig {
 			},
 			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
 			Capabilities: map[string]types.ModelCapabilities{
-				"openrouter/free": {Tools: boolPtr(true)},
+				"stepfun/step-3.7-flash:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+				},
+				"poolside/laguna-m.1:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+				},
+				"openrouter/free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+				},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -673,12 +687,12 @@ func getOciConfig() types.ProviderConfig {
 				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(15)},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"openai.gpt-oss-120b":          {StructuredOutputs: strPtr("json_schema"), Logprobs: boolPtr(true)},
-				"openai.gpt-oss-20b":           {StructuredOutputs: strPtr("json_schema"), Logprobs: boolPtr(true)},
-				"meta.llama-3.3-70b-instruct":  {Logprobs: boolPtr(true)},
+				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
+				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
+				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
+				"openai.gpt-oss-120b":          {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
+				"openai.gpt-oss-20b":           {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
+				"meta.llama-3.3-70b-instruct":  {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{

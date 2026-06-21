@@ -185,3 +185,83 @@ func TestOCIModelConcurrencyLimit(t *testing.T) {
 
 	t.Fatal("OCI provider not found")
 }
+
+func TestVerifiedOCIStrictSchemaModels(t *testing.T) {
+	provider := requireProvider(t, "oci")
+	verified := []string{
+		"google.gemini-2.5-pro",
+		"google.gemini-2.5-flash",
+		"google.gemini-2.5-flash-lite",
+		"meta.llama-3.3-70b-instruct",
+		"openai.gpt-oss-120b",
+		"openai.gpt-oss-20b",
+	}
+	certified := strictSchemaCertifications()
+
+	for _, model := range verified {
+		t.Run(model, func(t *testing.T) {
+			caps, ok := provider.Models.Capabilities[model]
+			require.True(t, ok, "verified OCI model must declare explicit capabilities")
+			require.NotNil(t, caps.StructuredOutputs)
+			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
+			assert.Contains(t, certified, "oci/"+model)
+		})
+	}
+}
+
+func TestVerifiedKiloStrictSchemaOverrides(t *testing.T) {
+	provider := requireProvider(t, "kilo")
+	verified := []string{
+		"stepfun/step-3.7-flash:free",
+		"poolside/laguna-m.1:free",
+		"openrouter/free",
+	}
+
+	for _, model := range verified {
+		t.Run(model, func(t *testing.T) {
+			caps, ok := provider.Models.Capabilities[model]
+			require.True(t, ok, "verified Kilo model must declare explicit capabilities")
+			require.NotNil(t, caps.StructuredOutputs)
+			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
+		})
+	}
+
+	if caps, ok := provider.Models.Capabilities["nvidia/nemotron-3-ultra-550b-a55b:free"]; ok && caps.StructuredOutputs != nil {
+		assert.NotEqual(t, "json_schema_strict", *caps.StructuredOutputs, "timed-out Kilo Nemotron model should not be promoted")
+	}
+}
+
+func TestKnownStructuredOutputFailuresStayDisabled(t *testing.T) {
+	nim := requireProvider(t, "nim")
+	nimCaps := nim.Models.Capabilities["mistralai/ministral-14b-instruct-2512"]
+	require.NotNil(t, nimCaps.StructuredOutputs)
+	assert.Equal(t, "none", *nimCaps.StructuredOutputs)
+
+	cohere := requireProvider(t, "cohere")
+	cohereCaps := cohere.Models.Capabilities["command-a-03-2025"]
+	require.NotNil(t, cohereCaps.StructuredOutputs)
+	assert.Equal(t, "none", *cohereCaps.StructuredOutputs)
+}
+
+func requireProvider(t *testing.T, providerID string) types.ProviderConfig {
+	t.Helper()
+
+	for _, provider := range GetProviders() {
+		if provider.ID == providerID {
+			return provider
+		}
+	}
+
+	t.Fatalf("provider %q not found", providerID)
+	return types.ProviderConfig{}
+}
+
+func strictSchemaCertifications() map[string]struct{} {
+	certified := make(map[string]struct{}, len(GetCertifications()))
+	for _, cert := range GetCertifications() {
+		if cert.StrictSchema {
+			certified[cert.Provider+"/"+cert.Model] = struct{}{}
+		}
+	}
+	return certified
+}
