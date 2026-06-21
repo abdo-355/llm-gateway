@@ -176,11 +176,13 @@ func newExternalTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 
 func testCooldownConfig() config.CooldownConfig {
 	return config.CooldownConfig{
-		Enabled:           true,
-		DefaultDuration:   30 * time.Second,
-		RateLimitDuration: 5 * time.Second,
-		PaymentDuration:   5 * time.Minute,
-		Error5xxDuration:  30 * time.Second,
+		Enabled:                  true,
+		DefaultDuration:          30 * time.Second,
+		RateLimitDuration:        5 * time.Second,
+		PaymentDuration:          5 * time.Minute,
+		Error5xxDuration:         30 * time.Second,
+		StructuredOutputDuration: 10 * time.Minute,
+		MaxRetryAfterDuration:    24 * time.Hour,
 	}
 }
 
@@ -1237,6 +1239,55 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "test-id", result.Response.ID)
 	})
 
+	t.Run("valid adapter fallback output succeeds after strict validation", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+
+		schema := []byte(`{"type":"object","properties":{"name":{"type":"string"}},"required":["name"],"additionalProperties":false}`)
+		strict := true
+		req := baseReq
+		req.ResponseFormat = &types.ResponseFormat{
+			Type: "json_schema",
+			JSONSchema: &types.JSONSchema{
+				Name:   "person",
+				Schema: schema,
+				Strict: &strict,
+			},
+		}
+
+		content := `{"name":"Ada"}`
+		resp := &types.ChatCompletionResponse{
+			ID: "adapter-valid", Model: "model-1",
+			Usage:   &types.Usage{TotalTokens: 35},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+
+		mockProvider.EXPECT().CallProvider(
+			gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
+		).DoAndReturn(func(_ string, _ string, _ string, gotReq types.ChatCompletionRequest, _ int, _ context.Context, _ string, _ types.ProviderAuth, _ string) (*types.ChatCompletionResponse, error) {
+			assert.Equal(t, "json_object", gotReq.ProviderCapabilities.StructuredOutputs)
+			assert.Equal(t, "json_schema", gotReq.ResponseFormat.Type)
+			return resp, nil
+		})
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-a", "model-1", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-a", "model-1", 35).Return(nil)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{{
+				ProviderID: "provider-a", Model: "model-1",
+				BaseURL: "https://a.com/v1", APIKey: "key",
+				TimeoutMs:    30000,
+				Auth:         types.ProviderAuth{Type: "bearer"},
+				Capabilities: types.ProviderCapabilities{StructuredOutputs: "json_object"},
+			}},
+			MaxAttempts: 1,
+		}
+
+		result, err := r.Execute(ctx, plan, req, "req-adapter-valid")
+		require.NoError(t, err)
+		assert.Equal(t, "adapter-valid", result.Response.ID)
+		assert.Equal(t, "provider-a", result.ProviderID)
+	})
+
 	t.Run("records provider level quota usage", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockQuota := mocks.NewMockQuotaChecker(ctrl)
@@ -1359,6 +1410,7 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "good-structured", result.Response.ID)
 		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
 		assert.Equal(t, services.CooldownStructuredOutput, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
+		assert.GreaterOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 9*time.Minute)
 	})
 
 	t.Run("rate limited attempt applies cooldown and failover succeeds", func(t *testing.T) {
