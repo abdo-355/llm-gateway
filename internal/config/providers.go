@@ -21,18 +21,10 @@ func GetProviders() []types.ProviderConfig {
 }
 
 func getGroqConfig() types.ProviderConfig {
-	rpm60 := 60
 	rpm30 := 30
-	rpd7000 := 7000
-	rpd14400 := 14400
 	rpd1000 := 1000
-	rpd250 := 250
-	tpm6000 := 6000
 	tpm8000 := 8000
-	tpm12000 := 12000
 	tpm30000 := 30000
-	tpm70000 := 70000
-	tpd100000 := 100000
 	tpd200000 := 200000
 	tpd500000 := 500000
 
@@ -46,37 +38,19 @@ func getGroqConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"allam-2-7b",
-				"groq/compound",
-				"groq/compound-mini",
-				"llama-3.1-8b-instant",
-				"llama-3.3-70b-versatile",
 				"meta-llama/llama-4-scout-17b-16e-instruct",
 				"openai/gpt-oss-120b",
 				"openai/gpt-oss-20b",
-				"qwen/qwen3-32b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"allam-2-7b":                                {Rpm: &rpm30, Rpd: &rpd7000, Tpm: &tpm6000, Tpd: &tpd500000},
-				"groq/compound":                             {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
-				"groq/compound-mini":                        {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
-				"llama-3.1-8b-instant":                      {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm6000, Tpd: &tpd500000},
-				"llama-3.3-70b-versatile":                   {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm12000, Tpd: &tpd100000},
 				"meta-llama/llama-4-scout-17b-16e-instruct": {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm30000, Tpd: &tpd500000},
 				"openai/gpt-oss-120b":                       {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 				"openai/gpt-oss-20b":                        {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
-				"qwen/qwen3-32b":                            {Rpm: &rpm60, Rpd: &rpd1000, Tpm: &tpm6000, Tpd: &tpd500000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"allam-2-7b":                                {Tools: boolPtr(false), StructuredOutputs: strPtr("none"), Logprobs: boolPtr(false)},
-				"groq/compound":                             {Tools: boolPtr(false), StructuredOutputs: strPtr("none"), Logprobs: boolPtr(false)},
-				"groq/compound-mini":                        {Tools: boolPtr(false), StructuredOutputs: strPtr("none"), Logprobs: boolPtr(false)},
-				"llama-3.1-8b-instant":                      {Tools: boolPtr(false), StructuredOutputs: strPtr("none"), Logprobs: boolPtr(false)},
-				"llama-3.3-70b-versatile":                   {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false)},
 				"meta-llama/llama-4-scout-17b-16e-instruct": {Logprobs: boolPtr(false)},
 				"openai/gpt-oss-120b":                       {Logprobs: boolPtr(false)},
 				"openai/gpt-oss-20b":                        {Logprobs: boolPtr(false)},
-				"qwen/qwen3-32b":                            {Tools: boolPtr(false), StructuredOutputs: strPtr("none")},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{

@@ -222,7 +222,7 @@ func TestRunPreservesNonRateLimitFailures(t *testing.T) {
 
 	report, err := runWithClient(context.Background(), Config{
 		Provider: "groq",
-		Model:    "qwen/qwen3-32b",
+		Model:    "openai/gpt-oss-20b",
 		Timeout:  time.Second,
 	}, client)
 
