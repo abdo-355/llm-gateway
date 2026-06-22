@@ -992,7 +992,16 @@ func isProviderUnsupportedResponseFormat(statusCode int, lowerMessage string) bo
 }
 
 func isProviderSchemaDialectRejection(statusCode int, lowerMessage string) bool {
-	if !isValidationStatus(statusCode) || !strings.Contains(lowerMessage, "response_format") {
+	if !isValidationStatus(statusCode) {
+		return false
+	}
+	if strings.Contains(lowerMessage, "unsupported json schema feature for gemini") {
+		return true
+	}
+	if strings.Contains(lowerMessage, "failed_generation") && strings.Contains(lowerMessage, "failed to validate json") {
+		return true
+	}
+	if !strings.Contains(lowerMessage, "response_format") {
 		return false
 	}
 	if !strings.Contains(lowerMessage, "json schema") && !strings.Contains(lowerMessage, "json_schema") {
@@ -1000,6 +1009,12 @@ func isProviderSchemaDialectRejection(statusCode int, lowerMessage string) bool 
 	}
 	return strings.Contains(lowerMessage, "`required` is required") ||
 		strings.Contains(lowerMessage, "must be listed in `required`") ||
+		strings.Contains(lowerMessage, "unsupported json schema feature") ||
+		strings.Contains(lowerMessage, "unsupported schema feature") ||
+		strings.Contains(lowerMessage, "anyof") ||
+		strings.Contains(lowerMessage, "oneof") ||
+		strings.Contains(lowerMessage, "allof") ||
+		strings.Contains(lowerMessage, "enum") ||
 		strings.Contains(lowerMessage, "additionalproperties") ||
 		strings.Contains(lowerMessage, "additional properties")
 }

@@ -1413,6 +1413,49 @@ func TestExecute(t *testing.T) {
 		assert.GreaterOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 9*time.Minute)
 	})
 
+	t.Run("provider structured output 400 fails over with structured cooldown", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
+		redisClient, _ := newExternalTestRedis(t)
+		cooldowns := services.NewCooldownService(redisClient, "cooldown", testCooldownConfig())
+		r.SetCooldownService(cooldowns)
+
+		req := baseReq
+		req.ResponseFormat = &types.ResponseFormat{Type: "json_object"}
+		providerErr := &errors.ProviderError{
+			Message:    "HTTP error 400: Unsupported JSON Schema feature for Gemini: enum",
+			StatusCode: http.StatusBadRequest,
+		}
+		goodContent := `{"ok":true}`
+		goodResp := &types.ChatCompletionResponse{
+			ID:      "good-after-provider-400",
+			Model:   "model-3",
+			Usage:   &types.Usage{TotalTokens: 12},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &goodContent}}},
+		}
+
+		gomock.InOrder(
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, providerErr),
+			mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1"),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(goodResp, nil),
+			mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any()),
+			mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 12).Return(nil),
+		)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2,
+		}
+
+		result, err := r.Execute(ctx, plan, req, "req-provider-structured-400")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-b", result.ProviderID)
+		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
+		assert.Equal(t, services.CooldownStructuredOutput, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
+	})
+
 	t.Run("rate limited attempt applies cooldown and failover succeeds", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockQuota := mocks.NewMockQuotaChecker(ctrl)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
@@ -1922,9 +1923,16 @@ func isStructuredOutputFailure(err error) bool {
 	switch err.(type) {
 	case *errors.ParseError, *errors.EmptyResponseError:
 		return true
-	default:
+	}
+	providerErr, ok := err.(*errors.ProviderError)
+	if !ok || !isValidationStatus(providerErr.StatusCode) {
 		return false
 	}
+	lower := strings.ToLower(providerErr.Message)
+	return strings.Contains(lower, "unsupported json schema feature") ||
+		strings.Contains(lower, "unsupported schema feature") ||
+		strings.Contains(lower, "failed_generation") ||
+		(strings.Contains(lower, "failed to validate json") && strings.Contains(lower, "json"))
 }
 
 func (r *Router) handleAuthFailure(ctx context.Context, providerID, model string, err error) {

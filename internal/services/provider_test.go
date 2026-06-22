@@ -791,6 +791,35 @@ func TestProviderCallProvider_RetiredModelIsProviderError(t *testing.T) {
 	assert.Contains(t, providerErr.Message, "was retired")
 }
 
+func TestClassifyProviderHTTPError_StructuredOutputProvider400IsProviderError(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "oci gemini unsupported schema feature",
+			body: `{"error":{"message":"Unsupported JSON Schema feature for Gemini: anyOf"}}`,
+		},
+		{
+			name: "groq failed generation strict json",
+			body: `{"error":{"message":"Failed to validate JSON. Please adjust your prompt. See 'failed_generation' for more details.","failed_generation":"{}"}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := classifyProviderHTTPError("oci", http.StatusBadRequest, nil, []byte(tt.body))
+
+			var providerErr *errors.ProviderError
+			require.ErrorAs(t, err, &providerErr)
+			assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
+
+			var validationErr *errors.ValidationError
+			assert.NotErrorAs(t, err, &validationErr)
+		})
+	}
+}
+
 func TestProviderCallProvider_402_PaymentRequiredError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusPaymentRequired)
