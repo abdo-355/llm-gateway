@@ -206,7 +206,39 @@ func writeExecutionError(c *gin.Context, err error) {
 		Str("error_message", gatewayErr.Message).
 		Msg("Request execution error")
 
-	c.JSON(status, gin.H{"error": gatewayErr})
+	c.JSON(status, gin.H{"error": publicGatewayError(gatewayErr)})
+}
+
+func publicGatewayError(err *types.GatewayError) *types.GatewayError {
+	if err == nil {
+		return nil
+	}
+	return &types.GatewayError{
+		Type:      err.Type,
+		Code:      err.Code,
+		Message:   err.Message,
+		RequestID: err.RequestID,
+		Details:   publicGatewayErrorDetails(err),
+	}
+}
+
+func publicGatewayErrorDetails(err *types.GatewayError) map[string]any {
+	if err == nil || len(err.Details) == 0 {
+		return nil
+	}
+	public := make(map[string]any)
+	if retryAfter, ok := err.Details["retry_after"]; ok {
+		public["retry_after"] = retryAfter
+	}
+	if err.Code == "NO_ELIGIBLE_PROVIDER" {
+		if summary, ok := err.Details["reason_summary"]; ok {
+			public["reason_summary"] = summary
+		}
+	}
+	if len(public) == 0 {
+		return nil
+	}
+	return public
 }
 
 func writeResultHeaders(c *gin.Context, result *types.ExecutionResult, tierConfig *types.TierConfig) {
@@ -256,7 +288,7 @@ func writeSSEError(c *gin.Context, err *types.GatewayError) {
 
 	// Then emit the gateway error details as a typed event with the same envelope
 	// shape used by non-streaming responses.
-	errJSON, _ := json.Marshal(gin.H{"error": err})
+	errJSON, _ := json.Marshal(gin.H{"error": publicGatewayError(err)})
 	fmt.Fprintf(c.Writer, "event: error\ndata: %s\n\n", errJSON)
 	c.Writer.Flush()
 }

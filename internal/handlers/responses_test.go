@@ -250,6 +250,11 @@ func TestResponses_NoEligibleProviders(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "NO_ELIGIBLE_PROVIDER", errObj["code"])
+	details, ok := errObj["details"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, details, "reason_summary")
+	assert.NotContains(t, details, "requirements")
+	assert.NotContains(t, details, "filtered_providers")
 }
 
 func TestResponses_ExecuteError(t *testing.T) {

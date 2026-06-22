@@ -162,6 +162,8 @@ func TestCompletions_NoEligibleProviders(t *testing.T) {
 	assert.Equal(t, "NO_ELIGIBLE_PROVIDER", errObj["code"])
 	details, ok := errObj["details"].(map[string]any)
 	require.True(t, ok)
+	assert.NotContains(t, details, "requirements")
+	assert.NotContains(t, details, "filtered_providers")
 	summary, ok := details["reason_summary"].([]any)
 	require.True(t, ok)
 	require.Len(t, summary, 1)
@@ -219,6 +221,9 @@ func TestCompletions_ExecuteError(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "RATE_LIMITED", errObj["code"])
+	details, ok := errObj["details"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(42), details["retry_after"])
 	assert.Equal(t, "42", w.Header().Get("Retry-After"))
 }
 
