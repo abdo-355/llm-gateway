@@ -53,7 +53,7 @@ func NewHealthService(redisClient *redis.Client, keyPrefix string) *HealthServic
 		redis:            redisClient,
 		prefix:           prefix,
 		failureThreshold: 3,
-		recoveryTimeout:  30 * time.Second,
+		recoveryTimeout:  10 * time.Second,
 	}
 }
 
