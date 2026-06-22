@@ -81,7 +81,7 @@ func LoadCooldownConfig() CooldownConfig {
 		RateLimitDuration:        5 * time.Second,
 		PaymentDuration:          300 * time.Second,
 		Error5xxDuration:         30 * time.Second,
-		StructuredOutputDuration: 10 * time.Minute,
+		StructuredOutputDuration: 30 * time.Second,
 		MaxRetryAfterDuration:    24 * time.Hour,
 	}
 

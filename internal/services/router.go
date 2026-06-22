@@ -671,6 +671,7 @@ func (r *Router) Execute(
 			Int("attempt", i+1).
 			Str("provider", attempt.ProviderID).
 			Str("model", attempt.Model).
+			Int("timeout_ms", attemptTimeoutMs).
 			Float64("score", attempt.Score).
 			Msg("Trying provider")
 
@@ -711,6 +712,7 @@ func (r *Router) Execute(
 		attemptReq := req
 		attemptReq.ProviderCapabilities = attempt.Capabilities
 
+		attemptStart := time.Now()
 		resp, err := r.providerService.CallProvider(
 			attempt.BaseURL,
 			attempt.APIKey,
@@ -723,13 +725,16 @@ func (r *Router) Execute(
 			requestID,
 		)
 
+		attemptLatencyMs := time.Since(attemptStart).Milliseconds()
+		parentContextErr := ctx.Err()
+		attemptContextErr := attemptCtx.Err()
 		cancel()
 
 		if concurrencyAcquired {
 			r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 		}
 
-		latencyMs := time.Since(startTime).Milliseconds()
+		totalLatencyMs := time.Since(startTime).Milliseconds()
 
 		if err == nil {
 			if validationErr := validateStructuredOutputResponse(req, resp, attempt.ProviderID, attempt.Model); validationErr != nil {
@@ -741,7 +746,7 @@ func (r *Router) Execute(
 		}
 
 		if err == nil {
-			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
+			r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(totalLatencyMs))
 
 			if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {
 				cooldownSec := cooldownMs / 1000
@@ -797,7 +802,7 @@ func (r *Router) Execute(
 			metrics.ProviderLatencySeconds.WithLabelValues(
 				attempt.ProviderID, attempt.Model,
 				tier, strategy,
-			).Observe(float64(latencyMs) / 1000.0)
+			).Observe(float64(totalLatencyMs) / 1000.0)
 			if resp.Usage != nil {
 				metrics.ProviderTokensTotal.WithLabelValues(
 					attempt.ProviderID, attempt.Model, "prompt", tier, strategy,
@@ -819,7 +824,9 @@ func (r *Router) Execute(
 				Str("request_id", requestID).
 				Str("provider", attempt.ProviderID).
 				Str("model", attempt.Model).
-				Int64("latency_ms", latencyMs).
+				Int64("latency_ms", totalLatencyMs).
+				Int64("attempt_latency_ms", attemptLatencyMs).
+				Int("timeout_ms", attemptTimeoutMs).
 				Int("tokens", tokensUsed).
 				Int("attempts", i+1)
 			if resp.Usage != nil {
@@ -845,7 +852,7 @@ func (r *Router) Execute(
 				Attempts:   i + 1,
 				ProviderID: attempt.ProviderID,
 				Model:      attempt.Model,
-				LatencyMs:  latencyMs,
+				LatencyMs:  totalLatencyMs,
 			}, nil
 		}
 
@@ -876,11 +883,19 @@ func (r *Router) Execute(
 		).Inc()
 
 		attemptFailure := map[string]any{
-			"provider":       attempt.ProviderID,
-			"model":          attempt.Model,
-			"failure_kind":   string(decision.Category),
-			"failure_action": string(decision.Action),
-			"failure_reason": decision.Reason,
+			"provider":           attempt.ProviderID,
+			"model":              attempt.Model,
+			"failure_kind":       string(decision.Category),
+			"failure_action":     string(decision.Action),
+			"failure_reason":     decision.Reason,
+			"attempt_latency_ms": attemptLatencyMs,
+			"total_latency_ms":   totalLatencyMs,
+			"timeout_ms":         attemptTimeoutMs,
+		}
+		if source := cancellationSource(parentContextErr, attemptContextErr); source != "" {
+			attemptFailure["cancellation_source"] = source
+			attemptFailure["parent_context_error"] = contextErrorString(parentContextErr)
+			attemptFailure["attempt_context_error"] = contextErrorString(attemptContextErr)
 		}
 		enrichAttemptFailureDetails(attemptFailure, err)
 		attemptChain = append(attemptChain, attemptFailure)
@@ -936,6 +951,12 @@ func (r *Router) Execute(
 			Str("request_id", requestID).
 			Str("provider", attempt.ProviderID).
 			Str("model", attempt.Model).
+			Int64("attempt_latency_ms", attemptLatencyMs).
+			Int64("total_latency_ms", totalLatencyMs).
+			Int("timeout_ms", attemptTimeoutMs).
+			Str("cancellation_source", cancellationSource(parentContextErr, attemptContextErr)).
+			Str("parent_context_error", contextErrorString(parentContextErr)).
+			Str("attempt_context_error", contextErrorString(attemptContextErr)).
 			Str("failure_category", string(decision.Category)).
 			Str("failure_action", string(decision.Action)).
 			Str("failure_reason", decision.Reason).
@@ -997,6 +1018,15 @@ func (r *Router) Execute(
 	if gatewayErr := aggregateRateLimitError(attemptChain); gatewayErr != nil {
 		return nil, gatewayErr
 	}
+
+	logger.Warn().
+		Str("type", "router").
+		Str("event", "attempts.exhausted").
+		Str("request_id", requestID).
+		Int("attempt_count", len(attemptChain)).
+		Int64("total_latency_ms", time.Since(startTime).Milliseconds()).
+		Interface("attempt_chain", attemptChain).
+		Msg("All provider attempts failed")
 
 	return nil, &types.GatewayError{
 		Type:    "gateway_error",
@@ -1589,6 +1619,26 @@ func waitWithHardTimeout(ctx context.Context, start time.Time, plan types.Routin
 	case <-ctx.Done():
 		return errors.NewTimeoutError("Context cancelled during backoff", "request")
 	}
+}
+
+func cancellationSource(parentErr, attemptErr error) string {
+	if parentErr != nil {
+		return "parent"
+	}
+	if attemptErr == context.DeadlineExceeded {
+		return "attempt_deadline"
+	}
+	if attemptErr == context.Canceled {
+		return "attempt_canceled"
+	}
+	return ""
+}
+
+func contextErrorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func hardTimeoutGatewayError() *types.GatewayError {

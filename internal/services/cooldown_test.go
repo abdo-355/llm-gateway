@@ -37,10 +37,10 @@ func TestCooldownStructuredOutputDuration(t *testing.T) {
 	svc := NewCooldownService(nil, "cooldown", config.CooldownConfig{
 		Enabled:                  true,
 		DefaultDuration:          30 * time.Second,
-		StructuredOutputDuration: 10 * time.Minute,
+		StructuredOutputDuration: 30 * time.Second,
 	})
 
-	assert.Equal(t, 10*time.Minute, svc.GetDurationForReason(CooldownStructuredOutput))
+	assert.Equal(t, 30*time.Second, svc.GetDurationForReason(CooldownStructuredOutput))
 }
 
 func TestCooldownRetryAfterHonorsLongQuotaWindow(t *testing.T) {

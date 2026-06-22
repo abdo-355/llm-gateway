@@ -13,7 +13,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "gemini", Model: "gemini-2.5-flash", Weight: 0.84},
 			{Provider: "oci", Model: "google.gemini-2.5-flash-lite", Weight: 0.82},
 			{Provider: "groq", Model: "meta-llama/llama-4-scout-17b-16e-instruct", Weight: 0.82},
-			{Provider: "oci", Model: "openai.gpt-oss-20b", Weight: 0.82},
 			{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.80},
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 0.78},
 			{Provider: "gemini", Model: "gemini-2.5-flash-lite", Weight: 0.78},
@@ -24,7 +23,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "opencode", Model: "north-mini-code-free", Weight: 0.30},
 		},
 		SLO: &types.TierSLO{
-			MaxLatencyMs: intPtr(15000),
+			MaxLatencyMs: intPtr(30000),
 		},
 	},
 	types.TierPro: {
@@ -36,7 +35,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "cerebras", Model: "zai-glm-4.7", Weight: 0.94},
 			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: 0.92},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.92},
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 0.90},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.90},
 			{Provider: "oci", Model: "google.gemini-2.5-pro", Weight: 0.88},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.86},
@@ -68,7 +66,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.88},
 			{Provider: "mistral", Model: "magistral-medium-2509", Weight: 0.84},
 			{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.80},
-			{Provider: "oci", Model: "openai.gpt-oss-120b", Weight: 0.78},
 			{Provider: "mistral", Model: "mistral-medium-2505", Weight: 0.78},
 			{Provider: "oci", Model: "google.gemini-2.5-pro", Weight: 0.76},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.70},

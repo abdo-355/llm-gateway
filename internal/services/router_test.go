@@ -181,7 +181,7 @@ func testCooldownConfig() config.CooldownConfig {
 		RateLimitDuration:        5 * time.Second,
 		PaymentDuration:          5 * time.Minute,
 		Error5xxDuration:         30 * time.Second,
-		StructuredOutputDuration: 10 * time.Minute,
+		StructuredOutputDuration: 30 * time.Second,
 		MaxRetryAfterDuration:    24 * time.Hour,
 	}
 }
@@ -1410,7 +1410,8 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "good-structured", result.Response.ID)
 		assert.True(t, cooldowns.IsOnCooldown(ctx, "provider-a", "model-1"))
 		assert.Equal(t, services.CooldownStructuredOutput, cooldowns.GetCooldownReason(ctx, "provider-a", "model-1"))
-		assert.GreaterOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 9*time.Minute)
+		assert.GreaterOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 20*time.Second)
+		assert.LessOrEqual(t, cooldowns.GetCooldownRemaining(ctx, "provider-a", "model-1"), 30*time.Second)
 	})
 
 	t.Run("provider structured output 400 fails over with structured cooldown", func(t *testing.T) {

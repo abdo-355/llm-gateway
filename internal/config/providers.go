@@ -189,8 +189,6 @@ func getMistralConfig() types.ProviderConfig {
 func GetCertifications() []types.Certification {
 	return []types.Certification{
 		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
-		{Provider: "oci", Model: "openai.gpt-oss-120b", StrictSchema: true},
-		{Provider: "oci", Model: "openai.gpt-oss-20b", StrictSchema: true},
 	}
 }
 
@@ -672,23 +670,17 @@ func getOciConfig() types.ProviderConfig {
 				"google.gemini-2.5-flash",
 				"google.gemini-2.5-flash-lite",
 				"meta.llama-3.3-70b-instruct",
-				"openai.gpt-oss-120b",
-				"openai.gpt-oss-20b",
 			},
 			Limits: map[string]types.ModelLimits{
 				"google.gemini-2.5-pro":        {MaxConcurrent: intPtr(15)},
 				"google.gemini-2.5-flash":      {MaxConcurrent: intPtr(15)},
 				"google.gemini-2.5-flash-lite": {MaxConcurrent: intPtr(15)},
 				"meta.llama-3.3-70b-instruct":  {MaxConcurrent: intPtr(15)},
-				"openai.gpt-oss-120b":          {MaxConcurrent: intPtr(15)},
-				"openai.gpt-oss-20b":           {MaxConcurrent: intPtr(15)},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
 				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
 				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"openai.gpt-oss-120b":          {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
-				"openai.gpt-oss-20b":           {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
 				"meta.llama-3.3-70b-instruct":  {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
 			},
 		},
