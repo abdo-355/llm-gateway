@@ -189,9 +189,6 @@ func TestOCIModelConcurrencyLimit(t *testing.T) {
 func TestVerifiedOCIStrictSchemaModels(t *testing.T) {
 	provider := requireProvider(t, "oci")
 	verified := []string{
-		"google.gemini-2.5-pro",
-		"google.gemini-2.5-flash",
-		"google.gemini-2.5-flash-lite",
 		"meta.llama-3.3-70b-instruct",
 		"openai.gpt-oss-120b",
 		"openai.gpt-oss-20b",
@@ -205,6 +202,26 @@ func TestVerifiedOCIStrictSchemaModels(t *testing.T) {
 			require.NotNil(t, caps.StructuredOutputs)
 			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
 			assert.Contains(t, certified, "oci/"+model)
+		})
+	}
+}
+
+func TestOCIGeminiUsesJSONObjectOnly(t *testing.T) {
+	provider := requireProvider(t, "oci")
+	geminiModels := []string{
+		"google.gemini-2.5-pro",
+		"google.gemini-2.5-flash",
+		"google.gemini-2.5-flash-lite",
+	}
+	certified := strictSchemaCertifications()
+
+	for _, model := range geminiModels {
+		t.Run(model, func(t *testing.T) {
+			caps, ok := provider.Models.Capabilities[model]
+			require.True(t, ok, "OCI Gemini model must declare explicit capabilities")
+			require.NotNil(t, caps.StructuredOutputs)
+			assert.Equal(t, "json_object", *caps.StructuredOutputs)
+			assert.NotContains(t, certified, "oci/"+model)
 		})
 	}
 }
