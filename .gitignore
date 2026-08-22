@@ -41,5 +41,5 @@ tmp/
 dist/
 bin/
 gateway
-verify-upstream
+/verify-upstream
 dump.rdb
