@@ -46,8 +46,8 @@ func getGroqConfig() types.ProviderConfig {
 				"qwen/qwen3.6-27b":    {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"openai/gpt-oss-120b": {Logprobs: boolPtr(false)},
-				"openai/gpt-oss-20b":  {Logprobs: boolPtr(false)},
+				"openai/gpt-oss-120b": {Logprobs: boolPtr(false), Reasoning: boolPtr(true)},
+				"openai/gpt-oss-20b":  {Logprobs: boolPtr(false), Reasoning: boolPtr(true)},
 				"qwen/qwen3.6-27b":    {Logprobs: boolPtr(false)},
 			},
 		},
@@ -125,6 +125,8 @@ func getNIMConfig() types.ProviderConfig {
 				"bytedance/seed-oss-36b-instruct":       {Tools: boolPtr(false)},
 				"qwen/qwen3.5-122b-a10b":                {MaxTokens: boolPtr(false), MultipleChoices: boolPtr(false)},
 				"qwen/qwen3.5-397b-a17b":                {PresencePenalty: boolPtr(false), MultipleChoices: boolPtr(false)},
+				"openai/gpt-oss-120b":                   {Reasoning: boolPtr(true)},
+				"minimaxai/minimax-m2.7":                {Reasoning: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -326,6 +328,7 @@ func getOpenCodeConfig() types.ProviderConfig {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Tools:             boolPtr(true),
 					ToolSchema:        strPtr("json_schema"),
+					Reasoning:         boolPtr(true),
 				},
 			},
 		},
@@ -420,15 +423,23 @@ func getOllamaConfig() types.ProviderConfig {
 				"mistral-large-3:675b": {MaxConcurrent: &conc1},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"cogito-2.1:671b":    {Tools: boolPtr(false)},
-				"deepseek-v3.1:671b": {Tools: boolPtr(false)},
+				"cogito-2.1:671b":    {Tools: boolPtr(false), Reasoning: boolPtr(true)},
+				"deepseek-v3.1:671b": {Tools: boolPtr(false), Reasoning: boolPtr(true)},
+				"deepseek-v3.2":      {Reasoning: boolPtr(true)},
 				"gemma3:12b":         {Tools: boolPtr(false)},
 				"gemma3:27b":         {Tools: boolPtr(false)},
 				"gemma3:4b":          {Tools: boolPtr(false)},
-				"glm-4.6":            {Tools: boolPtr(false)},
-				"glm-4.7":            {Tools: boolPtr(false)},
-				"minimax-m2.1":       {Tools: boolPtr(false)},
+				"glm-4.6":            {Tools: boolPtr(false), Reasoning: boolPtr(true)},
+				"glm-4.7":            {Tools: boolPtr(false), Reasoning: boolPtr(true)},
+				"minimax-m2":         {Reasoning: boolPtr(true)},
+				"minimax-m2.1":       {Tools: boolPtr(false), Reasoning: boolPtr(true)},
+				"minimax-m2.5":       {Reasoning: boolPtr(true)},
+				"minimax-m2.7":       {Reasoning: boolPtr(true)},
+				"qwen3-coder-next":   {Reasoning: boolPtr(true)},
+				"qwen3-coder:480b":   {Reasoning: boolPtr(true)},
 				"rnj-1:8b":           {Tools: boolPtr(false)},
+				"gpt-oss:20b":        {Reasoning: boolPtr(true)},
+				"gpt-oss:120b":       {Reasoning: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -473,7 +484,8 @@ func getZaiConfig() types.ProviderConfig {
 				"glm-4.6v-flash": {MaxConcurrent: &conc1},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"glm-4.5-flash": {StructuredOutputs: strPtr("json_schema_strict")},
+				"glm-4.5-flash":  {StructuredOutputs: strPtr("json_schema_strict"), Reasoning: boolPtr(true)},
+				"glm-4.6v-flash": {Reasoning: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -625,6 +637,18 @@ func getGeminiConfig() types.ProviderConfig {
 				"gemini-2.5-flash":       {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
 				"gemini-2.5-flash-lite":  {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
 			},
+			Capabilities: map[string]types.ModelCapabilities{
+				// Gemini's OpenAI-compat layer accepts reasoning_effort on
+				// thinking-capable models and rejects it on Gemma.
+				"gemini-2.5-flash":       {Reasoning: boolPtr(true)},
+				"gemini-2.5-flash-lite":  {Reasoning: boolPtr(true)},
+				"gemini-3.7-flash":       {Reasoning: boolPtr(true)},
+				"gemini-3.6-flash":       {Reasoning: boolPtr(true)},
+				"gemini-3-flash-preview": {Reasoning: boolPtr(true)},
+				"gemini-3.5-flash":       {Reasoning: boolPtr(true)},
+				"gemini-3.5-flash-lite":  {Reasoning: boolPtr(true)},
+				"gemini-3.1-flash-lite":  {Reasoning: boolPtr(true)},
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -688,6 +712,7 @@ func getNousConfig() types.ProviderConfig {
 				"stealth/ox-alpha": {
 					StructuredOutputs: strPtr("json_object"),
 					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
 				},
 				"upstage/solar-pro4:free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
@@ -767,8 +792,15 @@ func getOpenRouterConfig() types.ProviderConfig {
 				"thinkingmachines/inkling:free",
 				"dots-studio/dots-3-note-preview:free",
 			},
-			Limits:       map[string]types.ModelLimits{},
-			Capabilities: map[string]types.ModelCapabilities{},
+			Limits: map[string]types.ModelLimits{},
+			Capabilities: map[string]types.ModelCapabilities{
+				// OpenRouter normalizes reasoning_effort into its unified
+				// reasoning param and drops it for models that lack support,
+				// so flagging the known reasoning families is safe here.
+				"nvidia/nemotron-3-super-120b-a12b:free": {Reasoning: boolPtr(true)},
+				"nvidia/nemotron-3-ultra-550b-a55b:free": {Reasoning: boolPtr(true)},
+				"z-ai/glm-5.2:free":                      {Reasoning: boolPtr(true)},
+			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -819,6 +851,7 @@ func getOpenRouterAlphaConfig() types.ProviderConfig {
 				"stealth/ox-alpha": {
 					StructuredOutputs: strPtr("json_object"),
 					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
 				},
 			},
 		},
