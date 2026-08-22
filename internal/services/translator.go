@@ -28,6 +28,11 @@ func ResponseRequestToChatCompletion(req *types.ResponseRequest) (*types.ChatCom
 		chatReq.ResponseFormat = req.Text.Format
 	}
 
+	if req.Reasoning != nil && req.Reasoning.Effort != "" {
+		effort := req.Reasoning.Effort
+		chatReq.ReasoningEffort = &effort
+	}
+
 	if req.Instructions != nil {
 		chatReq.Messages = append(chatReq.Messages, types.OpenAIMessage{
 			Role:    "system",
