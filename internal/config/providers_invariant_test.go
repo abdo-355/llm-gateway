@@ -168,7 +168,7 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 }
 
 func TestOCIModelConcurrencyLimit(t *testing.T) {
-	const expected = 15
+	const expected = 20
 
 	for _, provider := range GetProviders() {
 		if provider.ID != "oci" {
@@ -204,31 +204,17 @@ func TestVerifiedOCIStrictSchemaModels(t *testing.T) {
 	}
 }
 
-func TestOCIGeminiUsesJSONObjectOnly(t *testing.T) {
+func TestOCIGeminiModelsAreRemoved(t *testing.T) {
 	provider := requireProvider(t, "oci")
-	geminiModels := []string{
-		"google.gemini-2.5-pro",
-		"google.gemini-2.5-flash",
-		"google.gemini-2.5-flash-lite",
-	}
-	certified := strictSchemaCertifications()
 
-	for _, model := range geminiModels {
-		t.Run(model, func(t *testing.T) {
-			caps, ok := provider.Models.Capabilities[model]
-			require.True(t, ok, "OCI Gemini model must declare explicit capabilities")
-			require.NotNil(t, caps.StructuredOutputs)
-			assert.Equal(t, "json_object", *caps.StructuredOutputs)
-			assert.NotContains(t, certified, "oci/"+model)
-		})
+	for _, model := range provider.Models.List {
+		assert.NotContains(t, model, "google.gemini-", "OCI google.gemini-* models 404 on this tenancy and must stay removed")
 	}
 }
 
 func TestVerifiedKiloStrictSchemaOverrides(t *testing.T) {
 	provider := requireProvider(t, "kilo")
 	verified := []string{
-		"stepfun/step-3.7-flash:free",
-		"poolside/laguna-m.1:free",
 		"openrouter/free",
 	}
 
@@ -239,10 +225,6 @@ func TestVerifiedKiloStrictSchemaOverrides(t *testing.T) {
 			require.NotNil(t, caps.StructuredOutputs)
 			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
 		})
-	}
-
-	if caps, ok := provider.Models.Capabilities["nvidia/nemotron-3-ultra-550b-a55b:free"]; ok && caps.StructuredOutputs != nil {
-		assert.NotEqual(t, "json_schema_strict", *caps.StructuredOutputs, "timed-out Kilo Nemotron model should not be promoted")
 	}
 }
 

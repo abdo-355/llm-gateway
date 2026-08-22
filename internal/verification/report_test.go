@@ -143,7 +143,7 @@ func TestJSONObjectProbeAlwaysUsesResponseFormat(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, report.Results, 1)
 	assert.Equal(t, "PASS", report.Results[0].Status)
-	assert.Equal(t, "none", report.Results[0].Configured)
+	assert.Equal(t, "json_object", report.Results[0].Configured)
 	if assert.Len(t, client.callRequests, 1) && assert.NotNil(t, client.callRequests[0].ResponseFormat) {
 		assert.Equal(t, "json_object", client.callRequests[0].ResponseFormat.Type)
 	}

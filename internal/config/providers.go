@@ -15,6 +15,7 @@ func GetProviders() []types.ProviderConfig {
 		getOciConfig(),
 		getGeminiConfig(),
 		getOpenRouterConfig(),
+		getOpenRouterAlphaConfig(),
 	}
 }
 
@@ -22,9 +23,7 @@ func getGroqConfig() types.ProviderConfig {
 	rpm30 := 30
 	rpd1000 := 1000
 	tpm8000 := 8000
-	tpm30000 := 30000
 	tpd200000 := 200000
-	tpd500000 := 500000
 
 	return types.ProviderConfig{
 		ID:      "groq",
@@ -36,19 +35,19 @@ func getGroqConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"meta-llama/llama-4-scout-17b-16e-instruct",
 				"openai/gpt-oss-120b",
 				"openai/gpt-oss-20b",
+				"qwen/qwen3.6-27b",
 			},
 			Limits: map[string]types.ModelLimits{
-				"meta-llama/llama-4-scout-17b-16e-instruct": {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm30000, Tpd: &tpd500000},
-				"openai/gpt-oss-120b":                       {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
-				"openai/gpt-oss-20b":                        {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
+				"openai/gpt-oss-120b": {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
+				"openai/gpt-oss-20b":  {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
+				"qwen/qwen3.6-27b":    {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"meta-llama/llama-4-scout-17b-16e-instruct": {Logprobs: boolPtr(false)},
-				"openai/gpt-oss-120b":                       {Logprobs: boolPtr(false)},
-				"openai/gpt-oss-20b":                        {Logprobs: boolPtr(false)},
+				"openai/gpt-oss-120b": {Logprobs: boolPtr(false)},
+				"openai/gpt-oss-20b":  {Logprobs: boolPtr(false)},
+				"qwen/qwen3.6-27b":    {Logprobs: boolPtr(false)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -163,18 +162,21 @@ func getKiloConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"stepfun/step-3.7-flash:free",
-				"poolside/laguna-m.1:free",
+				"poolside/laguna-s-2.1:free",
+				"thinkingmachines/inkling:free",
 				"nvidia/nemotron-3-ultra-550b-a55b:free",
 				"openrouter/free",
 			},
 			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
 			Capabilities: map[string]types.ModelCapabilities{
-				"stepfun/step-3.7-flash:free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
+				"poolside/laguna-s-2.1:free": {
+					StructuredOutputs: strPtr("json_object"),
 				},
-				"poolside/laguna-m.1:free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
+				"thinkingmachines/inkling:free": {
+					StructuredOutputs: strPtr("json_object"),
+				},
+				"nvidia/nemotron-3-ultra-550b-a55b:free": {
+					StructuredOutputs: strPtr("json_object"),
 				},
 				"openrouter/free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
@@ -282,7 +284,10 @@ func getCloudflareConfig() types.ProviderConfig {
 }
 
 func getOpenCodeConfig() types.ProviderConfig {
-	rpm60 := 60
+	conc5 := 5
+	conc10 := 10
+	pause24h := 24 * 60 * 60 * 1000
+	pause6h := 6 * 60 * 60 * 1000
 
 	return types.ProviderConfig{
 		ID:      "opencode",
@@ -294,27 +299,24 @@ func getOpenCodeConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"big-pickle",
-				"deepseek-v4-flash-free",
+				"x-preview-f-free",
+				"hy3-free",
 				"mimo-v2.5-free",
+				"muse-spark-1.2-contributor-free",
 				"nemotron-3-ultra-free",
-				"north-mini-code-free",
+				"nemotron-3.5-lightning-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"big-pickle":             {Rpm: &rpm60},
-				"deepseek-v4-flash-free": {Rpm: &rpm60},
-				"mimo-v2.5-free":         {Rpm: &rpm60},
-				"nemotron-3-ultra-free":  {Rpm: &rpm60},
-				"north-mini-code-free":   {Rpm: &rpm60},
+				"x-preview-f-free":                {MaxConcurrent: &conc10, RateLimitPauseMs: &pause6h},
+				"hy3-free":                        {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
+				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
+				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
+				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
+				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"big-pickle": {
+				"hy3-free": {
 					StructuredOutputs: strPtr("json_object"),
-					Logprobs:          boolPtr(true),
-				},
-				"deepseek-v4-flash-free": {
-					StructuredOutputs: strPtr("json_object"),
-					Logprobs:          boolPtr(true),
 				},
 				"mimo-v2.5-free": {
 					StructuredOutputs: strPtr("json_schema"),
@@ -323,9 +325,6 @@ func getOpenCodeConfig() types.ProviderConfig {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Tools:             boolPtr(true),
 					ToolSchema:        strPtr("json_schema"),
-				},
-				"north-mini-code-free": {
-					Metadata: boolPtr(false),
 				},
 			},
 		},
@@ -540,6 +539,8 @@ func getCohereConfig() types.ProviderConfig {
 	}
 }
 func getOciConfig() types.ProviderConfig {
+	conc20 := 20
+
 	return types.ProviderConfig{
 		ID:      "oci",
 		BaseURL: "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/openai/v1",
@@ -550,22 +551,13 @@ func getOciConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"google.gemini-2.5-pro",
-				"google.gemini-2.5-flash",
-				"google.gemini-2.5-flash-lite",
 				"meta.llama-3.3-70b-instruct",
 			},
 			Limits: map[string]types.ModelLimits{
-				"google.gemini-2.5-pro":        {MaxConcurrent: intPtr(15)},
-				"google.gemini-2.5-flash":      {MaxConcurrent: intPtr(15)},
-				"google.gemini-2.5-flash-lite": {MaxConcurrent: intPtr(15)},
-				"meta.llama-3.3-70b-instruct":  {MaxConcurrent: intPtr(15)},
+				"meta.llama-3.3-70b-instruct": {MaxConcurrent: &conc20},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"google.gemini-2.5-pro":        {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"google.gemini-2.5-flash":      {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"google.gemini-2.5-flash-lite": {StructuredOutputs: strPtr("json_object"), Logprobs: boolPtr(false), Tools: boolPtr(false)},
-				"meta.llama-3.3-70b-instruct":  {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
+				"meta.llama-3.3-70b-instruct": {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -592,9 +584,12 @@ func getGeminiConfig() types.ProviderConfig {
 	rpm5 := 5
 	rpm10 := 10
 	rpm15 := 15
+	rpm30 := 30
 	rpd20 := 20
 	rpd500 := 500
+	rpd14400 := 14400
 	tpm250000 := 250000
+	tpm16000 := 16000
 
 	return types.ProviderConfig{
 		ID:      "gemini",
@@ -606,16 +601,28 @@ func getGeminiConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"gemini-3.7-flash",
+				"gemini-3.6-flash",
+				"gemini-3-flash-preview",
 				"gemini-3.5-flash",
+				"gemini-3.5-flash-lite",
 				"gemini-3.1-flash-lite",
+				"gemma-4-31b-it",
+				"gemma-4-26b-a4b-it",
 				"gemini-2.5-flash",
 				"gemini-2.5-flash-lite",
 			},
 			Limits: map[string]types.ModelLimits{
-				"gemini-3.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
-				"gemini-3.1-flash-lite": {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
-				"gemini-2.5-flash":      {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
-				"gemini-2.5-flash-lite": {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3.7-flash":       {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3.6-flash":       {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3-flash-preview": {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3.5-flash":       {Rpm: &rpm5, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-3.5-flash-lite":  {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"gemini-3.1-flash-lite":  {Rpm: &rpm15, Rpd: &rpd500, Tpm: &tpm250000},
+				"gemma-4-31b-it":         {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm16000},
+				"gemma-4-26b-a4b-it":     {Rpm: &rpm30, Rpd: &rpd14400, Tpm: &tpm16000},
+				"gemini-2.5-flash":       {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
+				"gemini-2.5-flash-lite":  {Rpm: &rpm10, Rpd: &rpd20, Tpm: &tpm250000},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -654,14 +661,18 @@ func getOpenRouterConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"nvidia/nemotron-3-super-120b-a12b:free",
-				"openai/gpt-oss-120b:free",
 				"nvidia/nemotron-3-ultra-550b-a55b:free",
-				"qwen/qwen3-coder:free",
+				"nvidia/nemotron-3.5-lightning:free",
+				"z-ai/glm-5.2:free",
+				"google/gemma-4-31b-it:free",
+				"google/gemma-4-26b-a4b-it:free",
+				"cohere/north-mini-code:free",
+				"poolside/laguna-s-2.1:free",
+				"thinkingmachines/inkling:free",
+				"dots-studio/dots-3-note-preview:free",
 			},
-			Limits: map[string]types.ModelLimits{},
-			Capabilities: map[string]types.ModelCapabilities{
-				"openai/gpt-oss-120b:free": {StructuredOutputs: strPtr("json_schema_strict")},
-			},
+			Limits:       map[string]types.ModelLimits{},
+			Capabilities: map[string]types.ModelCapabilities{},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
@@ -682,6 +693,55 @@ func getOpenRouterConfig() types.ProviderConfig {
 			Rpm: &rpm20,
 			Rpd: &rpd50,
 		},
+		ProviderType: "openai",
+	}
+}
+
+// getOpenRouterAlphaConfig isolates stealth/ox-alpha under its own provider ID
+// so it gets a dedicated Redis quota scope with concurrency-only handling — no
+// request/token counters, no shared free-pool limits.
+func getOpenRouterAlphaConfig() types.ProviderConfig {
+	conc15 := 15
+
+	return types.ProviderConfig{
+		ID:      "openrouter-alpha",
+		BaseURL: "https://openrouter.ai/api/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "OPENROUTER_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"stealth/ox-alpha",
+			},
+			Limits: map[string]types.ModelLimits{
+				"stealth/ox-alpha": {MaxConcurrent: &conc15},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"stealth/ox-alpha": {
+					StructuredOutputs: strPtr("json_object"),
+					Tools:             boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_object",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
 		ProviderType: "openai",
 	}
 }
