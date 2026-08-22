@@ -778,11 +778,13 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	headers := flattenHeaders(resp.Header)
 	if resp.StatusCode == http.StatusTooManyRequests {
 		body, _ := io.ReadAll(resp.Body)
-		retryAfter, limitType, limitSubtype := parseRateLimitDetails(provider, resp.Header, body)
-		return nil, errors.NewRateLimitErrorWithSubtype(
+		retryAfter, limitType, limitSubtype, retryAfterProvided := parseRateLimitDetails(provider, resp.Header, body)
+		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
 			retryAfter, limitType, limitSubtype, headers,
 		)
+		err.RetryAfterProvided = retryAfterProvided
+		return nil, err
 	}
 
 	if resp.StatusCode == http.StatusPaymentRequired {
@@ -842,11 +844,12 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, prov
 
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
-		retryAfter, limitType, limitSubtype := parseRateLimitDetails(provider, resp.Header, body)
+		retryAfter, limitType, limitSubtype, retryAfterProvided := parseRateLimitDetails(provider, resp.Header, body)
 		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
 			retryAfter, limitType, limitSubtype, headers,
 		)
+		err.RetryAfterProvided = retryAfterProvided
 		if quota, ok := parseProviderQuotaDetails(body); ok {
 			err.LimitType = quota.LimitType
 			err.LimitSubtype = "quota_exhausted"
@@ -952,38 +955,47 @@ func flattenHeaders(headers http.Header) map[string]string {
 	return flat
 }
 
-func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string, string) {
+func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string, string, bool) {
 	retryAfter := 60
+	retryAfterProvided := false
 	if value := headers.Get("Retry-After"); value != "" {
 		if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
 			retryAfter = seconds
+			retryAfterProvided = true
 		} else if retryAt, err := http.ParseTime(value); err == nil {
 			seconds := int(time.Until(retryAt).Seconds())
 			if seconds > 0 {
 				retryAfter = seconds
+				retryAfterProvided = true
 			}
+		}
+	}
+	if !retryAfterProvided {
+		if delay := parseBodyRetryDelay(body); delay > 0 {
+			retryAfter = delay
+			retryAfterProvided = true
 		}
 	}
 
 	bodyUpper := strings.ToUpper(string(body))
 	limitSubtype := "rate_limit"
 	if quota, ok := parseProviderQuotaDetails(body); ok {
-		return retryAfter, quota.LimitType, "quota_exhausted"
+		return retryAfter, quota.LimitType, "quota_exhausted", retryAfterProvided
 	}
 
 	switch provider {
 	case "groq":
 		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
-			return retryAfter, "rpd", limitSubtype
+			return retryAfter, "rpd", limitSubtype, retryAfterProvided
 		}
 		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
-			return retryAfter, "tpm", limitSubtype
+			return retryAfter, "tpm", limitSubtype, retryAfterProvided
 		}
 	case cloudflareProviderID:
 		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||
 			strings.Contains(bodyUpper, "DAILY FREE ALLOCATION OF 10,000 NEURONS") ||
 			(strings.Contains(bodyUpper, "10,000 NEURONS") && strings.Contains(bodyUpper, "FREE ALLOCATION")) {
-			return retryAfter, "daily_neurons", "quota_exhausted"
+			return retryAfter, "daily_neurons", "quota_exhausted", retryAfterProvided
 		}
 	}
 
@@ -994,23 +1006,67 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		strings.Contains(bodyUpper, "BILLING") ||
 		strings.Contains(bodyUpper, "INSUFFICIENT_QUOTA") ||
 		strings.Contains(bodyUpper, "CREDITS") {
-		return retryAfter, "quota", "quota_exhausted"
+		return retryAfter, "quota", "quota_exhausted", retryAfterProvided
 	}
 
 	// Detect overload signals
 	if strings.Contains(bodyUpper, "OVERLOAD") ||
 		strings.Contains(bodyUpper, "SLOW_DOWN") ||
 		strings.Contains(bodyUpper, "CAPACITY") {
-		return retryAfter, "rpm", "overload"
+		return retryAfter, "rpm", "overload", retryAfterProvided
 	}
 
-	return retryAfter, "rpm", limitSubtype
+	return retryAfter, "rpm", limitSubtype, retryAfterProvided
 }
 
 type providerQuotaDetails struct {
 	LimitType string
 	Limit     int
 	ID        string
+}
+
+// parseBodyRetryDelay extracts a provider-supplied retry delay from an error
+// response body, e.g. Google's google.rpc.RetryInfo detail:
+// {"error":{"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"37s"}]}}
+func parseBodyRetryDelay(body []byte) int {
+	var payload struct {
+		Error struct {
+			Details []json.RawMessage `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return 0
+	}
+
+	for _, rawDetail := range payload.Error.Details {
+		var detail struct {
+			RetryDelay string `json:"retryDelay"`
+		}
+		if err := json.Unmarshal(rawDetail, &detail); err != nil || detail.RetryDelay == "" {
+			continue
+		}
+		if seconds := parseDurationSeconds(detail.RetryDelay); seconds > 0 {
+			return seconds
+		}
+	}
+	return 0
+}
+
+// parseDurationSeconds parses strings like "37s", "90s", or "1.5s" into whole seconds.
+func parseDurationSeconds(value string) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0
+	}
+	seconds := int(d.Seconds())
+	if d > 0 && seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func parseProviderQuotaDetails(body []byte) (providerQuotaDetails, bool) {

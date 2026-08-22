@@ -387,7 +387,7 @@ func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
 }
 
 func TestParseRateLimitDetails_CloudflareDailyAllocationExhausted(t *testing.T) {
-	retryAfter, limitType, limitSubtype := parseRateLimitDetails(
+	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails(
 		cloudflareProviderID,
 		http.Header{"Retry-After": []string{"60"}},
 		[]byte(`{"errors":[{"message":"AiError: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare's Workers Paid plan if you would like to continue usage."}]}`),
@@ -396,11 +396,12 @@ func TestParseRateLimitDetails_CloudflareDailyAllocationExhausted(t *testing.T) 
 	assert.Equal(t, 60, retryAfter)
 	assert.Equal(t, "daily_neurons", limitType)
 	assert.Equal(t, "quota_exhausted", limitSubtype)
+	assert.True(t, provided)
 }
 
 func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
 	retryAt := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
-	retryAfter, limitType, limitSubtype := parseRateLimitDetails(
+	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails(
 		"openai",
 		http.Header{"Retry-After": []string{retryAt}},
 		[]byte(`{"error":{"message":"rate limited"}}`),
@@ -410,6 +411,7 @@ func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
 	assert.LessOrEqual(t, retryAfter, 90)
 	assert.Equal(t, "rpm", limitType)
 	assert.Equal(t, "rate_limit", limitSubtype)
+	assert.True(t, provided)
 }
 
 func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
@@ -428,13 +430,14 @@ func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
 		}
 	}`)
 
-	retryAfter, limitType, limitSubtype := parseRateLimitDetails("gemini", http.Header{}, body)
+	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails("gemini", http.Header{}, body)
 	quota, ok := parseProviderQuotaDetails(body)
 
 	assert.True(t, ok)
 	assert.Equal(t, 60, retryAfter)
 	assert.Equal(t, "rpd", limitType)
 	assert.Equal(t, "quota_exhausted", limitSubtype)
+	assert.False(t, provided, "60s fallback must not masquerade as a provider-supplied retry-after")
 	assert.Equal(t, "rpd", quota.LimitType)
 	assert.Equal(t, 20, quota.Limit)
 	assert.Equal(t, "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quota.ID)

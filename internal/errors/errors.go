@@ -18,6 +18,7 @@ func (e *ProviderError) Error() string {
 type RateLimitError struct {
 	ProviderError
 	RetryAfter         int    // seconds until reset
+	RetryAfterProvided bool   // true when the provider actually sent a retry-after value (header or body)
 	LimitType          string // rpm, tpm, rpd, resource_exhausted
 	LimitSubtype       string // rate_limit, quota_exhausted, overload
 	ProviderQuotaLimit int

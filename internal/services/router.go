@@ -965,6 +965,7 @@ func (r *Router) Execute(
 
 		r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, err)
 		r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, err)
+		r.handlePaymentFailure(ctx, attempt.ProviderID, attempt.Model, err)
 		r.handleStructuredOutputFailure(ctx, attempt.ProviderID, attempt.Model, req, err)
 
 		if !r.failureAllowedByPlan(err, plan, i) {
@@ -1017,6 +1018,14 @@ func (r *Router) Execute(
 
 	if gatewayErr := aggregateRateLimitError(attemptChain); gatewayErr != nil {
 		return nil, gatewayErr
+	}
+	if allAttemptsPaymentRequired(attemptChain) {
+		return nil, &types.GatewayError{
+			Type:    "payment_error",
+			Code:    "PAYMENT_REQUIRED",
+			Message: "All provider attempts failed due to billing issues",
+			Details: map[string]any{"attempts": attemptChain},
+		}
 	}
 
 	logger.Warn().
@@ -1163,6 +1172,7 @@ func (r *Router) ExecuteStream(
 					if concurrencyAcquired {
 						r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 					}
+					r.releaseQuotaReservation(ctx, reservation)
 					return
 				}
 			}
@@ -1337,6 +1347,7 @@ func (r *Router) ExecuteStream(
 
 			r.handleRateLimitFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 			r.handleAuthFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
+			r.handlePaymentFailure(ctx, attempt.ProviderID, attempt.Model, typedErr)
 			r.handleStructuredOutputFailure(ctx, attempt.ProviderID, attempt.Model, req, typedErr)
 
 			attemptFailure := map[string]any{
@@ -1413,6 +1424,13 @@ func (r *Router) ExecuteStream(
 
 		if gatewayErr := aggregateRateLimitError(attemptChain); gatewayErr != nil {
 			errChan <- gatewayErr
+		} else if allAttemptsPaymentRequired(attemptChain) {
+			errChan <- &types.GatewayError{
+				Type:    "payment_error",
+				Code:    "PAYMENT_REQUIRED",
+				Message: "All provider attempts failed due to billing issues",
+				Details: map[string]any{"attempts": attemptChain},
+			}
 		} else {
 			errChan <- &types.GatewayError{
 				Type:    "gateway_error",
@@ -1985,6 +2003,27 @@ func isStructuredOutputFailure(err error) bool {
 		(strings.Contains(lower, "failed to validate json") && strings.Contains(lower, "json"))
 }
 
+// handlePaymentFailure benches every model of a provider whose account is in
+// arrears (upstream 402). The request itself still fails over to other
+// providers; this cooldown just keeps the broke provider out of subsequent
+// attempt chains until billing recovers.
+func (r *Router) handlePaymentFailure(ctx context.Context, providerID, model string, err error) {
+	if _, ok := err.(*errors.PaymentRequiredError); !ok {
+		return
+	}
+	if r.cooldownService == nil {
+		return
+	}
+
+	if provider, ok := r.lookupProvider(providerID); ok {
+		for _, providerModel := range provider.Models.List {
+			r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, CooldownBilling, 0)
+		}
+		return
+	}
+	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, CooldownBilling, 0)
+}
+
 func (r *Router) handleAuthFailure(ctx context.Context, providerID, model string, err error) {
 	if !isAuthProviderError(err) {
 		return
@@ -2079,7 +2118,7 @@ func (r *Router) handleRateLimitFailure(ctx context.Context, providerID, model s
 
 func (r *Router) applyRateLimitCooldown(ctx context.Context, providerID, model string, err *errors.RateLimitError) {
 	reason := rateLimitCooldownReason(err)
-	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, reason, err.RetryAfter)
+	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, reason, r.effectiveRateLimitCooldownSeconds(err, providerID, model))
 
 	provider, ok := r.lookupProvider(providerID)
 	if !ok || !providerLimitMatchesRateLimit(provider.Limits, err) {
@@ -2090,8 +2129,22 @@ func (r *Router) applyRateLimitCooldown(ctx context.Context, providerID, model s
 		if providerModel == model {
 			continue
 		}
-		r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, reason, err.RetryAfter)
+		r.cooldownService.ApplyCooldownForReason(ctx, providerID, providerModel, reason, r.effectiveRateLimitCooldownSeconds(err, providerID, providerModel))
 	}
+}
+
+// effectiveRateLimitCooldownSeconds resolves how long a model should stay benched
+// after a provider 429. A provider-supplied Retry-After always wins; otherwise a
+// configured per-model pause window applies; otherwise 0 falls back to the
+// reason's default cooldown duration.
+func (r *Router) effectiveRateLimitCooldownSeconds(err *errors.RateLimitError, providerID, model string) int {
+	if err.RetryAfterProvided && err.RetryAfter > 0 {
+		return err.RetryAfter
+	}
+	if pauseMs := r.lookupModelRateLimitPauseMs(providerID, model); pauseMs > 0 {
+		return int((time.Duration(pauseMs) * time.Millisecond).Seconds())
+	}
+	return 0
 }
 
 func rateLimitCooldownReason(err *errors.RateLimitError) CooldownReason {
@@ -2161,13 +2214,14 @@ func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 
 func effectiveModelLimits(provider types.ProviderConfig, model string) types.ModelLimits {
 	limits := types.ModelLimits{
-		Rpm:           provider.Limits.Rpm,
-		Rph:           provider.Limits.Rph,
-		Rpd:           provider.Limits.Rpd,
-		Tpm:           provider.Limits.Tpm,
-		Tph:           provider.Limits.Tph,
-		Tpd:           provider.Limits.Tpd,
-		MaxConcurrent: provider.Limits.MaxConcurrent,
+		Rpm:              provider.Limits.Rpm,
+		Rph:              provider.Limits.Rph,
+		Rpd:              provider.Limits.Rpd,
+		Tpm:              provider.Limits.Tpm,
+		Tph:              provider.Limits.Tph,
+		Tpd:              provider.Limits.Tpd,
+		MaxConcurrent:    provider.Limits.MaxConcurrent,
+		RateLimitPauseMs: provider.Limits.RateLimitPauseMs,
 	}
 	if limits.Rpd == nil {
 		limits.Rpd = provider.Limits.DailyRequests
@@ -2203,6 +2257,9 @@ func effectiveModelLimits(provider types.ProviderConfig, model string) types.Mod
 	}
 	if modelLimits.CooldownAfterMs != nil {
 		limits.CooldownAfterMs = modelLimits.CooldownAfterMs
+	}
+	if modelLimits.RateLimitPauseMs != nil {
+		limits.RateLimitPauseMs = modelLimits.RateLimitPauseMs
 	}
 	return limits
 }
@@ -2303,6 +2360,18 @@ func (r *Router) lookupModelCooldownMs(providerID, model string) int {
 	return 0
 }
 
+func (r *Router) lookupModelRateLimitPauseMs(providerID, model string) int {
+	for _, p := range r.config.Providers {
+		if p.ID == providerID {
+			if limits, ok := p.Models.Limits[model]; ok && limits.RateLimitPauseMs != nil {
+				return *limits.RateLimitPauseMs
+			}
+			return 0
+		}
+	}
+	return 0
+}
+
 func allAttemptsRateLimited(chain []map[string]any) bool {
 	if len(chain) == 0 {
 		return false
@@ -2371,6 +2440,19 @@ func aggregateRateLimitError(chain []map[string]any) *types.GatewayError {
 		Message: message,
 		Details: details,
 	}
+}
+
+func allAttemptsPaymentRequired(chain []map[string]any) bool {
+	if len(chain) == 0 {
+		return false
+	}
+	for _, entry := range chain {
+		kind, _ := entry["failure_kind"].(string)
+		if kind != string(types.CategoryPayment) {
+			return false
+		}
+	}
+	return true
 }
 
 func allAttemptsFailedMessage(chain []map[string]any) string {

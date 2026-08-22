@@ -498,6 +498,10 @@ type ProviderLimits struct {
 	Rpd *int `json:"rpd,omitempty"` // Requests per day
 	Tph *int `json:"tph,omitempty"` // Tokens per hour
 	Tpd *int `json:"tpd,omitempty"` // Tokens per day
+
+	// RateLimitPauseMs is the provider-wide fallback pause applied after a 429
+	// without a provider-supplied Retry-After. Per-model values override this.
+	RateLimitPauseMs *int `json:"rateLimitPauseMs,omitempty"`
 }
 
 type ModelLimits struct {
@@ -510,6 +514,10 @@ type ModelLimits struct {
 	Tpmu            *int `json:"tpmu,omitempty"`            // Tokens per month
 	MaxConcurrent   *int `json:"maxConcurrent,omitempty"`   // Max in-flight requests
 	CooldownAfterMs *int `json:"cooldownAfterMs,omitempty"` // Apply cooldown for N ms after each successful response
+	// RateLimitPauseMs is the fallback pause window applied to a model after a
+	// provider 429 when the provider did not supply its own Retry-After. When the
+	// provider does supply one, the supplied value always wins.
+	RateLimitPauseMs *int `json:"rateLimitPauseMs,omitempty"`
 }
 
 type Certification struct {

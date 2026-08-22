@@ -113,23 +113,21 @@ func TestFailureClassifier_ClassifyProvider4xxFailsOver(t *testing.T) {
 	}
 }
 
-func TestFailureClassifier_DoesNotRecordClientOrBillingFailures(t *testing.T) {
+func TestFailureClassifier_DoesNotRecordClientFailures(t *testing.T) {
 	classifier := NewDefaultFailureClassifier()
 
-	tests := []struct {
-		name string
-		err  error
-	}{
-		{name: "validation", err: errors.NewValidationError("bad request", nil)},
-		{name: "payment", err: errors.NewPaymentRequiredError("payment required")},
-	}
+	decision := classifier.Classify(errors.NewValidationError("bad request", nil), types.FailureContext{MaxAttempts: 1, HasRemainingBudget: true})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			decision := classifier.Classify(tt.err, types.FailureContext{MaxAttempts: 1, HasRemainingBudget: true})
+	assert.Equal(t, types.ActionAbort, decision.Action)
+	assert.False(t, decision.ShouldRecordFailure)
+}
 
-			assert.Equal(t, types.ActionAbort, decision.Action)
-			assert.False(t, decision.ShouldRecordFailure)
-		})
-	}
+func TestFailureClassifier_PaymentFailsOverInsteadOfAborting(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+
+	decision := classifier.Classify(errors.NewPaymentRequiredError("payment required"), types.FailureContext{MaxAttempts: 3, HasRemainingBudget: true, AttemptIndex: 0})
+
+	assert.Equal(t, types.ActionFailover, decision.Action)
+	assert.False(t, decision.IsRetryable)
+	assert.Contains(t, decision.Reason, "billing")
 }

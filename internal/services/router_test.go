@@ -1466,6 +1466,7 @@ func TestExecute(t *testing.T) {
 		r.SetCooldownService(cooldowns)
 
 		rateErr := errors.NewRateLimitError("limited", 60, "rpm")
+		rateErr.RetryAfterProvided = true
 		content := "ok"
 		resp := &types.ChatCompletionResponse{
 			ID: "id-rate-limit", Model: "model-3",
@@ -1664,11 +1665,23 @@ func TestExecute(t *testing.T) {
 		assert.Equal(t, "ALL_ATTEMPTS_FAILED", gatewayErr.Code)
 	})
 
-	t.Run("non-retryable error stops immediately", func(t *testing.T) {
-		r, _, _, mockProvider := newTestRouter(t)
+	t.Run("payment required fails over instead of aborting", func(t *testing.T) {
+		r, mockQuota, mockHealth, mockProvider := newTestRouter(t)
 
 		payErr := errors.NewPaymentRequiredError("payment required")
-		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr)
+		content := "ok"
+		resp := &types.ChatCompletionResponse{
+			ID: "id-payover", Model: "model-3",
+			Usage:   &types.Usage{TotalTokens: 12},
+			Choices: []types.Choice{{Message: types.ResponseMessage{Role: "assistant", Content: &content}}},
+		}
+		gomock.InOrder(
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr),
+			mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), "model-3", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(resp, nil),
+		)
+		mockHealth.EXPECT().RecordFailure(gomock.Any(), "provider-a", "model-1")
+		mockHealth.EXPECT().RecordSuccess(gomock.Any(), "provider-b", "model-3", gomock.Any())
+		mockQuota.EXPECT().RecordModelUsage(gomock.Any(), "provider-b", "model-3", 12).Return(nil)
 
 		plan := types.RoutingPlan{
 			Attempts: []types.RoutingAttempt{
@@ -1679,6 +1692,26 @@ func TestExecute(t *testing.T) {
 		}
 
 		result, err := r.Execute(ctx, plan, baseReq, "req-4")
+		require.NoError(t, err)
+		assert.Equal(t, "provider-b", result.ProviderID)
+	})
+
+	t.Run("payment required on every attempt surfaces PAYMENT_REQUIRED", func(t *testing.T) {
+		r, _, mockHealth, mockProvider := newTestRouter(t)
+
+		payErr := errors.NewPaymentRequiredError("payment required")
+		mockProvider.EXPECT().CallProvider(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, payErr).Times(2)
+		mockHealth.EXPECT().RecordFailure(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
+
+		plan := types.RoutingPlan{
+			Attempts: []types.RoutingAttempt{
+				{ProviderID: "provider-a", Model: "model-1", BaseURL: "https://a.com/v1", APIKey: "k1", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+				{ProviderID: "provider-b", Model: "model-3", BaseURL: "https://b.com/v1", APIKey: "k2", TimeoutMs: 5000, Auth: types.ProviderAuth{Type: "bearer"}},
+			},
+			MaxAttempts: 2, RetryOn5xx: true,
+		}
+
+		result, err := r.Execute(ctx, plan, baseReq, "req-4b")
 		assert.Nil(t, result)
 		require.Error(t, err)
 		gatewayErr, ok := err.(*types.GatewayError)
