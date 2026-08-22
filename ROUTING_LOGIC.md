@@ -443,8 +443,6 @@ for i := 0; i < maxAttempts && i < len(candidates); i++ {
     apiKey := ""
     switch candidate.Provider.Auth.Env {
     case "GROQ_API_KEY":         apiKey = config.GetEnv().GroqAPIKey
-    case "CEREBRAS_API_KEY":     apiKey = config.GetEnv().CerebrasAPIKey
-    case "MISTRAL_API_KEY":      apiKey = config.GetEnv().MistralAPIKey
     case "GEMINI_API_KEY":       apiKey = config.GetEnv().GeminiAPIKey
     case "NIM_API_KEY":          apiKey = config.GetEnv().NimAPIKey
     case "OLLAMA_API_KEY":       apiKey = config.GetEnv().OllamaAPIKey

@@ -18,8 +18,6 @@ type EnvConfig struct {
 
 	GatewayAPIKey       string
 	GroqAPIKey          string
-	CerebrasAPIKey      string
-	MistralAPIKey       string
 	GeminiAPIKey        string
 	NimAPIKey           string
 	OllamaAPIKey        string
@@ -159,8 +157,6 @@ func LoadEnv() (*EnvConfig, error) {
 		LogLevel:            getEnvString("LOG_LEVEL", "info"),
 		GatewayAPIKey:       gatewayKey,
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
-		CerebrasAPIKey:      os.Getenv("CEREBRAS_API_KEY"),
-		MistralAPIKey:       os.Getenv("MISTRAL_API_KEY"),
 		GeminiAPIKey:        os.Getenv("GEMINI_API_KEY"),
 		NimAPIKey:           os.Getenv("NIM_API_KEY"),
 		OllamaAPIKey:        os.Getenv("OLLAMA_API_KEY"),

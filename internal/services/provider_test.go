@@ -275,27 +275,6 @@ func TestProviderServiceShouldLogRawProviderResponse_FilterMatching(t *testing.T
 	assert.False(t, svc.shouldLogRawProviderResponse("groq", "llama-3.1-8b-instant"))
 }
 
-func TestPrepareRequest_MistralShaping(t *testing.T) {
-	svc := newProviderService()
-	req := types.ChatCompletionRequest{
-		Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
-		MaxCompletionTokens: ptrInt(12),
-		Seed:                ptrInt(42),
-		User:                "verify-upstream",
-	}
-
-	body, err := svc.prepareRequest(req, "mistral-large-2411", "https://api.mistral.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "MISTRAL_API_KEY"})
-	require.NoError(t, err)
-
-	var payload map[string]any
-	require.NoError(t, json.Unmarshal(body, &payload))
-	assert.Equal(t, float64(12), payload["max_tokens"])
-	assert.Equal(t, float64(42), payload["random_seed"])
-	assert.NotContains(t, payload, "max_completion_tokens")
-	assert.NotContains(t, payload, "seed")
-	assert.NotContains(t, payload, "user")
-}
-
 func TestPrepareRequest_GroqShaping(t *testing.T) {
 	svc := newProviderService()
 	penalty := 0.5
@@ -459,67 +438,6 @@ func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
 	assert.Equal(t, "rpd", quota.LimitType)
 	assert.Equal(t, 20, quota.Limit)
 	assert.Equal(t, "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quota.ID)
-}
-
-func TestPrepareRequest_CerebrasStrictSchemaIsDowngradedForUpstream(t *testing.T) {
-	svc := newProviderService()
-	req := types.ChatCompletionRequest{
-		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
-		ResponseFormat: &types.ResponseFormat{
-			Type: "json_schema",
-			JSONSchema: &types.JSONSchema{
-				Name:   "test",
-				Strict: boolPtr(true),
-				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}}}`),
-			},
-		},
-	}
-
-	body, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
-	require.NoError(t, err)
-
-	var sent types.ChatCompletionRequest
-	require.NoError(t, json.Unmarshal(body, &sent))
-	require.NotNil(t, sent.ResponseFormat)
-	require.NotNil(t, sent.ResponseFormat.JSONSchema)
-	assert.Nil(t, sent.ResponseFormat.JSONSchema.Strict)
-	require.NotNil(t, req.ResponseFormat.JSONSchema.Strict, "normalization must not mutate the client contract")
-}
-
-func TestPrepareRequest_CerebrasAllowsStrictSchemaWithAdditionalPropertiesFalse(t *testing.T) {
-	svc := newProviderService()
-	req := types.ChatCompletionRequest{
-		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
-		ResponseFormat: &types.ResponseFormat{
-			Type: "json_schema",
-			JSONSchema: &types.JSONSchema{
-				Name:   "test",
-				Strict: boolPtr(true),
-				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}},"additionalProperties":false}`),
-			},
-		},
-	}
-
-	_, err := svc.prepareRequest(req, "llama3.1-8b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
-	require.NoError(t, err)
-}
-
-func TestPrepareRequest_CerebrasAllowsNonStrictSchemaWithoutAdditionalPropertiesFalse(t *testing.T) {
-	svc := newProviderService()
-	req := types.ChatCompletionRequest{
-		Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
-		ResponseFormat: &types.ResponseFormat{
-			Type: "json_schema",
-			JSONSchema: &types.JSONSchema{
-				Name:   "test",
-				Strict: boolPtr(false),
-				Schema: json.RawMessage(`{"type":"object","properties":{"ok":{"type":"boolean"}}}`),
-			},
-		},
-	}
-
-	_, err := svc.prepareRequest(req, "gpt-oss-120b", "https://api.cerebras.ai/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"})
-	require.NoError(t, err)
 }
 
 func TestProviderCallProvider_ParsesArrayContentResponse(t *testing.T) {

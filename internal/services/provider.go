@@ -335,33 +335,12 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 	request.Model = model
 	provider := detectProvider(baseURL, providerType, auth)
 	request = normalizeRequestForProvider(request, provider, model)
-	if err := validateRequestForProvider(request, provider); err != nil {
-		return nil, err
-	}
 
 	if request.ResponseFormat != nil && request.ResponseFormat.Type == "json_object" {
 		request.Messages = ensureJSONKeyword(request.Messages)
 	}
 
 	return json.Marshal(request)
-}
-
-func validateRequestForProvider(request types.ChatCompletionRequest, provider string) error {
-	if request.ResponseFormat == nil {
-		return nil
-	}
-
-	if provider == "cerebras" && request.ResponseFormat.Type == "json_object" && request.Stream != nil && *request.Stream {
-		return fmt.Errorf("cerebras does not support json_object with streaming")
-	}
-
-	if provider == "cerebras" && isStrictJSONSchema(request.ResponseFormat) {
-		if !schemaObjectsDisallowAdditionalProperties(request.ResponseFormat.JSONSchema.Schema) {
-			return fmt.Errorf("cerebras strict json_schema requires additionalProperties=false on every object")
-		}
-	}
-
-	return nil
 }
 
 func isStrictJSONSchema(format *types.ResponseFormat) bool {
@@ -376,7 +355,7 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, 
 	request = normalizeStructuredOutputForProvider(request, provider, model)
 
 	switch provider {
-	case "groq", "cerebras":
+	case "groq":
 		if request.MaxCompletionTokens == nil && request.MaxTokens != nil {
 			request.MaxCompletionTokens = request.MaxTokens
 		}
@@ -386,16 +365,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, 
 			request.MaxTokens = request.MaxCompletionTokens
 		}
 		request.MaxCompletionTokens = nil
-	case "mistral":
-		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
-			request.MaxTokens = request.MaxCompletionTokens
-		}
-		request.MaxCompletionTokens = nil
-		if request.RandomSeed == nil && request.Seed != nil {
-			request.RandomSeed = request.Seed
-		}
-		request.Seed = nil
-		request.User = ""
 	}
 
 	switch provider {
@@ -403,8 +372,6 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, 
 		request.Metadata = nil
 		request.FrequencyPenalty = nil
 		request.PresencePenalty = nil
-	case "cerebras":
-		request.Metadata = nil
 	case "oci":
 		if request.Temperature != nil && *request.Temperature == 0 {
 			request.Temperature = nil
@@ -567,7 +534,7 @@ func normalizeStrictDialectSchemaNode(node any) any {
 
 func providerRequiresStrictResponseSchemaDialect(provider, model string) bool {
 	switch provider {
-	case "groq", "cerebras":
+	case "groq":
 		return true
 	case "oci":
 		return strings.HasPrefix(model, "openai.")
@@ -588,7 +555,7 @@ func providerUsesNativeJSONObject(provider, model string) bool {
 
 func providerUsesJSONSchemaForJSONObject(provider, model string) bool {
 	switch provider {
-	case "cerebras", "groq", "mistral", "nim", "zai", "kilo":
+	case "groq", "nim", "zai", "kilo":
 		return true
 	case "oci":
 		return !strings.HasPrefix(model, "google.gemini-")
@@ -605,10 +572,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	switch auth.Env {
 	case "GROQ_API_KEY":
 		return "groq"
-	case "CEREBRAS_API_KEY":
-		return "cerebras"
-	case "MISTRAL_API_KEY":
-		return "mistral"
 	case "NIM_API_KEY":
 		return "nim"
 	case "OLLAMA_API_KEY":
@@ -626,10 +589,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	switch {
 	case strings.Contains(baseURL, "api.groq.com"):
 		return "groq"
-	case strings.Contains(baseURL, "api.cerebras.ai"):
-		return "cerebras"
-	case strings.Contains(baseURL, "api.mistral.ai"):
-		return "mistral"
 	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
 		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
@@ -772,43 +731,6 @@ func (s *ProviderService) logRawProviderSSEData(provider, model, data string) {
 		Str("model", model).
 		Str("data", data).
 		Msg("Logged raw upstream SSE payload")
-}
-
-func schemaObjectsDisallowAdditionalProperties(raw json.RawMessage) bool {
-	if len(raw) == 0 {
-		return true
-	}
-
-	var schema any
-	if err := json.Unmarshal(raw, &schema); err != nil {
-		return false
-	}
-
-	return walkSchemaAdditionalProperties(schema)
-}
-
-func walkSchemaAdditionalProperties(node any) bool {
-	switch typed := node.(type) {
-	case map[string]any:
-		if schemaType, ok := typed["type"].(string); ok && schemaType == "object" {
-			flag, ok := typed["additionalProperties"].(bool)
-			if !ok || flag {
-				return false
-			}
-		}
-		for _, value := range typed {
-			if !walkSchemaAdditionalProperties(value) {
-				return false
-			}
-		}
-	case []any:
-		for _, value := range typed {
-			if !walkSchemaAdditionalProperties(value) {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func schemaContainsRecursiveRef(raw json.RawMessage) bool {
@@ -1056,13 +978,6 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		}
 		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
 			return retryAfter, "tpm", limitSubtype
-		}
-	case "cerebras":
-		if headers.Get("X-RateLimit-Limit-Tokens-Minute") != "" {
-			return retryAfter, "tpm", limitSubtype
-		}
-		if headers.Get("X-RateLimit-Limit-Requests-Day") != "" {
-			return retryAfter, "rpd", limitSubtype
 		}
 	case cloudflareProviderID:
 		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||

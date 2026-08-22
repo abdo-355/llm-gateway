@@ -48,8 +48,6 @@ go run cmd/verify-upstream/main.go -fail-fast
 Loads `.env` file automatically. Requires provider API keys:
 
 - `GROQ_API_KEY` - Groq provider
-- `CEREBRAS_API_KEY` - Cerebras provider
-- `MISTRAL_API_KEY` - Mistral provider
 - `GEMINI_API_KEY` - Google Gemini API
 - `NIM_API_KEY` - NVIDIA NIM provider
 - `OLLAMA_API_KEY` - Ollama provider

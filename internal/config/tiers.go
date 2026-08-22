@@ -6,17 +6,13 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierDefault: {
 		Tier: types.TierDefault,
 		Entries: []types.TierEntry{
-			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: 0.96},
 			{Provider: "oci", Model: "google.gemini-2.5-flash", Weight: 0.92},
-			{Provider: "mistral", Model: "mistral-small-2506", Weight: 0.90},
 			{Provider: "gemini", Model: "gemini-3.1-flash-lite", Weight: 0.86},
 			{Provider: "gemini", Model: "gemini-2.5-flash", Weight: 0.84},
 			{Provider: "oci", Model: "google.gemini-2.5-flash-lite", Weight: 0.82},
 			{Provider: "groq", Model: "meta-llama/llama-4-scout-17b-16e-instruct", Weight: 0.82},
-			{Provider: "mistral", Model: "mistral-small-2603", Weight: 0.80},
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 0.78},
 			{Provider: "gemini", Model: "gemini-2.5-flash-lite", Weight: 0.78},
-			{Provider: "mistral", Model: "mistral-medium-3.5", Weight: 0.76},
 			{Provider: "groq", Model: "openai/gpt-oss-20b", Weight: 0.68},
 			{Provider: "kilo", Model: "stepfun/step-3.7-flash:free", Weight: 0.60},
 			{Provider: "openrouter", Model: "openai/gpt-oss-120b:free", Weight: 0.40},
@@ -29,11 +25,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierPro: {
 		Tier: types.TierPro,
 		Entries: []types.TierEntry{
-			{Provider: "mistral", Model: "mistral-medium-2505", Weight: 1.00},
-			{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.96},
 			{Provider: "gemini", Model: "gemini-3.5-flash", Weight: 0.94},
-			{Provider: "cerebras", Model: "zai-glm-4.7", Weight: 0.94},
-			{Provider: "cerebras", Model: "gpt-oss-120b", Weight: 0.92},
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.92},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.90},
 			{Provider: "oci", Model: "google.gemini-2.5-pro", Weight: 0.88},
@@ -62,11 +54,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Entries: []types.TierEntry{
 			{Provider: "nim", Model: "minimaxai/minimax-m2.7", Weight: 0.96},
 			{Provider: "nim", Model: "qwen/qwen3.5-397b-a17b", Weight: 0.92},
-			{Provider: "cerebras", Model: "zai-glm-4.7", Weight: 0.90},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.88},
-			{Provider: "mistral", Model: "magistral-medium-2509", Weight: 0.84},
-			{Provider: "mistral", Model: "mistral-medium-2508", Weight: 0.80},
-			{Provider: "mistral", Model: "mistral-medium-2505", Weight: 0.78},
 			{Provider: "oci", Model: "google.gemini-2.5-pro", Weight: 0.76},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.70},
 			{Provider: "openrouter", Model: "nvidia/nemotron-3-ultra-550b-a55b:free", Weight: 0.66},

@@ -15,8 +15,6 @@ const testAPIKey = "test-api-key-that-is-at-least-32-characters-long"
 func TestMain(m *testing.M) {
 	os.Setenv("GATEWAY_API_KEY", testAPIKey)
 	os.Setenv("GROQ_API_KEY", "test-groq-key")
-	os.Setenv("CEREBRAS_API_KEY", "test-cerebras-key")
-	os.Setenv("MISTRAL_API_KEY", "test-mistral-key")
 	os.Exit(m.Run())
 }
 

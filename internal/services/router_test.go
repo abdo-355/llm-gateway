@@ -85,8 +85,6 @@ func (s *cloudflareQuotaStub) MarkCloudflareDailyBudgetExhausted(ctx context.Con
 func init() {
 	os.Setenv("GATEWAY_API_KEY", "test-api-key-that-is-at-least-32-characters-long")
 	os.Setenv("GROQ_API_KEY", "test-groq-key")
-	os.Setenv("CEREBRAS_API_KEY", "test-cerebras-key")
-	os.Setenv("MISTRAL_API_KEY", "test-mistral-key")
 }
 
 func testConfig() types.AppConfig {
@@ -123,7 +121,6 @@ func testConfig() types.AppConfig {
 			{
 				ID:      "provider-b",
 				BaseURL: "https://api.provider-b.com/v1",
-				Auth:    types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"},
 				Models: types.ProviderModels{
 					Mode: "allowlist",
 					List: []string{"model-3"},
@@ -596,7 +593,6 @@ func TestFilterCandidates(t *testing.T) {
 		cfg := types.AppConfig{Providers: []types.ProviderConfig{{
 			ID:      "cerebras",
 			BaseURL: "https://api.cerebras.ai/v1",
-			Auth:    types.ProviderAuth{Type: "bearer", Env: "CEREBRAS_API_KEY"},
 			Models:  types.ProviderModels{Mode: "allowlist", List: []string{"model-1"}},
 			Capabilities: types.ProviderCapabilities{
 				Streaming:           true,

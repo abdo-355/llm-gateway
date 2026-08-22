@@ -5,8 +5,6 @@ import "github.com/abdo-355/llm-gateway/internal/types"
 func GetProviders() []types.ProviderConfig {
 	return []types.ProviderConfig{
 		getGroqConfig(),
-		getCerebrasConfig(),
-		getMistralConfig(),
 		getNIMConfig(),
 		getKiloConfig(),
 		getCloudflareConfig(),
@@ -69,120 +67,6 @@ func getGroqConfig() types.ProviderConfig {
 			ToolSchema:          "json_schema",
 		},
 		Limits: types.ProviderLimits{},
-	}
-}
-
-func getCerebrasConfig() types.ProviderConfig {
-	rpm5 := 5
-	rph150 := 150
-	rpd2400 := 2400
-	tpm30000 := 30000
-	tph1000000 := 1000000
-	tpd1000000 := 1000000
-
-	return types.ProviderConfig{
-		ID:      "cerebras",
-		BaseURL: "https://api.cerebras.ai/v1",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "CEREBRAS_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"gpt-oss-120b",
-				"zai-glm-4.7",
-			},
-			Limits: map[string]types.ModelLimits{
-				"gpt-oss-120b": {Rpm: &rpm5, Rph: &rph150, Rpd: &rpd2400, Tpm: &tpm30000, Tph: &tph1000000, Tpd: &tpd1000000},
-				"zai-glm-4.7":  {Rpm: &rpm5, Rph: &rph150, Rpd: &rpd2400, Tpm: &tpm30000, Tph: &tph1000000, Tpd: &tpd1000000},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            true,
-			Metadata:            false,
-			Seed:                true,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           false,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{},
-	}
-}
-
-func getMistralConfig() types.ProviderConfig {
-	rpm5 := 5
-	rpm23 := 23
-	rpm25 := 25
-	rpm30 := 30
-	rpm50 := 50
-	rpm60 := 60
-	rpm300 := 300
-	tpm50000 := 50000
-	tpm75000 := 75000
-	tpm356250 := 356250
-	tpm375000 := 375000
-	tpm937500 := 937500
-	tpm2250000 := 2250000
-	tpmu1000000000 := 1000000000
-
-	return types.ProviderConfig{
-		ID:      "mistral",
-		BaseURL: "https://api.mistral.ai/v1",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "MISTRAL_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"magistral-medium-2509",
-				"magistral-small-2509",
-				"ministral-14b-2512",
-				"mistral-medium-2505",
-				"mistral-medium-2508",
-				"mistral-medium-3.5",
-				"mistral-small-2506",
-				"mistral-small-2603",
-				"open-mistral-nemo",
-			},
-			Limits: map[string]types.ModelLimits{
-				"magistral-medium-2509": {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
-				"magistral-small-2509":  {Rpm: &rpm5, Tpm: &tpm75000, Tpmu: &tpmu1000000000},
-				"ministral-14b-2512":    {Rpm: &rpm30, Tpm: &tpm937500},
-				"mistral-medium-2505":   {Rpm: &rpm25, Tpm: &tpm375000},
-				"mistral-medium-2508":   {Rpm: &rpm23, Tpm: &tpm356250},
-				"mistral-medium-3.5":    {Rpm: &rpm50, Tpm: &tpm50000},
-				"mistral-small-2506":    {Rpm: &rpm300, Tpm: &tpm2250000},
-				"mistral-small-2603":    {Rpm: &rpm50, Tpm: &tpm50000},
-				"open-mistral-nemo":     {Rpm: &rpm30, Tpm: &tpm937500},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            false,
-			Metadata:            true,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: false,
-			MultipleChoices:     true,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			Rpm: &rpm60,
-		},
 	}
 }
 

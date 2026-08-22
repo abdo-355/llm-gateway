@@ -45,7 +45,7 @@ func NewProviderDisabler(authDisableThreshold int, strictAuthProviders []string)
 func configuredStrictAuthProviders() []string {
 	raw := strings.TrimSpace(os.Getenv("STRICT_AUTH_PROVIDERS"))
 	if raw == "" {
-		return []string{"mistral"}
+		return nil
 	}
 	return strings.Split(raw, ",")
 }

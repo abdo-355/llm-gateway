@@ -26,8 +26,6 @@ LLM Gateway is a unified API interface that sits between your application and LL
 ### Supported Providers
 
 - **Groq** - Fast inference for Llama models
-- **Cerebras** - High-throughput Llama and Qwen models
-- **Mistral** - Mistral, Ministral, and Pixtral models
 - **NVIDIA NIM** - High-performance LLMs via NVIDIA's API
 - **Ollama** - Self-hosted and cloud Ollama models
 - **Kilo** - Diverse models via Kilo's gateway
@@ -105,8 +103,7 @@ Select relative capability tiers directly:
                               ▼
               ┌─────────────────────────┐
               │   LLM Providers         │
-              │   (Groq/Cerebras/       │
-              │    Mistral/NIM/         │
+              │   (Groq/NIM/            │
               │    Ollama/Kilo/         │
               │    Gemini)              │
               └─────────────────────────┘
@@ -218,7 +215,7 @@ go run ./cmd/verify-upstream
 Optional filters:
 
 ```bash
-go run ./cmd/verify-upstream --provider mistral
+go run ./cmd/verify-upstream --provider groq
 ```
 
 Optional behavior flags:
@@ -234,8 +231,7 @@ When a provider returns `200 OK` but the visible content is empty, you can log t
 
 ```bash
 LOG_RAW_PROVIDER_RESPONSES=1 \
-LOG_RAW_PROVIDER_RESPONSE_FILTERS=mistral/magistral-* \
-go run ./cmd/verify-upstream --provider mistral
+go run ./cmd/verify-upstream --provider groq
 ```
 
 Notes:
@@ -262,8 +258,6 @@ Failures include the exact reason when available, for example:
 |----------|----------|-------------|
 | `GATEWAY_API_KEY` | Yes | Your API key (min 32 characters) |
 | `GROQ_API_KEY` | No | Groq API key |
-| `CEREBRAS_API_KEY` | No | Cerebras API key |
-| `MISTRAL_API_KEY` | No | Mistral API key |
 | `NIM_API_KEY` | No | NVIDIA NIM API key |
 | `OLLAMA_API_KEY` | No | Ollama API key |
 | `KILO_API_KEY` | No | Kilo API key (optional for free models) |
