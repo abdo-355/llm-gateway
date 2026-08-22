@@ -20,6 +20,11 @@ services:
       - NIM_API_KEY=${NIM_API_KEY}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - KILO_API_KEY=${KILO_API_KEY}
+      - OPENCODE_ZEN_API_KEY=${OPENCODE_ZEN_API_KEY}
+      - ZAI_API_KEY=${ZAI_API_KEY}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - OCI_API_KEY=${OCI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
       redis:
         condition: service_healthy
@@ -44,7 +49,10 @@ services:
     volumes:
       - redis_data:/data
     restart: unless-stopped
-    command: redis-server --save 60 1 --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # noeviction: quota counters, cooldowns and circuit state must never be
+    # silently evicted — allkeys-lru wiped Gemini daily counters and let the
+    # gateway hammer exhausted providers. Bump memory instead of evicting.
+    command: redis-server --save 60 1 --maxmemory 512mb --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
