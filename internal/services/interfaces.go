@@ -29,6 +29,10 @@ type ProviderQuotaSyncer interface {
 type QuotaReservationService interface {
 	CheckAndReserveQuota(ctx context.Context, providerID, model string, limits types.ModelLimits, estimatedTokens int) (*QuotaReservation, error)
 	ReleaseQuotaReservation(ctx context.Context, reservation *QuotaReservation) error
+	// ReleaseTokenReservation drops only the token estimates from a reservation,
+	// keeping the request-count entries (RPM member + RPH/RPD counters) so failed
+	// attempts still count toward upstream request windows.
+	ReleaseTokenReservation(ctx context.Context, reservation *QuotaReservation) error
 	RecordTokenUsage(ctx context.Context, reservation *QuotaReservation, actualTokens int) error
 }
 

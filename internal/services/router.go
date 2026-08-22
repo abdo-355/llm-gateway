@@ -742,7 +742,7 @@ func (r *Router) Execute(
 			}
 		}
 		if err != nil {
-			r.releaseQuotaReservation(ctx, reservation)
+			r.releaseTokenReservation(ctx, reservation)
 		}
 
 		if err == nil {
@@ -1172,7 +1172,7 @@ func (r *Router) ExecuteStream(
 					if concurrencyAcquired {
 						r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 					}
-					r.releaseQuotaReservation(ctx, reservation)
+					r.releaseTokenReservation(ctx, reservation)
 					return
 				}
 			}
@@ -1183,7 +1183,7 @@ func (r *Router) ExecuteStream(
 				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
 			}
 			if err != nil {
-				r.releaseQuotaReservation(ctx, reservation)
+				r.releaseTokenReservation(ctx, reservation)
 			}
 
 			latencyMs := time.Since(startTime).Milliseconds()
@@ -2329,6 +2329,28 @@ func (r *Router) releaseQuotaReservation(ctx context.Context, reservation *Quota
 			Str("model", reservation.Model).
 			Err(err).
 			Msg("Failed to release quota reservation")
+	}
+}
+
+// releaseTokenReservation drops the token estimates from a failed attempt's
+// reservation while keeping the request-count entries: the upstream provider
+// counted the request, so RPM/RPH/RPD windows must reflect it.
+func (r *Router) releaseTokenReservation(ctx context.Context, reservation *QuotaReservation) {
+	if reservation == nil {
+		return
+	}
+	reservationService, ok := r.quotaService.(QuotaReservationService)
+	if !ok {
+		return
+	}
+	if err := reservationService.ReleaseTokenReservation(ctx, reservation); err != nil {
+		logger.Error().
+			Str("type", "router").
+			Str("event", "quota.token_reservation_release_failed").
+			Str("provider", reservation.ProviderID).
+			Str("model", reservation.Model).
+			Err(err).
+			Msg("Failed to release token reservation")
 	}
 }
 

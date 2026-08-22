@@ -339,6 +339,32 @@ func (s *QuotaService) ReleaseQuotaReservation(ctx context.Context, reservation 
 	return err
 }
 
+func (s *QuotaService) ReleaseTokenReservation(ctx context.Context, reservation *QuotaReservation) error {
+	if reservation == nil {
+		return nil
+	}
+
+	// Drop the token estimates but keep the request-count entries: a failed
+	// attempt still consumed a request slot upstream (RPM member, RPH/RPD),
+	// while no actual token usage is known.
+	script := redis.NewScript(`
+		redis.call('ZREM', KEYS[1], ARGV[1])
+		local estimated = tonumber(ARGV[2])
+		local tph = redis.call('DECRBY', KEYS[2], estimated)
+		if tph < 0 then redis.call('SET', KEYS[2], 0) end
+		local tpd = redis.call('DECRBY', KEYS[3], estimated)
+		if tpd < 0 then redis.call('SET', KEYS[3], 0) end
+		local tpmu = redis.call('DECRBY', KEYS[4], estimated)
+		if tpmu < 0 then redis.call('SET', KEYS[4], 0) end
+		return 1
+	`)
+
+	_, err := script.Run(ctx, s.redis,
+		[]string{reservation.Keys.TPM, reservation.Keys.TPH, reservation.Keys.TPD, reservation.Keys.TPMU},
+		reservation.TPMMember, reservation.EstimatedTokens).Result()
+	return err
+}
+
 func (s *QuotaService) RecordTokenUsage(ctx context.Context, reservation *QuotaReservation, actualTokens int) error {
 	if reservation == nil {
 		return nil

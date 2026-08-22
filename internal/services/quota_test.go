@@ -486,6 +486,36 @@ func TestQuotaCheckAndReserveQuota_ReleasesReservation(t *testing.T) {
 	assert.Equal(t, 0, status.Tpd)
 }
 
+func TestQuotaReleaseTokenReservationKeepsRequestCounts(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "")
+	ctx := testContext()
+
+	limits := types.ModelLimits{Rpm: intPtr(100), Rph: intPtr(1000), Rpd: intPtr(100), Tpm: intPtr(50000)}
+	reservation, err := svc.CheckAndReserveQuota(ctx, "nous", "stealth/ox-alpha", limits, 4000)
+	require.NoError(t, err)
+	require.NotNil(t, reservation)
+
+	status := svc.GetModelQuotaStatus(ctx, "nous", "stealth/ox-alpha", nil)
+	assert.Equal(t, 1, status.Rpm)
+	assert.Equal(t, 1, status.Rph)
+	assert.Equal(t, 1, status.Rpd)
+	assert.Equal(t, 4000, status.Tpm)
+
+	// Simulate a failed attempt: token estimates are released but the request
+	// still counts toward the upstream request windows.
+	require.NoError(t, svc.ReleaseTokenReservation(ctx, reservation))
+
+	status = svc.GetModelQuotaStatus(ctx, "nous", "stealth/ox-alpha", nil)
+	assert.Equal(t, 1, status.Rpm, "failed attempt must keep its RPM entry")
+	assert.Equal(t, 1, status.Rph, "failed attempt must keep its RPH count")
+	assert.Equal(t, 1, status.Rpd, "failed attempt must keep its RPD count")
+	assert.Equal(t, 0, status.Tpm, "token estimate must be released")
+	assert.Equal(t, 0, status.Tph)
+	assert.Equal(t, 0, status.Tpd)
+	assert.Equal(t, 0, status.Tpmu)
+}
+
 func TestQuotaCheckAndReserveQuota_RejectsAtomically(t *testing.T) {
 	client, _ := newTestRedis(t)
 	svc := NewQuotaService(client, "")
