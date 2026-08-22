@@ -693,7 +693,11 @@ func getNousConfig() types.ProviderConfig {
 					StructuredOutputs: strPtr("json_schema_strict"),
 				},
 				"stepfun/step-3.7-flash:free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
+					// Probe passed on short prompts, but production structured
+					// requests (~4-5K input tokens) repeatedly returned empty
+					// choice-0 content - reasoning budget starved under real
+					// loads. Text-only until re-verified.
+					StructuredOutputs: strPtr("none"),
 				},
 				"tencent/hy3:free": {
 					// Live probe: returns malformed JSON on response_format
