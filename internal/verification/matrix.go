@@ -57,12 +57,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "basic_text",
 			Fields: []string{"messages", "max_tokens"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:     combo.Model,
-					Messages:  basicMessages("Reply with OK only."),
-					MaxTokens: probeTokenPtr(cfg, 8),
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
-				return r.runJSONProbe(combo, "basic_text", []string{"messages", "max_tokens"}, req, validateNonEmptyChatMessage)
+				return r.runJSONProbe(combo, "basic_text", []string{"messages", tokenParamField(maxTokens, maxCompletionTokens)}, req, validateNonEmptyChatMessage)
 			},
 		},
 		{
@@ -93,11 +95,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "metadata",
 			Fields: []string{"metadata"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:     combo.Model,
-					Messages:  basicMessages("Reply with OK only."),
-					MaxTokens: probeTokenPtr(cfg, 8),
-					Metadata:  map[string]string{"probe": "metadata", "provider": combo.Provider.ID},
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+					Metadata:            map[string]string{"probe": "metadata", "provider": combo.Provider.ID},
 				}
 				return r.runJSONProbe(combo, "metadata", []string{"metadata"}, req, validateNonEmptyChatMessage)
 			},
@@ -106,11 +110,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "seed",
 			Fields: []string{"seed"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:     combo.Model,
-					Messages:  basicMessages("Reply with OK only."),
-					MaxTokens: probeTokenPtr(cfg, 8),
-					Seed:      intPtr(42),
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+					Seed:                intPtr(42),
 				}
 				return r.runJSONProbe(combo, "seed", []string{"seed"}, req, validateNonEmptyChatMessage)
 			},
@@ -119,11 +125,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "user",
 			Fields: []string{"user"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:     combo.Model,
-					Messages:  basicMessages("Reply with OK only."),
-					MaxTokens: probeTokenPtr(cfg, 8),
-					User:      "verify-upstream",
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+					User:                "verify-upstream",
 				}
 				return r.runJSONProbe(combo, "user", []string{"user"}, req, validateNonEmptyChatMessage)
 			},
@@ -132,11 +140,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "frequency_penalty",
 			Fields: []string{"frequency_penalty"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:            combo.Model,
-					Messages:         basicMessages("Reply with OK only."),
-					MaxTokens:        probeTokenPtr(cfg, 8),
-					FrequencyPenalty: floatPtr(0),
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+					FrequencyPenalty:    floatPtr(0),
 				}
 				return r.runJSONProbe(combo, "frequency_penalty", []string{"frequency_penalty"}, req, validateNonEmptyChatMessage)
 			},
@@ -145,11 +155,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "presence_penalty",
 			Fields: []string{"presence_penalty"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:           combo.Model,
-					Messages:        basicMessages("Reply with OK only."),
-					MaxTokens:       probeTokenPtr(cfg, 8),
-					PresencePenalty: floatPtr(0),
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+					PresencePenalty:     floatPtr(0),
 				}
 				return r.runJSONProbe(combo, "presence_penalty", []string{"presence_penalty"}, req, validateNonEmptyChatMessage)
 			},
@@ -158,6 +170,7 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "stream",
 			Fields: []string{"stream", "stream_options.include_usage"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, true)
 				req := types.ChatCompletionRequest{
 					Model:    combo.Model,
 					Messages: basicMessages("Reply with OK only."),
@@ -165,7 +178,8 @@ func BuildProbes(cfg Config) []Probe {
 					StreamOptions: &types.StreamOptions{
 						IncludeUsage: boolPtr(true),
 					},
-					MaxCompletionTokens: probeTokenPtr(cfg, 8),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runStreamProbe(combo, "stream", []string{"stream", "stream_options.include_usage"}, req)
 			},
@@ -174,12 +188,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "json_object",
 			Fields: []string{"response_format.type=json_object"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 12, true)
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Return a JSON object with key ok set to true."),
 					Stream:              boolPtr(false),
 					ResponseFormat:      &types.ResponseFormat{Type: "json_object"},
-					MaxCompletionTokens: probeTokenPtr(cfg, 12),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "json_object", []string{"response_format.type=json_object"}, req, validateJSONObjectChat)
 			},
@@ -188,12 +204,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "json_schema",
 			Fields: []string{"response_format.type=json_schema"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 12, true)
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Return JSON only with ok=true."),
 					Stream:              boolPtr(false),
 					ResponseFormat:      nonStrictJSONSchemaFormat(),
-					MaxCompletionTokens: probeTokenPtr(cfg, 12),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "json_schema", []string{"response_format.type=json_schema"}, req, validateStrictJSONChat)
 			},
@@ -202,12 +220,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "json_schema_strict",
 			Fields: []string{"response_format.type=json_schema", "response_format.json_schema.strict"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 12, true)
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Return JSON only with ok=true."),
 					Stream:              boolPtr(false),
 					ResponseFormat:      strictJSONSchemaFormat(),
-					MaxCompletionTokens: probeTokenPtr(cfg, 12),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "json_schema_strict", []string{"response_format.type=json_schema", "response_format.json_schema.strict"}, req, validateStrictJSONChat)
 			},
@@ -216,12 +236,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "logprobs",
 			Fields: []string{"logprobs", "top_logprobs"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:       combo.Model,
-					Messages:    basicMessages("Say hello."),
-					Logprobs:    boolPtr(true),
-					TopLogprobs: intPtr(5),
-					MaxTokens:   probeTokenPtr(cfg, 8),
+					Model:               combo.Model,
+					Messages:            basicMessages("Say hello."),
+					Logprobs:            boolPtr(true),
+					TopLogprobs:         intPtr(5),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "logprobs", []string{"logprobs", "top_logprobs"}, req, validateLogprobs)
 			},
@@ -230,11 +252,13 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "multiple_choices",
 			Fields: []string{"n"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 8, false)
 				req := types.ChatCompletionRequest{
-					Model:     combo.Model,
-					Messages:  basicMessages("Say hello."),
-					N:         intPtr(2),
-					MaxTokens: probeTokenPtr(cfg, 8),
+					Model:               combo.Model,
+					Messages:            basicMessages("Say hello."),
+					N:                   intPtr(2),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "multiple_choices", []string{"n"}, req, validateMultipleChoices)
 			},
@@ -243,12 +267,14 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "tools",
 			Fields: []string{"tools", "tool_choice"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 12, false)
 				req := types.ChatCompletionRequest{
-					Model:      combo.Model,
-					Messages:   basicMessages("Call the get_status tool and nothing else."),
-					Tools:      probeTools(false),
-					ToolChoice: "required",
-					MaxTokens:  probeTokenPtr(cfg, 12),
+					Model:               combo.Model,
+					Messages:            basicMessages("Call the get_status tool and nothing else."),
+					Tools:               probeTools(false),
+					ToolChoice:          "required",
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "tools", []string{"tools", "tool_choice"}, req, validateToolCallChat)
 			},
@@ -257,18 +283,56 @@ func BuildProbes(cfg Config) []Probe {
 			Name:   "tool_schema",
 			Fields: []string{"tools.function.parameters", "tools.function.strict", "parallel_tool_calls"},
 			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 12, true)
 				req := types.ChatCompletionRequest{
 					Model:               combo.Model,
 					Messages:            basicMessages("Call the get_status tool and nothing else."),
 					Tools:               probeTools(true),
 					ToolChoice:          "required",
 					ParallelToolCalls:   boolPtr(false),
-					MaxCompletionTokens: probeTokenPtr(cfg, 12),
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
 				}
 				return r.runJSONProbe(combo, "tool_schema", []string{"tools.function.parameters", "tools.function.strict", "parallel_tool_calls"}, req, validateToolCallChat)
 			},
 		},
+		{
+			Name:   "reasoning",
+			Fields: []string{"reasoning_effort"},
+			Applicable: func(combo Combo) bool {
+				return resolveCapabilities(combo).Reasoning
+			},
+			Run: func(r *Runner, combo Combo) ProbeResult {
+				maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, cfg, 128, true)
+				effort := probeReasoningEffort(combo)
+				req := types.ChatCompletionRequest{
+					Model:               combo.Model,
+					Messages:            basicMessages("Reply with OK only."),
+					ReasoningEffort:     &effort,
+					MaxTokens:           maxTokens,
+					MaxCompletionTokens: maxCompletionTokens,
+				}
+				return r.runJSONProbe(combo, "reasoning", []string{"reasoning_effort"}, req, validateNonEmptyChatMessage)
+			},
+		},
 	}
+}
+
+// probeReasoningEffort picks an effort level the configured capability set
+// accepts, falling back to "low" which every reasoning dialect understands.
+func probeReasoningEffort(combo Combo) string {
+	caps := resolveCapabilities(combo)
+	if len(caps.ReasoningLevels) == 0 {
+		return "low"
+	}
+	for _, candidate := range []string{"low", "medium", "high", "minimal"} {
+		for _, level := range caps.ReasoningLevels {
+			if level == candidate {
+				return candidate
+			}
+		}
+	}
+	return caps.ReasoningLevels[0]
 }
 
 func probeTokenPtr(cfg Config, fallback int) *int {
@@ -276,6 +340,33 @@ func probeTokenPtr(cfg Config, fallback int) *int {
 		return intPtr(cfg.ProbeMaxTokens)
 	}
 	return intPtr(fallback)
+}
+
+// tokenLimitForProbe picks the output-token parameter a feature probe should
+// carry so it exercises the probed feature instead of tripping over parameter
+// dialect. Models configured with exactly one supported token param get that
+// param; everything else keeps the caller's preferred default.
+func tokenLimitForProbe(combo Combo, cfg Config, fallback int, preferCompletion bool) (*int, *int) {
+	limit := probeTokenPtr(cfg, fallback)
+	caps := resolveCapabilities(combo)
+	useCompletion := preferCompletion
+	switch {
+	case !caps.MaxTokens && caps.MaxCompletionTokens:
+		useCompletion = true
+	case caps.MaxTokens && !caps.MaxCompletionTokens:
+		useCompletion = false
+	}
+	if useCompletion {
+		return nil, limit
+	}
+	return limit, nil
+}
+
+func tokenParamField(maxTokens, maxCompletionTokens *int) string {
+	if maxCompletionTokens != nil {
+		return "max_completion_tokens"
+	}
+	return "max_tokens"
 }
 
 func resolveEndpoint(provider types.ProviderConfig) string {
@@ -313,6 +404,36 @@ func resolveCapabilities(combo Combo) types.ProviderCapabilities {
 	}
 	if overrides.MultipleChoices != nil {
 		resolved.MultipleChoices = *overrides.MultipleChoices
+	}
+	if overrides.Metadata != nil {
+		resolved.Metadata = *overrides.Metadata
+	}
+	if overrides.Seed != nil {
+		resolved.Seed = *overrides.Seed
+	}
+	if overrides.User != nil {
+		resolved.User = *overrides.User
+	}
+	if overrides.FrequencyPenalty != nil {
+		resolved.FrequencyPenalty = *overrides.FrequencyPenalty
+	}
+	if overrides.PresencePenalty != nil {
+		resolved.PresencePenalty = *overrides.PresencePenalty
+	}
+	if overrides.MaxTokens != nil {
+		resolved.MaxTokens = *overrides.MaxTokens
+	}
+	if overrides.MaxCompletionTokens != nil {
+		resolved.MaxCompletionTokens = *overrides.MaxCompletionTokens
+	}
+	if overrides.ToolSchema != nil {
+		resolved.ToolSchema = *overrides.ToolSchema
+	}
+	if overrides.Reasoning != nil {
+		resolved.Reasoning = *overrides.Reasoning
+	}
+	if overrides.ReasoningLevels != nil {
+		resolved.ReasoningLevels = overrides.ReasoningLevels
 	}
 	return resolved
 }
@@ -387,6 +508,8 @@ func configuredCapability(combo Combo, probe string) string {
 		return boolCapability(caps.Tools)
 	case "tool_schema":
 		return caps.ToolSchema
+	case "reasoning":
+		return boolCapability(caps.Reasoning)
 	default:
 		return ""
 	}

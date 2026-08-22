@@ -52,6 +52,7 @@ Loads `.env` file automatically. Requires provider API keys:
 - `NIM_API_KEY` - NVIDIA NIM provider
 - `OLLAMA_API_KEY` - Ollama provider
 - `KILO_API_KEY` - Kilo provider (optional)
+- `OPENCODE_ZEN_API_KEY` - OpenCode Zen provider
 
 Optional:
 - `ENV` - environment name (development/production)

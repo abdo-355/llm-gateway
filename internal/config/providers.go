@@ -318,24 +318,51 @@ func getOpenCodeConfig() types.ProviderConfig {
 				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
+				// Muse Spark rides Zen's Responses API bridge: legacy max_tokens
+				// is rejected with a 400 while max_completion_tokens is honored,
+				// and the bridge cannot execute tools over chat/completions.
+				// Structured-output compliance is too inconsistent to certify a
+				// dialect, so it inherits the provider-level model_dependent.
+				"muse-spark-1.2-contributor-free": {
+					MaxTokens:           boolPtr(false),
+					MaxCompletionTokens: boolPtr(true),
+					Tools:               boolPtr(false),
+					Reasoning:           boolPtr(true),
+				},
+				// x-preview rejects metadata with a 400 and produced no tool call
+				// under the strict tool-schema probe.
+				"x-preview-f-free": {
+					Metadata:          boolPtr(false),
+					ToolSchema:        strPtr("none"),
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Reasoning:         boolPtr(true),
+				},
 				"hy3-free": {
-					StructuredOutputs: strPtr("json_object"),
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Reasoning:         boolPtr(true),
 				},
 				"mimo-v2.5-free": {
 					StructuredOutputs: strPtr("json_schema"),
 				},
+				// Nemotron 3 Ultra Free intermittently answers in plain text
+				// instead of emitting a tool call under load; the capability
+				// itself is confirmed by direct probes.
 				"nemotron-3-ultra-free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Tools:             boolPtr(true),
 					ToolSchema:        strPtr("json_schema"),
 					Reasoning:         boolPtr(true),
 				},
+				"nemotron-3.5-lightning-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Reasoning:         boolPtr(true),
+				},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
-			Tools:               false,
-			StructuredOutputs:   "none",
+			Tools:               true,
+			StructuredOutputs:   "model_dependent",
 			Logprobs:            false,
 			Metadata:            true,
 			Seed:                true,
@@ -345,7 +372,7 @@ func getOpenCodeConfig() types.ProviderConfig {
 			MaxTokens:           true,
 			MaxCompletionTokens: true,
 			MultipleChoices:     false,
-			ToolSchema:          "none",
+			ToolSchema:          "json_schema",
 		},
 		Limits:       types.ProviderLimits{},
 		ProviderType: "openai",

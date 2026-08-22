@@ -352,6 +352,73 @@ func TestPrepareRequest_OpenCodeShaping(t *testing.T) {
 	assert.NotContains(t, payload, "max_completion_tokens")
 }
 
+func TestPrepareRequest_OpenCodeResponsesBackedModelKeepsMaxCompletionTokens(t *testing.T) {
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{
+		Messages:  []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+		MaxTokens: ptrInt(11),
+	}
+
+	body, err := svc.prepareRequest(req, "muse-spark-1.2-contributor-free", "https://opencode.ai/zen/v1", "openai", types.ProviderAuth{Type: "bearer", Env: "OPENCODE_ZEN_API_KEY"})
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(body, &payload))
+	assert.Equal(t, float64(11), payload["max_completion_tokens"])
+	assert.NotContains(t, payload, "max_tokens")
+}
+
+func TestNormalizeRequestForProvider_OpenCodeTokenParamDialects(t *testing.T) {
+	tests := []struct {
+		name                string
+		model               string
+		maxTokens           *int
+		maxCompletionTokens *int
+		wantMaxTokens       *int
+		wantMaxCompTokens   *int
+	}{
+		{
+			name:                "chat dialect maps completion tokens to max_tokens",
+			model:               "x-preview-f-free",
+			maxCompletionTokens: ptrInt(7),
+			wantMaxTokens:       ptrInt(7),
+		},
+		{
+			name:          "chat dialect keeps max_tokens as-is",
+			model:         "hy3-free",
+			maxTokens:     ptrInt(9),
+			wantMaxTokens: ptrInt(9),
+		},
+		{
+			name:              "responses dialect maps max_tokens to completion tokens",
+			model:             "muse-spark-1.2-contributor-free",
+			maxTokens:         ptrInt(5),
+			wantMaxCompTokens: ptrInt(5),
+		},
+		{
+			name:                "responses dialect prefers existing completion tokens",
+			model:               "muse-spark-1.2-contributor-free",
+			maxTokens:           ptrInt(5),
+			maxCompletionTokens: ptrInt(8),
+			wantMaxCompTokens:   ptrInt(8),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := types.ChatCompletionRequest{
+				Messages:            []types.OpenAIMessage{{Role: "user", Content: "Hi"}},
+				MaxTokens:           tt.maxTokens,
+				MaxCompletionTokens: tt.maxCompletionTokens,
+			}
+
+			got := normalizeRequestForProvider(req, "opencode", tt.model)
+			assert.Equal(t, tt.wantMaxTokens, got.MaxTokens)
+			assert.Equal(t, tt.wantMaxCompTokens, got.MaxCompletionTokens)
+		})
+	}
+}
+
 func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
 	t.Setenv(cloudflareAccountIDEnv, "acct-123")
 

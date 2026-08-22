@@ -361,6 +361,15 @@ func isStrictJSONSchema(format *types.ResponseFormat) bool {
 		*format.JSONSchema.Strict
 }
 
+func isResponsesBackedOpenCodeModel(model string) bool {
+	switch model {
+	case "muse-spark-1.2-contributor-free":
+		return true
+	default:
+		return false
+	}
+}
+
 func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, model string) types.ChatCompletionRequest {
 	request = normalizeStructuredOutputForProvider(request, provider, model)
 	applyReasoningForProvider(&request, provider, request.ProviderCapabilities)
@@ -372,6 +381,15 @@ func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, 
 		}
 		request.MaxTokens = nil
 	case "opencode":
+		// Muse Spark rides Zen's Responses API bridge: it rejects legacy
+		// max_tokens with a 400 and only honors max_completion_tokens.
+		if isResponsesBackedOpenCodeModel(model) {
+			if request.MaxCompletionTokens == nil && request.MaxTokens != nil {
+				request.MaxCompletionTokens = request.MaxTokens
+			}
+			request.MaxTokens = nil
+			break
+		}
 		if request.MaxTokens == nil && request.MaxCompletionTokens != nil {
 			request.MaxTokens = request.MaxCompletionTokens
 		}

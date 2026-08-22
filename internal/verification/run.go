@@ -261,12 +261,14 @@ func recoverModel(runner *Runner, original modelExecutionResult) modelExecutionR
 		Name:   "final_recovery_check",
 		Fields: []string{"messages", "max_tokens"},
 		Run: func(r *Runner, combo Combo) ProbeResult {
+			maxTokens, maxCompletionTokens := tokenLimitForProbe(combo, r.config, 8, false)
 			req := types.ChatCompletionRequest{
-				Model:     combo.Model,
-				Messages:  basicMessages("Reply with OK only."),
-				MaxTokens: probeTokenPtr(r.config, 8),
+				Model:               combo.Model,
+				Messages:            basicMessages("Reply with OK only."),
+				MaxTokens:           maxTokens,
+				MaxCompletionTokens: maxCompletionTokens,
 			}
-			return r.runJSONProbe(combo, "final_recovery_check", []string{"messages", "max_tokens"}, req, validateNonEmptyChatMessage)
+			return r.runJSONProbe(combo, "final_recovery_check", []string{"messages", tokenParamField(maxTokens, maxCompletionTokens)}, req, validateNonEmptyChatMessage)
 		},
 	}
 
