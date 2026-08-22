@@ -13,8 +13,15 @@ import (
 var thinkTagPattern = regexp.MustCompile(`(?s)<think>(.*?)</think>`)
 
 // extractThinkTags splits <think>...</think> blocks out of content, returning
-// the remaining visible text and the joined reasoning text.
+// the remaining visible text and the joined reasoning text. Extraction only
+// fires when content *opens* with a think block — deepseek-style models emit
+// reasoning first, so tags appearing mid-text are treated as literal output
+// (e.g. a model demonstrating XML at the user's request) and left untouched.
 func extractThinkTags(content string) (visible string, reasoning string, found bool) {
+	trimmedStart := strings.TrimLeft(content, " \t\r\n")
+	if !strings.HasPrefix(trimmedStart, "<think>") {
+		return content, "", false
+	}
 	matches := thinkTagPattern.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {
 		return content, "", false
@@ -35,6 +42,11 @@ type OpenAIMessage struct {
 	Name       string     `json:"name,omitempty"`         // optional name
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // tool calls made by assistant
 	ToolCallID string     `json:"tool_call_id,omitempty"` // ID of tool call (for tool role)
+	// ThinkingBlocks preserves client-echoed reasoning blocks (with
+	// signatures) across multi-turn replay. They are parsed for gateway-side
+	// fidelity but stripped before any upstream request — no current provider
+	// target accepts this extension field.
+	ThinkingBlocks []ThinkingBlock `json:"thinking_blocks,omitempty"`
 }
 
 type ContentPart struct {

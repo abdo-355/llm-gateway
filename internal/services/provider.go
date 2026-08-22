@@ -336,6 +336,16 @@ func (s *ProviderService) prepareRequest(request types.ChatCompletionRequest, mo
 	provider := detectProvider(baseURL, providerType, auth)
 	request = normalizeRequestForProvider(request, provider, model)
 
+	// thinking_blocks are a gateway extension; no upstream dialect accepts
+	// them on requests, so strip them from replayed history. The copy keeps
+	// the caller's message slice untouched.
+	messages := make([]types.OpenAIMessage, len(request.Messages))
+	copy(messages, request.Messages)
+	for i := range messages {
+		messages[i].ThinkingBlocks = nil
+	}
+	request.Messages = messages
+
 	if request.ResponseFormat != nil && request.ResponseFormat.Type == "json_object" {
 		request.Messages = ensureJSONKeyword(request.Messages)
 	}

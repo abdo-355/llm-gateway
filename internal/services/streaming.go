@@ -7,13 +7,14 @@ import (
 // streamNormalizer enforces litellm-style stream discipline for one upstream
 // attempt: stable chunk identity across the whole stream, usage-artifact
 // suppression unless the client asked for include_usage, and terminal
-// finish_reason synthesis for upstreams that end without one.
+// synthesis (finish_reason, usage) for upstreams that end without them.
 type streamNormalizer struct {
 	latched         bool
 	id              string
 	created         int64
 	model           string
 	sawFinishReason bool
+	usageSeen       bool
 	includeUsage    bool
 }
 
@@ -57,6 +58,9 @@ func (n *streamNormalizer) Process(chunk *types.SSEChunk) bool {
 			n.sawFinishReason = true
 		}
 	}
+	if chunk.Usage != nil {
+		n.usageSeen = true
+	}
 
 	// A choices-less usage chunk is an OpenAI include_usage artifact; forward
 	// it only when the caller actually requested usage.
@@ -67,26 +71,40 @@ func (n *streamNormalizer) Process(chunk *types.SSEChunk) bool {
 	return true
 }
 
-// TerminalChunk builds the closing choice for upstreams that ended without any
-// finish_reason, keeping client parsers well-formed before [DONE]. Returns nil
-// when the upstream already terminated properly.
-func (n *streamNormalizer) TerminalChunk() *types.SSEChunk {
-	if n.sawFinishReason {
-		return nil
+// TerminalChunks builds the closing frames for upstreams that ended without a
+// finish_reason and/or without the usage the client explicitly requested,
+// keeping client parsers well-formed before [DONE]. Returns whatever is
+// missing; empty slice when the upstream already terminated properly.
+func (n *streamNormalizer) TerminalChunks() []*types.SSEChunk {
+	var chunks []*types.SSEChunk
+
+	if !n.sawFinishReason {
+		stop := "stop"
+		chunks = append(chunks, &types.SSEChunk{
+			Object:  "chat.completion.chunk",
+			Created: n.created,
+			ID:      n.id,
+			Model:   n.model,
+			Choices: []types.DeltaChoice{{
+				Index:        0,
+				Delta:        types.DeltaMessage{},
+				FinishReason: &stop,
+			}},
+		})
 	}
-	stop := "stop"
-	chunk := &types.SSEChunk{
-		Object:  "chat.completion.chunk",
-		Created: n.created,
-		ID:      n.id,
-		Model:   n.model,
-		Choices: []types.DeltaChoice{{
-			Index:        0,
-			Delta:        types.DeltaMessage{},
-			FinishReason: &stop,
-		}},
+
+	if n.includeUsage && !n.usageSeen {
+		chunks = append(chunks, &types.SSEChunk{
+			Object:  "chat.completion.chunk",
+			Created: n.created,
+			ID:      n.id,
+			Model:   n.model,
+			Choices: []types.DeltaChoice{},
+			Usage:   &types.Usage{},
+		})
 	}
-	return chunk
+
+	return chunks
 }
 
 // chunkHasPayload reports whether a chunk carries anything a client renders:

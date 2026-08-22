@@ -213,6 +213,12 @@ func TestApplyReasoningForProvider(t *testing.T) {
 		require.NotNil(t, req.Thinking)
 		assert.Equal(t, "enabled", req.Thinking.Type)
 
+		// Disabled requests forward the official toggle rather than dropping:
+		// Z.ai hybrid models honor thinking.type=disabled (litellm parity).
+		off := run(types.ChatCompletionRequest{ReasoningEffort: strPtr("none")}, zaiProviderID, reasoningCaps())
+		require.NotNil(t, off.Thinking)
+		assert.Equal(t, "disabled", off.Thinking.Type)
+
 		dropped := run(types.ChatCompletionRequest{ReasoningEffort: strPtr("high")}, zaiProviderID, types.ProviderCapabilities{})
 		assert.Nil(t, dropped.Thinking)
 		assert.Nil(t, dropped.ReasoningEffort)
@@ -262,6 +268,28 @@ func TestApplyOllamaThinking(t *testing.T) {
 	// Capability gate runs first — ollama hard-errors otherwise.
 	assert.Nil(t, build(
 		types.ChatCompletionRequest{ReasoningEffort: strPtr("high")}, "gemma3:27b", types.ProviderCapabilities{}))
+}
+
+func TestPrepareRequestStripsThinkingBlocks(t *testing.T) {
+	svc := newProviderService()
+
+	request := types.ChatCompletionRequest{
+		Model: "gpt-oss:120b",
+		Messages: []types.OpenAIMessage{
+			{Role: "user", Content: "hi"},
+			{Role: "assistant", Content: "answer",
+				ThinkingBlocks: []types.ThinkingBlock{{Type: "thinking", Thinking: "hmm", Signature: "sig"}}},
+			{Role: "user", Content: "continue"},
+		},
+	}
+
+	body, err := svc.prepareRequest(request, "gpt-oss:120b", "https://api.groq.com/openai/v1", "openai", types.ProviderAuth{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), "thinking_blocks")
+	assert.NotContains(t, string(body), `"signature"`)
+
+	// The caller's struct keeps the blocks — stripping is upstream-only.
+	assert.Len(t, request.Messages[1].ThinkingBlocks, 1)
 }
 
 func TestDeriveRequirementsDetectsReasoning(t *testing.T) {

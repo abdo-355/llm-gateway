@@ -55,19 +55,43 @@ func TestStreamNormalizerTerminalSynthesis(t *testing.T) {
 		assert.True(t, normalizer.Process(&types.SSEChunk{ID: "id-1", Model: "m",
 			Choices: []types.DeltaChoice{{Delta: types.DeltaMessage{Content: ptrString("text")}}}}))
 
-		terminal := normalizer.TerminalChunk()
-		require.NotNil(t, terminal)
-		require.Len(t, terminal.Choices, 1)
-		require.NotNil(t, terminal.Choices[0].FinishReason)
-		assert.Equal(t, "stop", *terminal.Choices[0].FinishReason)
-		assert.Equal(t, "id-1", terminal.ID)
+		terminal := normalizer.TerminalChunks()
+		require.Len(t, terminal, 1)
+		require.Len(t, terminal[0].Choices, 1)
+		require.NotNil(t, terminal[0].Choices[0].FinishReason)
+		assert.Equal(t, "stop", *terminal[0].Choices[0].FinishReason)
+		assert.Equal(t, "id-1", terminal[0].ID)
 	})
 
-	t.Run("no synthesis when finish_reason arrived", func(t *testing.T) {
+	t.Run("no stop synthesis when finish_reason arrived", func(t *testing.T) {
 		normalizer := newStreamNormalizer(types.ChatCompletionRequest{})
 		normalizer.Process(&types.SSEChunk{ID: "id-2", Model: "m",
 			Choices: []types.DeltaChoice{{Delta: types.DeltaMessage{Content: ptrString("t")}, FinishReason: strPtr("stop")}}})
-		assert.Nil(t, normalizer.TerminalChunk())
+		assert.Empty(t, normalizer.TerminalChunks())
+	})
+
+	t.Run("synthesizes usage chunk when include_usage set but upstream silent", func(t *testing.T) {
+		req := types.ChatCompletionRequest{
+			StreamOptions: &types.StreamOptions{IncludeUsage: boolPtr(true)},
+		}
+		normalizer := newStreamNormalizer(req)
+		normalizer.Process(&types.SSEChunk{ID: "id-3", Model: "m",
+			Choices: []types.DeltaChoice{{Delta: types.DeltaMessage{Content: ptrString("t")}, FinishReason: strPtr("stop")}}})
+
+		terminal := normalizer.TerminalChunks()
+		require.Len(t, terminal, 1)
+		assert.NotNil(t, terminal[0].Usage)
+		assert.Empty(t, terminal[0].Choices, "usage chunk carries no choices")
+	})
+
+	t.Run("no usage synthesis when upstream already reported usage", func(t *testing.T) {
+		req := types.ChatCompletionRequest{
+			StreamOptions: &types.StreamOptions{IncludeUsage: boolPtr(true)},
+		}
+		normalizer := newStreamNormalizer(req)
+		normalizer.Process(&types.SSEChunk{ID: "id-4", Model: "m", Usage: &types.Usage{},
+			Choices: []types.DeltaChoice{{FinishReason: strPtr("stop")}}})
+		assert.Empty(t, normalizer.TerminalChunks())
 	})
 }
 

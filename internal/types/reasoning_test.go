@@ -118,11 +118,25 @@ func TestExtractThinkTags(t *testing.T) {
 	_, _, found = extractThinkTags("no tags here")
 	assert.False(t, found)
 
+	// Leading whitespace before the opening block still counts as leading.
+	visible, reasoning, found = extractThinkTags("\n  <think>plan</think>answer")
+	assert.True(t, found)
+	assert.Equal(t, "plan", reasoning)
+	assert.Equal(t, "answer", visible)
+
 	// Multiple blocks join; surrounding whitespace is trimmed.
 	visible, reasoning, found = extractThinkTags("<think>a</think>\n<think>b</think> done")
 	assert.True(t, found)
 	assert.Equal(t, "a\nb", reasoning)
 	assert.Equal(t, "done", visible)
+
+	// Tags that appear mid-text are literal output (e.g. a model
+	// demonstrating XML on request) and must not be split out.
+	literal := "Here is an example: <think>demo</think> — that's the format."
+	visible, reasoning, found = extractThinkTags(literal)
+	assert.False(t, found)
+	assert.Equal(t, literal, visible)
+	assert.Empty(t, reasoning)
 }
 
 func strPtrT(s string) *string { return &s }

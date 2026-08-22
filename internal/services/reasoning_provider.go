@@ -27,11 +27,12 @@ func applyReasoningForProvider(req *types.ChatCompletionRequest, providerID stri
 
 	if providerID == zaiProviderID {
 		// Z.ai GLM models take thinking:{type} rather than an effort ladder.
+		// Both toggle values are officially supported on hybrid models.
 		if !SupportsReasoningLevel(caps, resolved.Level) {
 			return
 		}
 		if resolved.Disabled {
-			// GLM hybrid-thinking models cannot reliably disable thinking.
+			req.Thinking = &types.ThinkingConfig{Type: "disabled"}
 			return
 		}
 		req.Thinking = &types.ThinkingConfig{Type: "enabled"}

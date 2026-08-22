@@ -1241,7 +1241,7 @@ func (r *Router) ExecuteStream(
 			latencyMs := time.Since(startTime).Milliseconds()
 
 			if err == nil {
-				if terminal := normalizer.TerminalChunk(); terminal != nil {
+				for _, terminal := range normalizer.TerminalChunks() {
 					select {
 					case chunks <- terminal:
 					case <-ctx.Done():
