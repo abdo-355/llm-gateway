@@ -356,13 +356,13 @@ func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []Provi
 
 	pipe := s.redis.Pipeline()
 	type cmdGroup struct {
-		pair            ProviderModelPair
-		stateCmd        *redis.StringCmd
-		failuresCmd     *redis.StringCmd
-		successesCmd    *redis.StringCmd
-		lastFailureCmd  *redis.StringCmd
-		scoreCmd        *redis.StringCmd
-		latencyCmd      *redis.ZSliceCmd
+		pair           ProviderModelPair
+		stateCmd       *redis.StringCmd
+		failuresCmd    *redis.StringCmd
+		successesCmd   *redis.StringCmd
+		lastFailureCmd *redis.StringCmd
+		scoreCmd       *redis.StringCmd
+		latencyCmd     *redis.ZSliceCmd
 	}
 	groups := make([]cmdGroup, len(pairs))
 

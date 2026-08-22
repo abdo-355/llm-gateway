@@ -54,25 +54,31 @@ var budgetLadder map[string]int
 
 func getBudgetLadder() map[string]int {
 	budgetLadderOnce.Do(func() {
-		ladder := map[string]int{
-			ReasoningMinimal: defaultBudgetMinimal,
-			ReasoningLow:     defaultBudgetLow,
-			ReasoningMedium:  defaultBudgetMedium,
-			ReasoningHigh:    defaultBudgetHigh,
-			ReasoningXHigh:   defaultBudgetXHigh,
-			ReasoningMax:     defaultBudgetMax,
-		}
-		for level, current := range ladder {
-			if raw := strings.TrimSpace(os.Getenv("REASONING_BUDGET_" + strings.ToUpper(level))); raw != "" {
-				if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
-					current = n
-				}
-			}
-			ladder[level] = current
-		}
-		budgetLadder = ladder
+		budgetLadder = loadBudgetLadder()
 	})
 	return budgetLadder
+}
+
+// loadBudgetLadder builds the effort→budget table from defaults plus
+// REASONING_BUDGET_<LEVEL> overrides. Kept separate from the once-guard so
+// tests can exercise override handling directly.
+func loadBudgetLadder() map[string]int {
+	ladder := map[string]int{
+		ReasoningMinimal: defaultBudgetMinimal,
+		ReasoningLow:     defaultBudgetLow,
+		ReasoningMedium:  defaultBudgetMedium,
+		ReasoningHigh:    defaultBudgetHigh,
+		ReasoningXHigh:   defaultBudgetXHigh,
+		ReasoningMax:     defaultBudgetMax,
+	}
+	for level := range ladder {
+		if raw := strings.TrimSpace(os.Getenv("REASONING_BUDGET_" + strings.ToUpper(level))); raw != "" {
+			if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+				ladder[level] = n
+			}
+		}
+	}
+	return ladder
 }
 
 // CanonicalizeReasoningEffort normalizes client-supplied effort vocabulary to a

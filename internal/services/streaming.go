@@ -68,8 +68,12 @@ func (n *streamNormalizer) Process(chunk *types.SSEChunk) bool {
 }
 
 // TerminalChunk builds the closing choice for upstreams that ended without any
-// finish_reason, keeping client parsers well-formed before [DONE].
+// finish_reason, keeping client parsers well-formed before [DONE]. Returns nil
+// when the upstream already terminated properly.
 func (n *streamNormalizer) TerminalChunk() *types.SSEChunk {
+	if n.sawFinishReason {
+		return nil
+	}
 	stop := "stop"
 	chunk := &types.SSEChunk{
 		Object:  "chat.completion.chunk",

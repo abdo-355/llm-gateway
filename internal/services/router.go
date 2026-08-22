@@ -1241,9 +1241,9 @@ func (r *Router) ExecuteStream(
 			latencyMs := time.Since(startTime).Milliseconds()
 
 			if err == nil {
-				if !normalizer.sawFinishReason {
+				if terminal := normalizer.TerminalChunk(); terminal != nil {
 					select {
-					case chunks <- normalizer.TerminalChunk():
+					case chunks <- terminal:
 					case <-ctx.Done():
 						r.releaseTokenReservation(ctx, reservation)
 						return

@@ -41,7 +41,14 @@ func applyReasoningForProvider(req *types.ChatCompletionRequest, providerID stri
 	// Remaining targets speak the OpenAI reasoning_effort dialect through their
 	// compatible endpoints (groq, nim, kilo, opencode, nous, openrouter*,
 	// gemini's OpenAI layer).
-	if !SupportsReasoningLevel(caps, resolved.Level) {
+	level := resolved.Level
+	if (providerID == "openrouter" || providerID == "openrouter-alpha") && level == ReasoningMax {
+		// Dialect translation runs before capability gating: OpenRouter's
+		// vocabulary tops out at xhigh.
+		level = ReasoningXHigh
+	}
+
+	if !SupportsReasoningLevel(caps, level) {
 		return
 	}
 
@@ -52,11 +59,6 @@ func applyReasoningForProvider(req *types.ChatCompletionRequest, providerID stri
 		return
 	}
 
-	level := resolved.Level
-	if (providerID == "openrouter" || providerID == "openrouter-alpha") && level == ReasoningMax {
-		// OpenRouter's vocabulary tops out at xhigh.
-		level = ReasoningXHigh
-	}
 	req.ReasoningEffort = &level
 
 	// A synthesized token budget needs answer room above it when the caller

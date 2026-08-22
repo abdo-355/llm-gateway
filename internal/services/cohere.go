@@ -20,11 +20,11 @@ import (
 const cohereProviderType = "cohere"
 
 type cohereChatRequest struct {
-	Model       string  `json:"model"`
-	Message     string  `json:"message"`
-	Temperature float64 `json:"temperature,omitempty"`
-	Stream      bool    `json:"stream,omitempty"`
-	MaxTokens   *int    `json:"max_tokens,omitempty"`
+	Model       string   `json:"model"`
+	Message     string   `json:"message"`
+	Temperature float64  `json:"temperature,omitempty"`
+	Stream      bool     `json:"stream,omitempty"`
+	MaxTokens   *int     `json:"max_tokens,omitempty"`
 	P           *float64 `json:"p,omitempty"`
 }
 
@@ -215,8 +215,8 @@ func (s *ProviderService) callCohereStreamProvider(
 				chunks <- &types.SSEChunk{
 					Object: "chat.completion.chunk",
 					Choices: []types.DeltaChoice{{
-						Index: 0,
-						Delta: types.DeltaMessage{},
+						Index:        0,
+						Delta:        types.DeltaMessage{},
 						FinishReason: func() *string { s := "stop"; return &s }(),
 					}},
 				}
@@ -231,9 +231,9 @@ func (s *ProviderService) callCohereStreamProvider(
 			switch event.EventType {
 			case "text-generation":
 				chunk := &types.SSEChunk{
-					ID:     generationID,
-					Object: "chat.completion.chunk",
-					Model:  model,
+					ID:      generationID,
+					Object:  "chat.completion.chunk",
+					Model:   model,
 					Created: time.Now().Unix(),
 					Choices: []types.DeltaChoice{{
 						Index:        0,
@@ -246,9 +246,9 @@ func (s *ProviderService) callCohereStreamProvider(
 			case "stream-end":
 				finishReason := "stop"
 				chunks <- &types.SSEChunk{
-					ID:     generationID,
-					Object: "chat.completion.chunk",
-					Model:  model,
+					ID:      generationID,
+					Object:  "chat.completion.chunk",
+					Model:   model,
 					Created: time.Now().Unix(),
 					Choices: []types.DeltaChoice{{
 						Index:        0,
@@ -261,9 +261,9 @@ func (s *ProviderService) callCohereStreamProvider(
 					completionTokens := int(math.Round(event.Meta.Tokens.OutputTokens))
 					totalTokens := promptTokens + completionTokens
 					chunks <- &types.SSEChunk{
-						ID:     generationID,
-						Object: "chat.completion.chunk",
-						Model:  model,
+						ID:      generationID,
+						Object:  "chat.completion.chunk",
+						Model:   model,
 						Created: time.Now().Unix(),
 						Choices: []types.DeltaChoice{{
 							Index: 0,
