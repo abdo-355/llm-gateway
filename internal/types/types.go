@@ -86,8 +86,26 @@ type ChatCompletionRequest struct {
 	ParallelToolCalls    *bool                `json:"parallel_tool_calls,omitempty"`
 	User                 string               `json:"user,omitempty"`
 	Metadata             map[string]string    `json:"metadata,omitempty"`
-	Router               *RouterHints         `json:"router,omitempty"` // Internal gateway routing hints
+	ReasoningEffort      *string              `json:"reasoning_effort,omitempty"` // minimal, low, medium, high, xhigh, max; none/disable turns reasoning off
+	Thinking             *ThinkingConfig      `json:"thinking,omitempty"`         // Anthropic-style {type, budget_tokens}
+	Router               *RouterHints         `json:"router,omitempty"`           // Internal gateway routing hints
 	ProviderCapabilities ProviderCapabilities `json:"-"`
+}
+
+// ThinkingConfig mirrors the Anthropic extended-thinking request shape.
+type ThinkingConfig struct {
+	Type         string `json:"type"` // enabled or disabled
+	BudgetTokens *int   `json:"budget_tokens,omitempty"`
+}
+
+// ThinkingBlock is a provider thinking block as returned in responses.
+// Signature is preserved verbatim for Anthropic-style replay; redacted
+// blocks carry their opaque payload in Data.
+type ThinkingBlock struct {
+	Type      string `json:"type"` // thinking or redacted_thinking
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	Data      string `json:"data,omitempty"`
 }
 
 type StreamOptions struct {
@@ -112,18 +130,24 @@ type Choice struct {
 }
 
 type ResponseMessage struct {
-	Role      string     `json:"role"`
-	Content   *string    `json:"content"` // null if tool calls present
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-	Refusal   *string    `json:"refusal,omitempty"`
+	Role           string          `json:"role"`
+	Content        *string         `json:"content"` // null if tool calls present
+	ToolCalls      []ToolCall      `json:"tool_calls,omitempty"`
+	Refusal        *string         `json:"refusal,omitempty"`
+	ReasoningContent *string       `json:"reasoning_content,omitempty"`
+	ThinkingBlocks []ThinkingBlock `json:"thinking_blocks,omitempty"`
 }
 
 func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
 	type alias struct {
-		Role      string          `json:"role"`
-		Content   json.RawMessage `json:"content"`
-		ToolCalls []ToolCall      `json:"tool_calls,omitempty"`
-		Refusal   *string         `json:"refusal,omitempty"`
+		Role              string          `json:"role"`
+		Content           json.RawMessage `json:"content"`
+		ToolCalls         []ToolCall      `json:"tool_calls,omitempty"`
+		Refusal           *string         `json:"refusal,omitempty"`
+		ReasoningContent  string          `json:"reasoning_content"`
+		Reasoning         string          `json:"reasoning"`  // Groq/Cerebras/OpenRouter variant
+		Thinking          string          `json:"thinking"`   // Ollama variant
+		ThinkingBlocks    []ThinkingBlock `json:"thinking_blocks"`
 	}
 
 	var parsed alias
@@ -131,7 +155,7 @@ func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	content, err := parseVisibleContent(parsed.Content)
+	content, blocks, err := parseContentWithReasoning(parsed.Content)
 	if err != nil {
 		return err
 	}
@@ -140,6 +164,8 @@ func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
 	m.Content = content
 	m.ToolCalls = parsed.ToolCalls
 	m.Refusal = parsed.Refusal
+	m.ThinkingBlocks = append(blocks, parsed.ThinkingBlocks...)
+	m.ReasoningContent = resolveReasoningContent(parsed.ReasoningContent, parsed.Reasoning, parsed.Thinking, m.ThinkingBlocks)
 	return nil
 }
 
@@ -199,18 +225,24 @@ type DeltaChoice struct {
 
 // DeltaMessage represents the delta in a streaming chunk
 type DeltaMessage struct {
-	Role      string          `json:"role,omitempty"`
-	Content   *string         `json:"content,omitempty"`
-	ToolCalls []DeltaToolCall `json:"tool_calls,omitempty"`
-	Refusal   *string         `json:"refusal,omitempty"`
+	Role             string          `json:"role,omitempty"`
+	Content          *string         `json:"content,omitempty"`
+	ToolCalls        []DeltaToolCall `json:"tool_calls,omitempty"`
+	Refusal          *string         `json:"refusal,omitempty"`
+	ReasoningContent *string         `json:"reasoning_content,omitempty"`
+	ThinkingBlocks   []ThinkingBlock `json:"thinking_blocks,omitempty"`
 }
 
 func (m *DeltaMessage) UnmarshalJSON(data []byte) error {
 	type alias struct {
-		Role      string          `json:"role,omitempty"`
-		Content   json.RawMessage `json:"content,omitempty"`
-		ToolCalls []DeltaToolCall `json:"tool_calls,omitempty"`
-		Refusal   *string         `json:"refusal,omitempty"`
+		Role             string          `json:"role,omitempty"`
+		Content          json.RawMessage `json:"content,omitempty"`
+		ToolCalls        []DeltaToolCall `json:"tool_calls,omitempty"`
+		Refusal          *string         `json:"refusal,omitempty"`
+		ReasoningContent string          `json:"reasoning_content"`
+		Reasoning        string          `json:"reasoning"` // Groq/Cerebras/OpenRouter variant
+		Thinking         string          `json:"thinking"`  // Ollama variant
+		ThinkingBlocks   []ThinkingBlock `json:"thinking_blocks"`
 	}
 
 	var parsed alias
@@ -218,7 +250,7 @@ func (m *DeltaMessage) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	content, err := parseVisibleContent(parsed.Content)
+	content, blocks, err := parseContentWithReasoning(parsed.Content)
 	if err != nil {
 		return err
 	}
@@ -227,6 +259,8 @@ func (m *DeltaMessage) UnmarshalJSON(data []byte) error {
 	m.Content = content
 	m.ToolCalls = parsed.ToolCalls
 	m.Refusal = parsed.Refusal
+	m.ThinkingBlocks = append(blocks, parsed.ThinkingBlocks...)
+	m.ReasoningContent = resolveReasoningContent(parsed.ReasoningContent, parsed.Reasoning, parsed.Thinking, m.ThinkingBlocks)
 	return nil
 }
 
@@ -242,32 +276,36 @@ type DeltaFunction struct {
 	Arguments *string `json:"arguments,omitempty"`
 }
 
-func parseVisibleContent(raw json.RawMessage) (*string, error) {
+// parseContentWithReasoning extracts the visible assistant text from a content
+// field while harvesting typed thinking/reasoning nodes into ThinkingBlocks
+// instead of discarding them (previous behavior silently dropped them).
+func parseContentWithReasoning(raw json.RawMessage) (*string, []ThinkingBlock, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var value any
 	if err := json.Unmarshal(trimmed, &value); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	text := collectVisibleText(value)
-	if text == "" {
-		return nil, nil
+	var blocks []ThinkingBlock
+	text := collectVisibleText(value, &blocks)
+	var content *string
+	if text != "" {
+		content = &text
 	}
-
-	return &text, nil
+	return content, blocks, nil
 }
 
-func collectVisibleText(value any) string {
+func collectVisibleText(value any, blocks *[]ThinkingBlock) string {
 	parts := make([]string, 0)
-	appendVisibleText(value, &parts)
+	appendVisibleText(value, &parts, blocks)
 	return strings.Join(parts, "")
 }
 
-func appendVisibleText(value any, parts *[]string) {
+func appendVisibleText(value any, parts *[]string, blocks *[]ThinkingBlock) {
 	switch typed := value.(type) {
 	case string:
 		if typed != "" {
@@ -275,23 +313,29 @@ func appendVisibleText(value any, parts *[]string) {
 		}
 	case []any:
 		for _, item := range typed {
-			appendVisibleText(item, parts)
+			appendVisibleText(item, parts, blocks)
 		}
 	case map[string]any:
-		if thinking := typed["thinking"]; thinking != nil {
+		if blockType, ok := typed["type"].(string); ok && isReasoningBlockType(blockType) {
+			*blocks = append(*blocks, thinkingBlockFromNode(blockType, typed))
 			return
 		}
-		if reasoning := typed["reasoning"]; reasoning != nil {
+		// Mistral-style: {"thinking": [{"type":"text","text":"..."}]} without a type tag.
+		if node, ok := typed["thinking"]; ok && node != nil {
+			*blocks = append(*blocks, thinkingBlockFromTextContainer("thinking", node))
 			return
 		}
-		if partType, ok := typed["type"].(string); ok {
+		if reasoning, ok := typed["reasoning"]; ok && reasoning != nil {
+			*blocks = append(*blocks, thinkingBlockFromTextContainer("thinking", reasoning))
+			return
+		}
+		switch partType := typed["type"].(type) {
+		case string:
 			switch partType {
 			case "text", "output_text":
 				if text, ok := typed["text"].(string); ok && text != "" {
 					*parts = append(*parts, text)
 				}
-				return
-			case "thinking", "reasoning":
 				return
 			}
 		}
@@ -300,9 +344,99 @@ func appendVisibleText(value any, parts *[]string) {
 			return
 		}
 		if content, ok := typed["content"]; ok {
-			appendVisibleText(content, parts)
+			appendVisibleText(content, parts, blocks)
 		}
 	}
+}
+
+func isReasoningBlockType(t string) bool {
+	switch t {
+	case "thinking", "redacted_thinking", "reasoning":
+		return true
+	}
+	return false
+}
+
+// thinkingBlockFromNode converts an Anthropic-style typed node into a canonical
+// ThinkingBlock. Signatures are preserved verbatim for round-trip fidelity.
+func thinkingBlockFromNode(blockType string, node map[string]any) ThinkingBlock {
+	block := ThinkingBlock{Type: blockType}
+	if sig, ok := node["signature"].(string); ok {
+		block.Signature = sig
+	}
+	if data, ok := node["data"].(string); ok && data != "" {
+		block.Data = data
+	}
+	block.Thinking = reasoningTextFromValue(node["thinking"])
+	if block.Thinking == "" {
+		block.Thinking = reasoningTextFromValue(node["reasoning"])
+	}
+	if block.Thinking == "" {
+		block.Thinking = reasoningTextFromValue(node["text"])
+	}
+	return block
+}
+
+// thinkingBlockFromTextContainer handles containers whose payload is either a
+// plain string or an array of {type:"text",text:"..."} fragments.
+func thinkingBlockFromTextContainer(containerType string, value any) ThinkingBlock {
+	return ThinkingBlock{
+		Type:     containerType,
+		Thinking: reasoningTextFromValue(value),
+	}
+}
+
+func reasoningTextFromValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []any:
+		parts := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if m, ok := item.(map[string]any); ok {
+				if text, ok := m["text"].(string); ok && text != "" {
+					parts = append(parts, text)
+				}
+				continue
+			}
+			if s, ok := item.(string); ok && s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, "")
+	default:
+		return ""
+	}
+}
+
+// resolveReasoningContent picks the flat reasoning string: explicit fields win,
+// then provider-variant aliases, then a flattening of harvested thinking blocks.
+func resolveReasoningContent(reasoningContent, reasoning, thinking string, blocks []ThinkingBlock) *string {
+	if reasoningContent != "" {
+		return &reasoningContent
+	}
+	if reasoning != "" {
+		return &reasoning
+	}
+	if thinking != "" {
+		return &thinking
+	}
+	flat := flattenThinkingBlocks(blocks)
+	if flat != "" {
+		return &flat
+	}
+	return nil
+}
+
+func flattenThinkingBlocks(blocks []ThinkingBlock) string {
+	parts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Type == "redacted_thinking" || block.Thinking == "" {
+			continue
+		}
+		parts = append(parts, block.Thinking)
+	}
+	return strings.Join(parts, "")
 }
 
 type RouterHints struct {
@@ -319,6 +453,7 @@ type RouterRequirements struct {
 	Output    *string `json:"output,omitempty"`    // text, json_object, json_schema, json_schema_strict
 	Streaming *string `json:"streaming,omitempty"` // required, preferred, forbidden
 	Tools     *string `json:"tools,omitempty"`     // required, allowed, forbidden
+	Reasoning *string `json:"reasoning,omitempty"` // required, preferred, forbidden
 }
 
 type BudgetConfig struct {
@@ -470,6 +605,11 @@ type ProviderCapabilities struct {
 	MaxCompletionTokens bool   `json:"maxCompletionTokens,omitempty"`
 	MultipleChoices     bool   `json:"multipleChoices,omitempty"`
 	ToolSchema          string `json:"toolSchema,omitempty"` // json_schema, openapi
+	// Reasoning marks providers/models that accept reasoning_effort or an
+	// equivalent native parameter. ReasoningLevels lists the effort levels the
+	// target accepts; nil means the common default (minimal..high).
+	Reasoning       bool     `json:"reasoning,omitempty"`
+	ReasoningLevels []string `json:"reasoningLevels,omitempty"`
 }
 
 type ModelCapabilities struct {
@@ -486,6 +626,8 @@ type ModelCapabilities struct {
 	MaxCompletionTokens *bool   `json:"maxCompletionTokens,omitempty"`
 	MultipleChoices     *bool   `json:"multipleChoices,omitempty"`
 	ToolSchema          *string `json:"toolSchema,omitempty"`
+	Reasoning           *bool   `json:"reasoning,omitempty"`
+	ReasoningLevels     []string `json:"reasoningLevels,omitempty"`
 }
 
 type ProviderLimits struct {
@@ -538,6 +680,7 @@ type DerivedRequirements struct {
 	Output    string `json:"output"`    // text, json_object, json_schema, json_schema_strict
 	Streaming string `json:"streaming"` // required, preferred, forbidden
 	Tools     string `json:"tools"`     // required, allowed, forbidden
+	Reasoning string `json:"reasoning"` // required, preferred, forbidden
 }
 
 type RoutingCandidate struct {
@@ -621,7 +764,14 @@ type ResponseRequest struct {
 	TopP                *float64          `json:"top_p,omitempty"`
 	Stream              *bool             `json:"stream,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
+	Reasoning           *ResponseReasoningConfig `json:"reasoning,omitempty"`
 	Router              *RouterHints      `json:"router,omitempty"`
+}
+
+// ResponseReasoningConfig mirrors the OpenAI Responses API reasoning parameter.
+type ResponseReasoningConfig struct {
+	Effort  string          `json:"effort,omitempty"`
+	Summary json.RawMessage `json:"summary,omitempty"` // accepted for parity, not forwarded
 }
 
 type TextConfig struct {
