@@ -130,24 +130,24 @@ type Choice struct {
 }
 
 type ResponseMessage struct {
-	Role           string          `json:"role"`
-	Content        *string         `json:"content"` // null if tool calls present
-	ToolCalls      []ToolCall      `json:"tool_calls,omitempty"`
-	Refusal        *string         `json:"refusal,omitempty"`
-	ReasoningContent *string       `json:"reasoning_content,omitempty"`
-	ThinkingBlocks []ThinkingBlock `json:"thinking_blocks,omitempty"`
+	Role             string          `json:"role"`
+	Content          *string         `json:"content"` // null if tool calls present
+	ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
+	Refusal          *string         `json:"refusal,omitempty"`
+	ReasoningContent *string         `json:"reasoning_content,omitempty"`
+	ThinkingBlocks   []ThinkingBlock `json:"thinking_blocks,omitempty"`
 }
 
 func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
 	type alias struct {
-		Role              string          `json:"role"`
-		Content           json.RawMessage `json:"content"`
-		ToolCalls         []ToolCall      `json:"tool_calls,omitempty"`
-		Refusal           *string         `json:"refusal,omitempty"`
-		ReasoningContent  string          `json:"reasoning_content"`
-		Reasoning         string          `json:"reasoning"`  // Groq/Cerebras/OpenRouter variant
-		Thinking          string          `json:"thinking"`   // Ollama variant
-		ThinkingBlocks    []ThinkingBlock `json:"thinking_blocks"`
+		Role             string          `json:"role"`
+		Content          json.RawMessage `json:"content"`
+		ToolCalls        []ToolCall      `json:"tool_calls,omitempty"`
+		Refusal          *string         `json:"refusal,omitempty"`
+		ReasoningContent string          `json:"reasoning_content"`
+		Reasoning        string          `json:"reasoning"` // Groq/Cerebras/OpenRouter variant
+		Thinking         string          `json:"thinking"`  // Ollama variant
+		ThinkingBlocks   []ThinkingBlock `json:"thinking_blocks"`
 	}
 
 	var parsed alias
@@ -613,20 +613,20 @@ type ProviderCapabilities struct {
 }
 
 type ModelCapabilities struct {
-	Streaming           *bool   `json:"streaming,omitempty"`
-	Tools               *bool   `json:"tools,omitempty"`
-	StructuredOutputs   *string `json:"structuredOutputs,omitempty"`
-	Logprobs            *bool   `json:"logprobs,omitempty"`
-	Metadata            *bool   `json:"metadata,omitempty"`
-	Seed                *bool   `json:"seed,omitempty"`
-	User                *bool   `json:"user,omitempty"`
-	FrequencyPenalty    *bool   `json:"frequencyPenalty,omitempty"`
-	PresencePenalty     *bool   `json:"presencePenalty,omitempty"`
-	MaxTokens           *bool   `json:"maxTokens,omitempty"`
-	MaxCompletionTokens *bool   `json:"maxCompletionTokens,omitempty"`
-	MultipleChoices     *bool   `json:"multipleChoices,omitempty"`
-	ToolSchema          *string `json:"toolSchema,omitempty"`
-	Reasoning           *bool   `json:"reasoning,omitempty"`
+	Streaming           *bool    `json:"streaming,omitempty"`
+	Tools               *bool    `json:"tools,omitempty"`
+	StructuredOutputs   *string  `json:"structuredOutputs,omitempty"`
+	Logprobs            *bool    `json:"logprobs,omitempty"`
+	Metadata            *bool    `json:"metadata,omitempty"`
+	Seed                *bool    `json:"seed,omitempty"`
+	User                *bool    `json:"user,omitempty"`
+	FrequencyPenalty    *bool    `json:"frequencyPenalty,omitempty"`
+	PresencePenalty     *bool    `json:"presencePenalty,omitempty"`
+	MaxTokens           *bool    `json:"maxTokens,omitempty"`
+	MaxCompletionTokens *bool    `json:"maxCompletionTokens,omitempty"`
+	MultipleChoices     *bool    `json:"multipleChoices,omitempty"`
+	ToolSchema          *string  `json:"toolSchema,omitempty"`
+	Reasoning           *bool    `json:"reasoning,omitempty"`
 	ReasoningLevels     []string `json:"reasoningLevels,omitempty"`
 }
 
@@ -677,10 +677,11 @@ type AppConfig struct {
 }
 
 type DerivedRequirements struct {
-	Output    string `json:"output"`    // text, json_object, json_schema, json_schema_strict
-	Streaming string `json:"streaming"` // required, preferred, forbidden
-	Tools     string `json:"tools"`     // required, allowed, forbidden
-	Reasoning string `json:"reasoning"` // required, preferred, forbidden
+	Output         string `json:"output"`                    // text, json_object, json_schema, json_schema_strict
+	Streaming      string `json:"streaming"`                 // required, preferred, forbidden
+	Tools          string `json:"tools"`                     // required, allowed, forbidden
+	Reasoning      string `json:"reasoning"`                 // required, preferred, forbidden
+	ReasoningLevel string `json:"reasoning_level,omitempty"` // canonical level when the caller asked for one
 }
 
 type RoutingCandidate struct {
@@ -749,23 +750,23 @@ type StreamResult struct {
 }
 
 type ResponseRequest struct {
-	Model               string            `json:"model"`
-	Input               any               `json:"input"`
-	Instructions        *string           `json:"instructions,omitempty"`
-	Tools               []OpenAITool      `json:"tools,omitempty"`
-	ToolChoice          any               `json:"tool_choice,omitempty"`
-	Text                *TextConfig       `json:"text,omitempty"`
-	Store               *bool             `json:"store,omitempty"`
-	PreviousResponseID  *string           `json:"previous_response_id,omitempty"`
-	Include             []string          `json:"include,omitempty"`
-	Temperature         *float64          `json:"temperature,omitempty"`
-	MaxTokens           *int              `json:"max_tokens,omitempty"`
-	MaxCompletionTokens *int              `json:"max_completion_tokens,omitempty"`
-	TopP                *float64          `json:"top_p,omitempty"`
-	Stream              *bool             `json:"stream,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
+	Model               string                   `json:"model"`
+	Input               any                      `json:"input"`
+	Instructions        *string                  `json:"instructions,omitempty"`
+	Tools               []OpenAITool             `json:"tools,omitempty"`
+	ToolChoice          any                      `json:"tool_choice,omitempty"`
+	Text                *TextConfig              `json:"text,omitempty"`
+	Store               *bool                    `json:"store,omitempty"`
+	PreviousResponseID  *string                  `json:"previous_response_id,omitempty"`
+	Include             []string                 `json:"include,omitempty"`
+	Temperature         *float64                 `json:"temperature,omitempty"`
+	MaxTokens           *int                     `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                     `json:"max_completion_tokens,omitempty"`
+	TopP                *float64                 `json:"top_p,omitempty"`
+	Stream              *bool                    `json:"stream,omitempty"`
+	Metadata            map[string]string        `json:"metadata,omitempty"`
 	Reasoning           *ResponseReasoningConfig `json:"reasoning,omitempty"`
-	Router              *RouterHints      `json:"router,omitempty"`
+	Router              *RouterHints             `json:"router,omitempty"`
 }
 
 // ResponseReasoningConfig mirrors the OpenAI Responses API reasoning parameter.

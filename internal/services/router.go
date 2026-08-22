@@ -85,6 +85,7 @@ func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *type
 		Output:    "text",
 		Streaming: "preferred",
 		Tools:     "forbidden",
+		Reasoning: "preferred",
 	}
 
 	// Detect structured output requirements.
@@ -132,6 +133,17 @@ func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *type
 		}
 	}
 
+	// Detect reasoning: any reasoning param makes it preferred (drop on
+	// unsupported targets); the required hint opts into candidate filtering.
+	if resolvedReasoning := NormalizeReasoningParams(req); resolvedReasoning.Present {
+		requirements.Reasoning = "preferred"
+		if !resolvedReasoning.Disabled {
+			requirements.ReasoningLevel = resolvedReasoning.Level
+		}
+	} else {
+		requirements.Reasoning = "forbidden"
+	}
+
 	// Router hints override
 	if hints != nil && hints.Requirements != nil {
 		if hints.Requirements.Output != nil {
@@ -142,6 +154,9 @@ func (r *Router) DeriveRequirements(req types.ChatCompletionRequest, hints *type
 		}
 		if hints.Requirements.Tools != nil {
 			requirements.Tools = *hints.Requirements.Tools
+		}
+		if hints.Requirements.Reasoning != nil {
+			requirements.Reasoning = *hints.Requirements.Reasoning
 		}
 	}
 
@@ -288,6 +303,13 @@ func (r *Router) FilterCandidates(
 		if requirements.Tools == "required" && !caps.Tools {
 			filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "tools_not_supported"
 			continue
+		}
+
+		if requirements.Reasoning == "required" {
+			if !SupportsReasoningLevel(caps, requirements.ReasoningLevel) {
+				filtered[fmt.Sprintf("%s/%s", provider.ID, model)] = "reasoning_not_supported"
+				continue
+			}
 		}
 
 		if req.Logprobs != nil && *req.Logprobs && !caps.Logprobs {
@@ -479,8 +501,13 @@ func (r *Router) ScoreCandidates(ctx context.Context, candidates []types.Routing
 			candidate.ScoreBreakdown["strict_structured_output_penalty"] = -structuredOutputAdjustment
 		}
 
+		reasoningBonus := reasoningScoreAdjustment(requirements, r.resolveCapabilities(candidate.Provider, candidate.Model))
+		if reasoningBonus > 0 {
+			candidate.ScoreBreakdown["reasoning_bonus"] = reasoningBonus
+		}
+
 		// Combine scores
-		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score + structuredOutputAdjustment - concurrencyPenalty
+		candidate.Score = baseScore*0.5 + healthScore*0.5 + successRatioScore + candidate.Score + structuredOutputAdjustment + reasoningBonus - concurrencyPenalty
 	}
 
 	slices.SortFunc(candidates, func(a, b types.RoutingCandidate) int {
@@ -511,6 +538,21 @@ func strictStructuredOutputScoreAdjustment(requirements types.DerivedRequirement
 	}
 	if caps.StructuredOutputs == "json_object" {
 		return -2.00
+	}
+	return 0
+}
+
+// reasoningScoreAdjustment gives a small preference to candidates that can
+// honor an explicit reasoning ask. It never applies when the requirement is
+// forbidden or the request carries no reasoning params.
+func reasoningScoreAdjustment(requirements types.DerivedRequirements, caps types.ProviderCapabilities) float64 {
+	if requirements.Reasoning == "forbidden" {
+		return 0
+	}
+	if requirements.Reasoning == "required" || requirements.ReasoningLevel != "" {
+		if SupportsReasoningLevel(caps, requirements.ReasoningLevel) {
+			return 0.25
+		}
 	}
 	return 0
 }
@@ -1743,6 +1785,12 @@ func (r *Router) resolveCapabilities(provider types.ProviderConfig, model string
 	}
 	if overrides.ToolSchema != nil {
 		resolved.ToolSchema = *overrides.ToolSchema
+	}
+	if overrides.Reasoning != nil {
+		resolved.Reasoning = *overrides.Reasoning
+	}
+	if len(overrides.ReasoningLevels) > 0 {
+		resolved.ReasoningLevels = overrides.ReasoningLevels
 	}
 
 	return resolved
