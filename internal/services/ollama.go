@@ -50,6 +50,7 @@ type ollamaChatResponse struct {
 type ollamaMessage struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking,omitempty"` // reasoning text from thinking-capable models
 	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -249,6 +250,12 @@ func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string
 	promptTokens := ollamaResp.PromptEvalCount
 	completionTokens := ollamaResp.EvalCount
 
+	var reasoningContent *string
+	if ollamaResp.Message.Thinking != "" {
+		reasoning := ollamaResp.Message.Thinking
+		reasoningContent = &reasoning
+	}
+
 	return &types.ChatCompletionResponse{
 		ID:      "chatcmpl-" + uuid.NewString()[:29],
 		Object:  "chat.completion",
@@ -257,10 +264,11 @@ func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string
 		Choices: []types.Choice{{
 			Index: 0,
 			Message: types.ResponseMessage{
-				Role:      ollamaResp.Message.Role,
-				Content:   &content,
-				ToolCalls: toolCalls,
-				Refusal:   refusal,
+				Role:             ollamaResp.Message.Role,
+				Content:          &content,
+				ToolCalls:        toolCalls,
+				Refusal:          refusal,
+				ReasoningContent: reasoningContent,
 			},
 			FinishReason: "stop",
 		}},
@@ -375,9 +383,10 @@ func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.Read
 				Choices: []types.DeltaChoice{{
 					Index: 0,
 					Delta: types.DeltaMessage{
-						Role:      ollamaResp.Message.Role,
-						Content:   ollamaStrPtr(content),
-						ToolCalls: toolCalls,
+						Role:             ollamaResp.Message.Role,
+						Content:          ollamaStrPtr(content),
+						ToolCalls:        toolCalls,
+						ReasoningContent: ollamaStrPtr(ollamaResp.Message.Thinking),
 					},
 				}},
 			}
@@ -483,6 +492,7 @@ func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, b
 	scanner.Buffer(buf, 1024*1024)
 
 	var contentBuilder strings.Builder
+	var thinkingBuilder strings.Builder
 	var role string
 	var finalModel string
 	promptTokens := 0
@@ -516,6 +526,7 @@ func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, b
 		}
 
 		contentBuilder.WriteString(ollamaResp.Message.Content)
+		thinkingBuilder.WriteString(ollamaResp.Message.Thinking)
 
 		for _, tc := range ollamaResp.Message.ToolCalls {
 			argsStr := ""
@@ -554,6 +565,11 @@ func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, b
 		return nil, errors.NewEmptyResponseError(provider, model, 200)
 	}
 
+	var reasoningContent *string
+	if thinking := thinkingBuilder.String(); thinking != "" {
+		reasoningContent = &thinking
+	}
+
 	return &types.ChatCompletionResponse{
 		ID:      "chatcmpl-" + uuid.NewString()[:29],
 		Object:  "chat.completion",
@@ -562,9 +578,10 @@ func (s *ProviderService) collectOllamaStreamResult(body io.ReadCloser, model, b
 		Choices: []types.Choice{{
 			Index: 0,
 			Message: types.ResponseMessage{
-				Role:      role,
-				Content:   ollamaStrPtr(fullContent),
-				ToolCalls: toolCalls,
+				Role:             role,
+				Content:          ollamaStrPtr(fullContent),
+				ToolCalls:        toolCalls,
+				ReasoningContent: reasoningContent,
 			},
 			FinishReason: "stop",
 		}},

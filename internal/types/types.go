@@ -4,8 +4,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// thinkTagPattern matches deepseek-style inline reasoning blocks. Applied only
+// as a fallback when a provider returned no explicit reasoning field.
+var thinkTagPattern = regexp.MustCompile(`(?s)<think>(.*?)</think>`)
+
+// extractThinkTags splits <think>...</think> blocks out of content, returning
+// the remaining visible text and the joined reasoning text.
+func extractThinkTags(content string) (visible string, reasoning string, found bool) {
+	matches := thinkTagPattern.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content, "", false
+	}
+
+	reasoningParts := make([]string, 0, len(matches))
+	for _, match := range matches {
+		reasoningParts = append(reasoningParts, match[1])
+	}
+	visible = strings.TrimSpace(thinkTagPattern.ReplaceAllString(content, ""))
+	return visible, strings.Join(reasoningParts, "\n"), true
+}
 
 // OpenAIMessage represents a chat message in OpenAI format
 type OpenAIMessage struct {
@@ -166,6 +187,12 @@ func (m *ResponseMessage) UnmarshalJSON(data []byte) error {
 	m.Refusal = parsed.Refusal
 	m.ThinkingBlocks = append(blocks, parsed.ThinkingBlocks...)
 	m.ReasoningContent = resolveReasoningContent(parsed.ReasoningContent, parsed.Reasoning, parsed.Thinking, m.ThinkingBlocks)
+	if m.ReasoningContent == nil && m.Content != nil && *m.Content != "" {
+		if visible, reasoning, found := extractThinkTags(*m.Content); found {
+			m.Content = &visible
+			m.ReasoningContent = &reasoning
+		}
+	}
 	return nil
 }
 
@@ -261,6 +288,12 @@ func (m *DeltaMessage) UnmarshalJSON(data []byte) error {
 	m.Refusal = parsed.Refusal
 	m.ThinkingBlocks = append(blocks, parsed.ThinkingBlocks...)
 	m.ReasoningContent = resolveReasoningContent(parsed.ReasoningContent, parsed.Reasoning, parsed.Thinking, m.ThinkingBlocks)
+	if m.ReasoningContent == nil && m.Content != nil && *m.Content != "" {
+		if visible, reasoning, found := extractThinkTags(*m.Content); found {
+			m.Content = &visible
+			m.ReasoningContent = &reasoning
+		}
+	}
 	return nil
 }
 
