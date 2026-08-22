@@ -264,6 +264,7 @@ Failures include the exact reason when available, for example:
 | `CLOUDFLARE_ACCOUNT_ID` | No | Cloudflare account ID for Workers AI |
 | `CLOUDFLARE_API_TOKEN` | No | Cloudflare API token for Workers AI |
 | `OPENCODE_ZEN_API_KEY` | No | OpenCode Zen API key |
+| `NOUS_API_KEY` | No | Nous Portal API key |
 
 | Variable | Default | Description |
 |----------|---------|-------------|

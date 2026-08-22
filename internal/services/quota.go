@@ -548,6 +548,18 @@ func (s *QuotaService) HandleProviderRateLimit(ctx context.Context, providerID, 
 				_, _ = pipe.Exec(ctx)
 			case "rpd":
 				s.redis.Set(ctx, keys.RPD, used, 25*time.Hour)
+			case "tpm":
+				// Provider reported token-window usage: rebuild the local TPM
+				// window so it reflects reality instead of our estimates.
+				nowMillis := now.UnixMilli()
+				pipe := s.redis.Pipeline()
+				pipe.Del(ctx, keys.TPM)
+				pipe.ZAdd(ctx, keys.TPM, redis.Z{
+					Score:  float64(nowMillis),
+					Member: formatTokenWindowMember(nowMillis, used, now.Nanosecond()),
+				})
+				pipe.Expire(ctx, keys.TPM, 60*time.Second)
+				_, _ = pipe.Exec(ctx)
 			}
 		}
 	}
@@ -598,6 +610,15 @@ func (s *QuotaService) SyncProviderQuotaLimit(ctx context.Context, providerID, m
 
 func parseRequestLimitHeaders(providerID string, headers http.Header) (int, int, string) {
 	switch providerID {
+	case "nous":
+		// Nous portal sends x-ratelimit-limit-requests / -tokens per minute
+		// (plus -1h hourly variants we don't sync here).
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Requests"), "rpm"
+		}
+		if limit := parseHeaderInt(headers, "X-RateLimit-Limit-Tokens"); limit > 0 {
+			return limit, parseHeaderInt(headers, "X-RateLimit-Remaining-Tokens"), "tpm"
+		}
 	case "groq":
 		limit := parseHeaderInt(headers, "X-RateLimit-Limit-Requests")
 		remaining := parseHeaderInt(headers, "X-RateLimit-Remaining-Requests")

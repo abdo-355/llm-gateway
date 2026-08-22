@@ -14,6 +14,7 @@ func GetProviders() []types.ProviderConfig {
 		getCohereConfig(),
 		getOciConfig(),
 		getGeminiConfig(),
+		getNousConfig(),
 		getOpenRouterConfig(),
 		getOpenRouterAlphaConfig(),
 	}
@@ -641,6 +642,85 @@ func getGeminiConfig() types.ProviderConfig {
 			ToolSchema:          "json_schema",
 		},
 		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+// getNousConfig configures the Nous Research inference portal. Rate limits are
+// ACCOUNT-WIDE (50 rpm / 500k tpm, 2100 rph / 6m tph per the response headers),
+// so they live at the provider level and are enforced through the shared
+// "__provider__" quota scope rather than per model.
+func getNousConfig() types.ProviderConfig {
+	rpm50 := 50
+	rph2100 := 2100
+	tpm500000 := 500000
+	tph6000000 := 6000000
+
+	return types.ProviderConfig{
+		ID:      "nous",
+		BaseURL: "https://inference-api.nousresearch.com/v1",
+		Auth: types.ProviderAuth{
+			Type: "bearer",
+			Env:  "NOUS_API_KEY",
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"stealth/ox-alpha",
+				"upstage/solar-pro4:free",
+				"stepfun/step-3.7-flash:free",
+				"tencent/hy3:free",
+				"meituan/longcat-2.0:free",
+				"poolside/laguna-s-2.1:free",
+				"poolside/laguna-xs-2.1:free",
+			},
+			Limits: map[string]types.ModelLimits{},
+			Capabilities: map[string]types.ModelCapabilities{
+				"stealth/ox-alpha": {
+					StructuredOutputs: strPtr("json_object"),
+					Tools:             boolPtr(true),
+				},
+				"upstage/solar-pro4:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+				},
+				"stepfun/step-3.7-flash:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+				},
+				"tencent/hy3:free": {
+					StructuredOutputs: strPtr("json_object"),
+				},
+				"meituan/longcat-2.0:free": {
+					StructuredOutputs: strPtr("none"),
+				},
+				"poolside/laguna-s-2.1:free": {
+					StructuredOutputs: strPtr("none"),
+				},
+				"poolside/laguna-xs-2.1:free": {
+					StructuredOutputs: strPtr("none"),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema_strict",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                false,
+			FrequencyPenalty:    false,
+			PresencePenalty:     false,
+			MaxTokens:           true,
+			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits: types.ProviderLimits{
+			Rpm: &rpm50,
+			Rph: &rph2100,
+			Tpm: &tpm500000,
+			Tph: &tph6000000,
+		},
 		ProviderType: "openai",
 	}
 }

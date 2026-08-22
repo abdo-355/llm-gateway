@@ -16,6 +16,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Entries: []types.TierEntry{
 			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
 			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
+			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "groq", Model: "qwen/qwen3.6-27b", Weight: 0.94},
 			{Provider: "gemini", Model: "gemini-3.5-flash-lite", Weight: 0.92},
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.88},
@@ -34,6 +35,12 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", Weight: 0.66},
 			{Provider: "gemini", Model: "gemini-2.5-flash-lite", Weight: 0.62},
 			{Provider: "opencode", Model: "hy3-free", Weight: 0.60},
+			{Provider: "nous", Model: "upstage/solar-pro4:free", Weight: 0.58},
+			{Provider: "nous", Model: "stepfun/step-3.7-flash:free", Weight: 0.56},
+			{Provider: "nous", Model: "tencent/hy3:free", Weight: 0.54},
+			{Provider: "nous", Model: "meituan/longcat-2.0:free", Weight: 0.54},
+			{Provider: "nous", Model: "poolside/laguna-s-2.1:free", Weight: 0.52},
+			{Provider: "nous", Model: "poolside/laguna-xs-2.1:free", Weight: 0.50},
 			{Provider: "openrouter", Model: "nvidia/nemotron-3-super-120b-a12b:free", Weight: 0.48},
 			{Provider: "openrouter", Model: "nvidia/nemotron-3-ultra-550b-a55b:free", Weight: 0.47},
 			{Provider: "openrouter", Model: "z-ai/glm-5.2:free", Weight: 0.46},
@@ -56,6 +63,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Entries: []types.TierEntry{
 			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
 			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
+			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "gemini", Model: "gemini-3.7-flash", Weight: 0.98},
 			{Provider: "opencode", Model: "muse-spark-1.2-contributor-free", Weight: 0.96},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.94},
@@ -82,6 +90,7 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 		Entries: []types.TierEntry{
 			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
 			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
+			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "gemini", Model: "gemini-3.7-flash", Weight: 0.98},
 			{Provider: "opencode", Model: "muse-spark-1.2-contributor-free", Weight: 0.97},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.95},

@@ -27,6 +27,7 @@ type EnvConfig struct {
 	OpenCodeAPIKey      string
 	ZaiAPIKey           string
 	CohereAPIKey        string
+	NousAPIKey          string
 	OciAPIKey           string
 
 	RedisURL       string
@@ -166,6 +167,7 @@ func LoadEnv() (*EnvConfig, error) {
 		OpenCodeAPIKey:      os.Getenv("OPENCODE_ZEN_API_KEY"),
 		ZaiAPIKey:           os.Getenv("ZAI_API_KEY"),
 		CohereAPIKey:        os.Getenv("COHERE_API_KEY"),
+		NousAPIKey:          os.Getenv("NOUS_API_KEY"),
 		OciAPIKey:           os.Getenv("OCI_API_KEY"),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
