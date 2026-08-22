@@ -25,6 +25,7 @@ type ollamaChatRequest struct {
 	Format   any                   `json:"format,omitempty"`
 	Options  *ollamaOptions        `json:"options,omitempty"`
 	Tools    []types.OpenAITool    `json:"tools,omitempty"`
+	Think    any                   `json:"think,omitempty"` // bool for thinking models; string level for gpt-oss
 }
 
 type ollamaOptions struct {
@@ -123,6 +124,8 @@ func (s *ProviderService) prepareOllamaRequest(request types.ChatCompletionReque
 	if len(request.Tools) > 0 {
 		ollamaReq.Tools = request.Tools
 	}
+
+	applyOllamaThinking(&ollamaReq, request, model, request.ProviderCapabilities)
 
 	return json.Marshal(ollamaReq)
 }

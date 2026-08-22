@@ -353,6 +353,7 @@ func isStrictJSONSchema(format *types.ResponseFormat) bool {
 
 func normalizeRequestForProvider(request types.ChatCompletionRequest, provider, model string) types.ChatCompletionRequest {
 	request = normalizeStructuredOutputForProvider(request, provider, model)
+	applyReasoningForProvider(&request, provider, request.ProviderCapabilities)
 
 	switch provider {
 	case "groq":
