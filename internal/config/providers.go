@@ -655,6 +655,10 @@ func getNousConfig() types.ProviderConfig {
 	rph2100 := 2100
 	tpm500000 := 500000
 	tph6000000 := 6000000
+	// Account-wide in-flight cap: the portal rejects concurrent requests for
+	// low-credit accounts ("Too many concurrent inference requests"), which
+	// 429-benched every nous model under burst load. Gate locally instead.
+	conc3 := 3
 
 	return types.ProviderConfig{
 		ID:      "nous",
@@ -718,10 +722,11 @@ func getNousConfig() types.ProviderConfig {
 			ToolSchema:          "json_schema",
 		},
 		Limits: types.ProviderLimits{
-			Rpm: &rpm50,
-			Rph: &rph2100,
-			Tpm: &tpm500000,
-			Tph: &tph6000000,
+			Rpm:           &rpm50,
+			Rph:           &rph2100,
+			Tpm:           &tpm500000,
+			Tph:           &tph6000000,
+			MaxConcurrent: &conc3,
 		},
 		ProviderType: "openai",
 	}

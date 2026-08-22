@@ -675,33 +675,30 @@ func (r *Router) Execute(
 			Float64("score", attempt.Score).
 			Msg("Trying provider")
 
-		concurrencyAcquired := false
-		if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
-			if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
-				logger.Warn().
-					Str("type", "router").
-					Str("event", "attempt.concurrency_denied").
-					Str("request_id", requestID).
-					Str("provider", attempt.ProviderID).
-					Str("model", attempt.Model).
-					Err(err).
-					Msg("Concurrency slot unavailable")
-				attemptChain = append(attemptChain, map[string]any{
-					"provider":       attempt.ProviderID,
-					"model":          attempt.Model,
-					"failure_kind":   "concurrency_denied",
-					"failure_action": string(types.ActionFailover),
-					"failure_reason": "concurrency slot unavailable, trying different provider",
-				})
-				continue
-			}
-			concurrencyAcquired = true
+		releaseConcurrency, deniedScope, concurrencyOK := r.acquireAttemptConcurrency(ctx, attempt.ProviderID, attempt.Model)
+		if !concurrencyOK {
+			logger.Warn().
+				Str("type", "router").
+				Str("event", "attempt.concurrency_denied").
+				Str("request_id", requestID).
+				Str("provider", attempt.ProviderID).
+				Str("model", attempt.Model).
+				Str("scope", deniedScope).
+				Msg("Concurrency slot unavailable")
+			attemptChain = append(attemptChain, map[string]any{
+				"provider":       attempt.ProviderID,
+				"model":          attempt.Model,
+				"failure_kind":   "concurrency_denied",
+				"failure_action": string(types.ActionFailover),
+				"failure_reason": "concurrency slot unavailable, trying different provider",
+			})
+			continue
 		}
 
 		reservation, reservationErr := r.reserveAttemptQuota(ctx, attempt, req)
 		if reservationErr != nil {
-			if concurrencyAcquired {
-				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+			if releaseConcurrency != nil {
+				releaseConcurrency()
 			}
 			attemptChain = append(attemptChain, quotaReservationFailureAttempt(attempt, reservationErr))
 			continue
@@ -730,8 +727,8 @@ func (r *Router) Execute(
 		attemptContextErr := attemptCtx.Err()
 		cancel()
 
-		if concurrencyAcquired {
-			r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+		if releaseConcurrency != nil {
+			releaseConcurrency()
 		}
 
 		totalLatencyMs := time.Since(startTime).Milliseconds()
@@ -1099,35 +1096,32 @@ func (r *Router) ExecuteStream(
 			}
 
 			attemptCtx, cancel := context.WithTimeout(ctx, time.Duration(attemptTimeoutMs)*time.Millisecond)
-			concurrencyAcquired := false
 
-			if limit := r.lookupModelConcurrencyLimit(attempt.ProviderID, attempt.Model); limit > 0 {
-				if err := r.quotaService.AcquireConcurrencySlot(ctx, attempt.ProviderID, attempt.Model, limit); err != nil {
-					logger.Warn().
-						Str("type", "router").
-						Str("event", "attempt.concurrency_denied").
-						Str("request_id", requestID).
-						Str("provider", attempt.ProviderID).
-						Str("model", attempt.Model).
-						Err(err).
-						Msg("Concurrency slot unavailable")
-					attemptChain = append(attemptChain, map[string]any{
-						"provider":       attempt.ProviderID,
-						"model":          attempt.Model,
-						"failure_kind":   "concurrency_denied",
-						"failure_action": string(types.ActionFailover),
-						"failure_reason": "concurrency slot unavailable, trying different provider",
-					})
-					cancel()
-					continue
-				}
-				concurrencyAcquired = true
+			releaseConcurrency, deniedScope, concurrencyOK := r.acquireAttemptConcurrency(ctx, attempt.ProviderID, attempt.Model)
+			if !concurrencyOK {
+				logger.Warn().
+					Str("type", "router").
+					Str("event", "attempt.concurrency_denied").
+					Str("request_id", requestID).
+					Str("provider", attempt.ProviderID).
+					Str("model", attempt.Model).
+					Str("scope", deniedScope).
+					Msg("Concurrency slot unavailable")
+				attemptChain = append(attemptChain, map[string]any{
+					"provider":       attempt.ProviderID,
+					"model":          attempt.Model,
+					"failure_kind":   "concurrency_denied",
+					"failure_action": string(types.ActionFailover),
+					"failure_reason": "concurrency slot unavailable, trying different provider",
+				})
+				cancel()
+				continue
 			}
 
 			reservation, reservationErr := r.reserveAttemptQuota(ctx, attempt, req)
 			if reservationErr != nil {
-				if concurrencyAcquired {
-					r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+				if releaseConcurrency != nil {
+					releaseConcurrency()
 				}
 				attemptChain = append(attemptChain, quotaReservationFailureAttempt(attempt, reservationErr))
 				cancel()
@@ -1169,8 +1163,8 @@ func (r *Router) ExecuteStream(
 				case chunks <- chunk:
 				case <-ctx.Done():
 					cancel()
-					if concurrencyAcquired {
-						r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+					if releaseConcurrency != nil {
+						releaseConcurrency()
 					}
 					r.releaseTokenReservation(ctx, reservation)
 					return
@@ -1179,8 +1173,8 @@ func (r *Router) ExecuteStream(
 
 			err := <-result.Err
 			cancel()
-			if concurrencyAcquired {
-				r.releaseConcurrencySlot(attempt.ProviderID, attempt.Model)
+			if releaseConcurrency != nil {
+				releaseConcurrency()
 			}
 			if err != nil {
 				r.releaseTokenReservation(ctx, reservation)
@@ -2267,6 +2261,51 @@ func (r *Router) lookupModelConcurrencyLimit(providerID, model string) int {
 		}
 	}
 	return 0
+}
+
+// lookupProviderConcurrencyLimit returns the provider-wide (account-level)
+// in-flight cap, e.g. nous enforces concurrency per account rather than per
+// model. 0 means the provider has no account-wide cap.
+func (r *Router) lookupProviderConcurrencyLimit(providerID string) int {
+	for _, p := range r.config.Providers {
+		if p.ID == providerID {
+			if p.Limits.MaxConcurrent != nil {
+				return *p.Limits.MaxConcurrent
+			}
+			return 0
+		}
+	}
+	return 0
+}
+
+// acquireAttemptConcurrency enforces both concurrency caps for an attempt: the
+// account-wide slot first (coarse gate — a denial there fails cheaply), then the
+// per-model slot. Returns a release closure when any slot was taken; ok=false
+// means a cap denied the attempt outright and deniedScope names which one.
+func (r *Router) acquireAttemptConcurrency(ctx context.Context, providerID, model string) (release func(), deniedScope string, ok bool) {
+	var acquired []string
+	releaseAll := func() {
+		for i := len(acquired) - 1; i >= 0; i-- {
+			r.releaseConcurrencySlot(providerID, acquired[i])
+		}
+	}
+	if limit := r.lookupProviderConcurrencyLimit(providerID); limit > 0 {
+		if err := r.quotaService.AcquireConcurrencySlot(ctx, providerID, providerQuotaScopeModel, limit); err != nil {
+			return nil, "provider", false
+		}
+		acquired = append(acquired, providerQuotaScopeModel)
+	}
+	if limit := r.lookupModelConcurrencyLimit(providerID, model); limit > 0 {
+		if err := r.quotaService.AcquireConcurrencySlot(ctx, providerID, model, limit); err != nil {
+			releaseAll()
+			return nil, "model", false
+		}
+		acquired = append(acquired, model)
+	}
+	if len(acquired) == 0 {
+		return nil, "", true
+	}
+	return releaseAll, "", true
 }
 
 func effectiveModelLimits(provider types.ProviderConfig, model string) types.ModelLimits {
