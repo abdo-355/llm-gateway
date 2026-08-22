@@ -1194,6 +1194,8 @@ func (r *Router) ExecuteStream(
 
 			outputTokenCount = 0
 			streamUsage = nil
+			normalizer := newStreamNormalizer(attemptReq)
+
 			for chunk := range result.Chunks {
 				if !ttfbRecorded {
 					metrics.StreamTTFBSeconds.WithLabelValues(
@@ -1207,7 +1209,14 @@ func (r *Router) ExecuteStream(
 				if chunk.Usage != nil {
 					streamUsage = chunk.Usage
 				}
-				chunksSent = true
+				if !normalizer.Process(chunk) {
+					// Suppressed usage artifact (include_usage not requested).
+					continue
+				}
+				// Lock failover only once real payload reached the client;
+				// role preambles alone don't pin this attempt (litellm rule:
+				// splice only while nothing content-bearing was emitted).
+				chunksSent = chunksSent || chunkHasPayload(chunk)
 				select {
 				case chunks <- chunk:
 				case <-ctx.Done():
@@ -1232,6 +1241,15 @@ func (r *Router) ExecuteStream(
 			latencyMs := time.Since(startTime).Milliseconds()
 
 			if err == nil {
+				if !normalizer.sawFinishReason {
+					select {
+					case chunks <- normalizer.TerminalChunk():
+					case <-ctx.Done():
+						r.releaseTokenReservation(ctx, reservation)
+						return
+					}
+				}
+
 				r.healthService.RecordSuccess(ctx, attempt.ProviderID, attempt.Model, int(latencyMs))
 
 				if cooldownMs := r.lookupModelCooldownMs(attempt.ProviderID, attempt.Model); cooldownMs > 0 && r.cooldownService != nil {

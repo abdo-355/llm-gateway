@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/logger"
@@ -17,6 +18,45 @@ import (
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
+
+// sseKeepAliveInterval paces ": ping" comment frames emitted while the
+// upstream is silent — failover chains and reasoning models routinely pause
+// for tens of seconds. Well below typical proxy/client idle timeouts.
+const sseKeepAliveInterval = 10 * time.Second
+
+func resetKeepAliveTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(sseKeepAliveInterval)
+}
+
+// pumpStreamToClient forwards chunks to the client with SSE comment pings
+// during upstream silence. Single-writer by design: both chunk frames and
+// pings are emitted from this goroutine only. Returns the terminal gateway
+// error; nil signals a clean stream end.
+func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(*types.SSEChunk)) *types.GatewayError {
+	timer := time.NewTimer(sseKeepAliveInterval)
+	defer timer.Stop()
+
+	for {
+		select {
+		case chunk, ok := <-result.Chunks:
+			if !ok {
+				return <-result.Err
+			}
+			resetKeepAliveTimer(timer)
+			onChunk(chunk)
+		case <-timer.C:
+			fmt.Fprint(c.Writer, ": ping\n\n")
+			c.Writer.Flush()
+			timer.Reset(sseKeepAliveInterval)
+		}
+	}
+}
 
 type Pipeline struct {
 	router services.RouterHandler

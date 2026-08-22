@@ -1449,6 +1449,10 @@ func shouldSkipChunk(chunk types.SSEChunk) bool {
 		if choice.Delta.Role != "" || choice.Delta.Content != nil || choice.Delta.Refusal != nil || len(choice.Delta.ToolCalls) > 0 || choice.FinishReason != nil {
 			return false
 		}
+		// Reasoning-only deltas are client-visible payload; never skip them.
+		if choice.Delta.ReasoningContent != nil || len(choice.Delta.ThinkingBlocks) > 0 {
+			return false
+		}
 	}
 
 	return true

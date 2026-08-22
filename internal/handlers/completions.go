@@ -76,14 +76,12 @@ func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, r
 
 	streamResult := h.pipeline.router.ExecuteStream(routeResult.Ctx, routeResult.Plan, req, reqID)
 
-	for chunk := range streamResult.Chunks {
-		if err := writeSSEChunk(c, chunk); err != nil {
-			continue
-		}
-	}
+	streamErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) {
+		_ = writeSSEChunk(c, chunk)
+	})
 
-	if err := <-streamResult.Err; err != nil {
-		writeSSEError(c, err)
+	if streamErr != nil {
+		writeSSEError(c, streamErr)
 	} else {
 		writeSSEDone(c)
 	}
@@ -163,24 +161,22 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 	streamResult := h.pipeline.router.ExecuteStream(ctx, plan, chatReq, reqID)
 
 	accumulator := newStreamResponseAccumulator()
-	for chunk := range streamResult.Chunks {
+	streamErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) {
 		accumulator.Add(chunk)
-		if err := writeSSEChunk(c, chunk); err != nil {
-			continue
-		}
-	}
+		_ = writeSSEChunk(c, chunk)
+	})
 
-	if err := <-streamResult.Err; err != nil {
-		writeSSEError(c, err)
-	} else {
-		if accumulator.HasData() {
-			response := accumulator.Response()
-			respJSON, _ := json.Marshal(response)
-			fmt.Fprintf(c.Writer, "data: %s\n\n", respJSON)
-			c.Writer.Flush()
-		}
-		writeSSEDone(c)
+	if streamErr != nil {
+		writeSSEError(c, streamErr)
+		return
 	}
+	if accumulator.HasData() {
+		response := accumulator.Response()
+		respJSON, _ := json.Marshal(response)
+		fmt.Fprintf(c.Writer, "data: %s\n\n", respJSON)
+		c.Writer.Flush()
+	}
+	writeSSEDone(c)
 }
 
 func newGatewayErrorFromTyped(err error) *types.GatewayError {

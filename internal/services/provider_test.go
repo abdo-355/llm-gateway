@@ -542,7 +542,7 @@ func TestProviderCallProvider_ParsesArrayContentResponse(t *testing.T) {
 	assert.Equal(t, "Visible answer", *resp.Choices[0].Message.Content)
 }
 
-func TestProviderStreamProviderChannel_SkipsThinkingOnlyChunks(t *testing.T) {
+func TestProviderStreamProviderChannel_ForwardsThinkingChunksAsReasoning(t *testing.T) {
 	visibleChunk := types.SSEChunk{
 		ID: "chunk-visible", Object: "chat.completion.chunk", Model: "magistral-medium-2509",
 		Choices: []types.DeltaChoice{{Index: 0, Delta: types.DeltaMessage{Content: ptrString("Visible")}}},
@@ -586,9 +586,19 @@ func TestProviderStreamProviderChannel_SkipsThinkingOnlyChunks(t *testing.T) {
 		t.Fatal("timed out waiting for completion signal")
 	}
 
-	require.Len(t, received, 1)
-	require.NotNil(t, received[0].Choices[0].Delta.Content)
-	assert.Equal(t, "Visible", *received[0].Choices[0].Delta.Content)
+	require.Len(t, received, 2)
+
+	// Mistral-style thinking nodes surface as flat reasoning_content plus
+	// structured blocks instead of being silently dropped.
+	thinking := received[0].Choices[0].Delta
+	assert.Equal(t, "Hidden", *thinking.ReasoningContent)
+	assert.Nil(t, thinking.Content)
+	require.Len(t, thinking.ThinkingBlocks, 1)
+	assert.Equal(t, "thinking", thinking.ThinkingBlocks[0].Type)
+	assert.Equal(t, "Hidden", thinking.ThinkingBlocks[0].Thinking)
+
+	require.NotNil(t, received[1].Choices[0].Delta.Content)
+	assert.Equal(t, "Visible", *received[1].Choices[0].Delta.Content)
 }
 
 // ---------------------------------------------------------------------------
