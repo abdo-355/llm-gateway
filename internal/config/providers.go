@@ -659,6 +659,7 @@ func getNousConfig() types.ProviderConfig {
 	// low-credit accounts ("Too many concurrent inference requests"), which
 	// 429-benched every nous model under burst load. Gate locally instead.
 	conc3 := 3
+	ms60000 := 60000
 
 	return types.ProviderConfig{
 		ID:      "nous",
@@ -678,7 +679,11 @@ func getNousConfig() types.ProviderConfig {
 				"poolside/laguna-s-2.1:free",
 				"poolside/laguna-xs-2.1:free",
 			},
-			Limits: map[string]types.ModelLimits{},
+			Limits: map[string]types.ModelLimits{
+				// Live generations finish at 19-27s; the default tier SLO of
+				// 30s killed legitimate completions at the wall.
+				"stealth/ox-alpha": {TimeoutMs: &ms60000},
+			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"stealth/ox-alpha": {
 					StructuredOutputs: strPtr("json_object"),

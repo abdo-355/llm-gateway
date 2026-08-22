@@ -1090,6 +1090,20 @@ func TestCompilePlan(t *testing.T) {
 		assert.Equal(t, 3, plan.MaxAttempts)
 	})
 
+	t.Run("per-model timeout overrides tier SLO", func(t *testing.T) {
+		provider := testConfig().Providers[0]
+		provider.Models.Limits["model-1"] = types.ModelLimits{Rpm: intPtr(30), TimeoutMs: intPtr(60000)}
+		overrideCandidates := []types.RoutingCandidate{
+			{Provider: provider, Model: "model-1", Score: 1.0},
+			{Provider: testConfig().Providers[1], Model: "model-3", Score: 0.9},
+		}
+		slo := &types.TierSLO{MaxLatencyMs: intPtr(30000)}
+		plan := r.CompilePlan(overrideCandidates, nil, slo)
+		require.Len(t, plan.Attempts, 2)
+		assert.Equal(t, 60000, plan.Attempts[0].TimeoutMs, "model override must beat the tier SLO")
+		assert.Equal(t, 30000, plan.Attempts[1].TimeoutMs, "models without an override keep the tier SLO")
+	})
+
 	t.Run("custom retry policy", func(t *testing.T) {
 		hints := &types.RouterHints{
 			Fallback: &types.FallbackConfig{

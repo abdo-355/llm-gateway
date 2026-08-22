@@ -518,6 +518,9 @@ type ModelLimits struct {
 	// provider 429 when the provider did not supply its own Retry-After. When the
 	// provider does supply one, the supplied value always wins.
 	RateLimitPauseMs *int `json:"rateLimitPauseMs,omitempty"`
+	// TimeoutMs overrides the tier SLO attempt timeout for this model (e.g.
+	// slow reasoning models that legitimately exceed 30s).
+	TimeoutMs *int `json:"timeoutMs,omitempty"`
 }
 
 type Certification struct {

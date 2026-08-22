@@ -584,13 +584,20 @@ func (r *Router) CompilePlan(
 		apiKey := r.resolveProviderAPIKey(candidate.Provider.Auth)
 		caps := r.resolveCapabilities(candidate.Provider, candidate.Model)
 
+		// Per-model timeout overrides let slow-but-reliable models outlive the
+		// tier SLO (nous ox-alpha legitimately finishes at 19-27s).
+		attemptTimeoutMs := timeoutMs
+		if override := candidate.Provider.Models.Limits[candidate.Model].TimeoutMs; override != nil && *override > 0 {
+			attemptTimeoutMs = *override
+		}
+
 		attempts = append(attempts, types.RoutingAttempt{
 			ProviderID:   candidate.Provider.ID,
 			Model:        candidate.Model,
 			BaseURL:      candidate.Provider.BaseURL,
 			APIKey:       apiKey,
 			Score:        candidate.Score,
-			TimeoutMs:    timeoutMs,
+			TimeoutMs:    attemptTimeoutMs,
 			ProviderType: candidate.Provider.ProviderType,
 			Auth:         candidate.Provider.Auth,
 			Capabilities: caps,
@@ -2356,6 +2363,9 @@ func effectiveModelLimits(provider types.ProviderConfig, model string) types.Mod
 	}
 	if modelLimits.RateLimitPauseMs != nil {
 		limits.RateLimitPauseMs = modelLimits.RateLimitPauseMs
+	}
+	if modelLimits.TimeoutMs != nil {
+		limits.TimeoutMs = modelLimits.TimeoutMs
 	}
 	return limits
 }
