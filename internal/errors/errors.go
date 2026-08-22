@@ -23,6 +23,7 @@ type RateLimitError struct {
 	LimitSubtype       string // rate_limit, quota_exhausted, overload
 	ProviderQuotaLimit int
 	ProviderQuotaID    string
+	ResetAtUnixMs      int64 // provider-stated window reset (epoch ms) when supplied, e.g. OpenRouter X-RateLimit-Reset
 }
 
 func NewRateLimitError(message string, retryAfter int, limitType string) *RateLimitError {

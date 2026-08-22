@@ -3,6 +3,10 @@ package app
 import (
 	"context"
 
+	// Embed timezone data so America/Los_Angeles lookups work in distroless
+	// containers without zoneinfo (used for Gemini daily-quota resets).
+	_ "time/tzdata"
+
 	"github.com/abdo-355/llm-gateway/internal/config"
 	"github.com/abdo-355/llm-gateway/internal/db"
 	"github.com/abdo-355/llm-gateway/internal/logger"

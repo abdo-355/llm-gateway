@@ -778,12 +778,14 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	headers := flattenHeaders(resp.Header)
 	if resp.StatusCode == http.StatusTooManyRequests {
 		body, _ := io.ReadAll(resp.Body)
-		retryAfter, limitType, limitSubtype, retryAfterProvided := parseRateLimitDetails(provider, resp.Header, body)
+		details := parseRateLimitDetails(provider, resp.Header, body)
 		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
-			retryAfter, limitType, limitSubtype, headers,
+			details.RetryAfter, details.LimitType, details.LimitSubtype, headers,
 		)
-		err.RetryAfterProvided = retryAfterProvided
+		err.RetryAfterProvided = details.RetryAfterProvided
+		err.ResetAtUnixMs = details.ResetAtUnixMs
+		applyProviderQuotaSync(err, resp.Header, body)
 		return nil, err
 	}
 
@@ -844,19 +846,14 @@ func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, prov
 
 	switch resp.StatusCode {
 	case http.StatusTooManyRequests:
-		retryAfter, limitType, limitSubtype, retryAfterProvided := parseRateLimitDetails(provider, resp.Header, body)
+		details := parseRateLimitDetails(provider, resp.Header, body)
 		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
-			retryAfter, limitType, limitSubtype, headers,
+			details.RetryAfter, details.LimitType, details.LimitSubtype, headers,
 		)
-		err.RetryAfterProvided = retryAfterProvided
-		if quota, ok := parseProviderQuotaDetails(body); ok {
-			err.LimitType = quota.LimitType
-			err.LimitSubtype = "quota_exhausted"
-			err.IsRetryable = false
-			err.ProviderQuotaLimit = quota.Limit
-			err.ProviderQuotaID = quota.ID
-		}
+		err.RetryAfterProvided = details.RetryAfterProvided
+		err.ResetAtUnixMs = details.ResetAtUnixMs
+		applyProviderQuotaSync(err, resp.Header, body)
 		return err
 	case http.StatusPaymentRequired:
 		return &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
@@ -955,7 +952,15 @@ func flattenHeaders(headers http.Header) map[string]string {
 	return flat
 }
 
-func parseRateLimitDetails(provider string, headers http.Header, body []byte) (int, string, string, bool) {
+type rateLimitParseResult struct {
+	RetryAfter         int
+	RetryAfterProvided bool
+	LimitType          string
+	LimitSubtype       string
+	ResetAtUnixMs      int64
+}
+
+func parseRateLimitDetails(provider string, headers http.Header, body []byte) rateLimitParseResult {
 	retryAfter := 60
 	retryAfterProvided := false
 	if value := headers.Get("Retry-After"); value != "" {
@@ -980,22 +985,46 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 	bodyUpper := strings.ToUpper(string(body))
 	limitSubtype := "rate_limit"
 	if quota, ok := parseProviderQuotaDetails(body); ok {
-		return retryAfter, quota.LimitType, "quota_exhausted", retryAfterProvided
+		return rateLimitParseResult{
+			RetryAfter:         retryAfter,
+			RetryAfterProvided: retryAfterProvided,
+			LimitType:          quota.LimitType,
+			LimitSubtype:       "quota_exhausted",
+			ResetAtUnixMs:      parseResetAtUnixMs(headers, body),
+		}
 	}
 
 	switch provider {
 	case "groq":
 		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
-			return retryAfter, "rpd", limitSubtype, retryAfterProvided
+			return rateLimitParseResult{retryAfter, retryAfterProvided, "rpd", limitSubtype, parseResetAtUnixMs(headers, body)}
 		}
 		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
-			return retryAfter, "tpm", limitSubtype, retryAfterProvided
+			return rateLimitParseResult{retryAfter, retryAfterProvided, "tpm", limitSubtype, parseResetAtUnixMs(headers, body)}
 		}
 	case cloudflareProviderID:
 		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||
 			strings.Contains(bodyUpper, "DAILY FREE ALLOCATION OF 10,000 NEURONS") ||
 			(strings.Contains(bodyUpper, "10,000 NEURONS") && strings.Contains(bodyUpper, "FREE ALLOCATION")) {
-			return retryAfter, "daily_neurons", "quota_exhausted", retryAfterProvided
+			return rateLimitParseResult{retryAfter, retryAfterProvided, "daily_neurons", "quota_exhausted", parseResetAtUnixMs(headers, body)}
+		}
+	}
+
+	// Day-scale request limits: benching for seconds is wrong when the window
+	// resets daily (e.g. kilo "limit_rpd/… Daily limit reached", OpenRouter
+	// "free-models-per-day-stealth"). Google PerDay quotas are handled above
+	// via structured quotaId details.
+	if isDayScaleRequestBody(bodyUpper) {
+		subtype := "rate_limit"
+		if strings.Contains(bodyUpper, "LIMIT REACHED") || strings.Contains(bodyUpper, "QUOTA") {
+			subtype = "quota_exhausted"
+		}
+		return rateLimitParseResult{
+			RetryAfter:         retryAfter,
+			RetryAfterProvided: retryAfterProvided,
+			LimitType:          "rpd",
+			LimitSubtype:       subtype,
+			ResetAtUnixMs:      parseResetAtUnixMs(headers, body),
 		}
 	}
 
@@ -1006,17 +1035,124 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) (i
 		strings.Contains(bodyUpper, "BILLING") ||
 		strings.Contains(bodyUpper, "INSUFFICIENT_QUOTA") ||
 		strings.Contains(bodyUpper, "CREDITS") {
-		return retryAfter, "quota", "quota_exhausted", retryAfterProvided
+		return rateLimitParseResult{retryAfter, retryAfterProvided, "quota", "quota_exhausted", parseResetAtUnixMs(headers, body)}
 	}
 
 	// Detect overload signals
 	if strings.Contains(bodyUpper, "OVERLOAD") ||
 		strings.Contains(bodyUpper, "SLOW_DOWN") ||
 		strings.Contains(bodyUpper, "CAPACITY") {
-		return retryAfter, "rpm", "overload", retryAfterProvided
+		return rateLimitParseResult{retryAfter, retryAfterProvided, "rpm", "overload", 0}
 	}
 
-	return retryAfter, "rpm", limitSubtype, retryAfterProvided
+	return rateLimitParseResult{retryAfter, retryAfterProvided, "rpm", limitSubtype, 0}
+}
+
+// isDayScaleRequestBody detects free-text markers of daily request windows.
+func isDayScaleRequestBody(bodyUpper string) bool {
+	return strings.Contains(bodyUpper, "PER-DAY") ||
+		strings.Contains(bodyUpper, "PER DAY") ||
+		strings.Contains(bodyUpper, "PERDAY") ||
+		strings.Contains(bodyUpper, "LIMIT_RPD") ||
+		strings.Contains(bodyUpper, "FREE-MODELS-PER-DAY") ||
+		strings.Contains(bodyUpper, "DAILY LIMIT") ||
+		strings.Contains(bodyUpper, "DAILY QUOTA")
+}
+
+// parseResetAtUnixMs extracts an absolute window-reset timestamp when the
+// provider supplies one. OpenRouter sends X-RateLimit-Reset as epoch
+// milliseconds both as a response header and echoed in error.metadata.headers.
+func parseResetAtUnixMs(headers http.Header, body []byte) int64 {
+	if value := headers.Get("X-RateLimit-Reset"); value != "" {
+		if ms, ok := normalizeResetEpochMs(value); ok {
+			return ms
+		}
+	}
+	return parseBodyMetadataResetMs(body)
+}
+
+// normalizeResetEpochMs accepts epoch milliseconds (OpenRouter), epoch seconds,
+// or HTTP-date reset values and clamps them to a plausible future horizon.
+func normalizeResetEpochMs(raw string) (int64, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if ms < 1_000_000_000_000 { // magnitudes below ~2001 in ms are epoch seconds
+			ms *= 1000
+		}
+		return clampResetEpochMs(ms)
+	}
+	if t, err := http.ParseTime(raw); err == nil {
+		return clampResetEpochMs(t.UnixMilli())
+	}
+	return 0, false
+}
+
+func clampResetEpochMs(ms int64) (int64, bool) {
+	now := time.Now().UnixMilli()
+	maxHorizon := now + int64(48*time.Hour/time.Millisecond)
+	if ms <= now || ms > maxHorizon {
+		return 0, false
+	}
+	return ms, true
+}
+
+func parseBodyMetadataResetMs(body []byte) int64 {
+	if value, ok := errorMetadataHeader(body, "X-RateLimit-Reset"); ok {
+		if ms, ok := normalizeResetEpochMs(value); ok {
+			return ms
+		}
+	}
+	return 0
+}
+
+// errorMetadataHeader reads a header echo out of an error envelope such as
+// {"error":{"metadata":{"headers":{"X-RateLimit-Reset":"1787443200000"}}}}.
+func errorMetadataHeader(body []byte, wanted string) (string, bool) {
+	var payload struct {
+		Error struct {
+			Metadata struct {
+				Headers map[string]string `json:"headers"`
+			} `json:"metadata"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", false
+	}
+	for name, value := range payload.Error.Metadata.Headers {
+		if strings.EqualFold(name, wanted) {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// applyProviderQuotaSync mirrors numeric provider-side limits onto the error so
+// handleRateLimitFailure can sync local tracking windows. Structured Google
+// quota violations win; otherwise plain X-RateLimit-Limit headers feed rpd syncs.
+func applyProviderQuotaSync(err *errors.RateLimitError, headers http.Header, body []byte) {
+	if quota, ok := parseProviderQuotaDetails(body); ok {
+		err.LimitType = quota.LimitType
+		err.LimitSubtype = "quota_exhausted"
+		err.IsRetryable = false
+		err.ProviderQuotaLimit = quota.Limit
+		err.ProviderQuotaID = quota.ID
+		return
+	}
+	if err.LimitType != "rpd" && err.LimitType != "tpd" {
+		return
+	}
+	limit := parseHeaderInt(headers, "X-RateLimit-Limit")
+	if limit <= 0 {
+		if value, ok := errorMetadataHeader(body, "X-RateLimit-Limit"); ok {
+			limit = parseHeaderInt(http.Header{"X-RateLimit-Limit": []string{value}}, "X-RateLimit-Limit")
+		}
+	}
+	if limit > 0 {
+		err.ProviderQuotaLimit = limit
+	}
 }
 
 type providerQuotaDetails struct {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -387,31 +388,31 @@ func TestProviderCallProvider_CloudflareNativeResponse(t *testing.T) {
 }
 
 func TestParseRateLimitDetails_CloudflareDailyAllocationExhausted(t *testing.T) {
-	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails(
+	details := parseRateLimitDetails(
 		cloudflareProviderID,
 		http.Header{"Retry-After": []string{"60"}},
 		[]byte(`{"errors":[{"message":"AiError: you have used up your daily free allocation of 10,000 neurons, please upgrade to Cloudflare's Workers Paid plan if you would like to continue usage."}]}`),
 	)
 
-	assert.Equal(t, 60, retryAfter)
-	assert.Equal(t, "daily_neurons", limitType)
-	assert.Equal(t, "quota_exhausted", limitSubtype)
-	assert.True(t, provided)
+	assert.Equal(t, 60, details.RetryAfter)
+	assert.Equal(t, "daily_neurons", details.LimitType)
+	assert.Equal(t, "quota_exhausted", details.LimitSubtype)
+	assert.True(t, details.RetryAfterProvided)
 }
 
 func TestParseRateLimitDetails_HTTPDateRetryAfter(t *testing.T) {
 	retryAt := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
-	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails(
+	details := parseRateLimitDetails(
 		"openai",
 		http.Header{"Retry-After": []string{retryAt}},
 		[]byte(`{"error":{"message":"rate limited"}}`),
 	)
 
-	assert.GreaterOrEqual(t, retryAfter, 80)
-	assert.LessOrEqual(t, retryAfter, 90)
-	assert.Equal(t, "rpm", limitType)
-	assert.Equal(t, "rate_limit", limitSubtype)
-	assert.True(t, provided)
+	assert.GreaterOrEqual(t, details.RetryAfter, 80)
+	assert.LessOrEqual(t, details.RetryAfter, 90)
+	assert.Equal(t, "rpm", details.LimitType)
+	assert.Equal(t, "rate_limit", details.LimitSubtype)
+	assert.True(t, details.RetryAfterProvided)
 }
 
 func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
@@ -430,17 +431,83 @@ func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
 		}
 	}`)
 
-	retryAfter, limitType, limitSubtype, provided := parseRateLimitDetails("gemini", http.Header{}, body)
+	details := parseRateLimitDetails("gemini", http.Header{}, body)
 	quota, ok := parseProviderQuotaDetails(body)
 
 	assert.True(t, ok)
-	assert.Equal(t, 60, retryAfter)
-	assert.Equal(t, "rpd", limitType)
-	assert.Equal(t, "quota_exhausted", limitSubtype)
-	assert.False(t, provided, "60s fallback must not masquerade as a provider-supplied retry-after")
+	assert.Equal(t, 60, details.RetryAfter)
+	assert.Equal(t, "rpd", details.LimitType)
+	assert.Equal(t, "quota_exhausted", details.LimitSubtype)
+	assert.False(t, details.RetryAfterProvided, "60s fallback must not masquerade as a provider-supplied retry-after")
+	assert.Equal(t, int64(0), details.ResetAtUnixMs, "Gemini supplies no absolute reset timestamp")
 	assert.Equal(t, "rpd", quota.LimitType)
 	assert.Equal(t, 20, quota.Limit)
 	assert.Equal(t, "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quota.ID)
+}
+
+func TestParseRateLimitDetails_KiloDailyLimitReached(t *testing.T) {
+	body := []byte(`{"error":{"message":"429 limit_rpd/thinkingmachines/inkling-20260715/org/abc Daily limit reached for org-xyz."}}`)
+
+	details := parseRateLimitDetails("kilo", http.Header{}, body)
+
+	assert.Equal(t, "rpd", details.LimitType)
+	assert.Equal(t, "quota_exhausted", details.LimitSubtype, "daily-limit-reached bodies are day-scale quota exhaustion")
+}
+
+func TestParseRateLimitDetails_OpenRouterFreeModelDailyCap(t *testing.T) {
+	resetMs := time.Now().Add(2 * time.Hour).UnixMilli()
+	headers := http.Header{
+		"X-Ratelimit-Limit":     []string{"1000"},
+		"X-Ratelimit-Remaining": []string{"0"},
+		"X-Ratelimit-Reset":     []string{strconv.FormatInt(resetMs, 10)},
+	}
+	body := []byte(fmt.Sprintf(`{
+		"error": {
+			"message": "Rate limit exceeded: free-models-per-day-stealth. ",
+			"code": 429,
+			"metadata": {
+				"headers": {
+					"X-RateLimit-Limit": "1000",
+					"X-RateLimit-Remaining": "0",
+					"X-RateLimit-Reset": "%d"
+				}
+			}
+		}
+	}`, resetMs))
+
+	details := parseRateLimitDetails("openrouter-alpha", headers, body)
+
+	assert.Equal(t, "rpd", details.LimitType)
+	assert.Equal(t, "rate_limit", details.LimitSubtype)
+	assert.InDelta(t, resetMs, details.ResetAtUnixMs, 1000, "reset epoch-ms must be honored from headers")
+
+	err := errors.NewRateLimitErrorWithSubtype("limited", details.RetryAfter, details.LimitType, details.LimitSubtype, nil)
+	applyProviderQuotaSync(err, headers, body)
+	assert.Equal(t, 1000, err.ProviderQuotaLimit, "plain X-RateLimit-Limit feeds the rpd local sync")
+}
+
+func TestParseResetEpochMs_Variants(t *testing.T) {
+	now := time.Now()
+
+	ms, ok := normalizeResetEpochMs(strconv.FormatInt(now.Add(2*time.Hour).UnixMilli(), 10))
+	assert.True(t, ok)
+	assert.InDelta(t, now.Add(2*time.Hour).UnixMilli(), ms, 1000)
+
+	secs, ok := normalizeResetEpochMs(strconv.FormatInt(now.Add(2*time.Hour).Unix(), 10))
+	assert.True(t, ok, "epoch seconds must be scaled to milliseconds")
+	assert.InDelta(t, now.Add(2*time.Hour).UnixMilli(), secs, 1000)
+
+	past, ok := normalizeResetEpochMs(strconv.FormatInt(now.Add(-time.Hour).UnixMilli(), 10))
+	assert.False(t, ok, "past timestamps are implausible resets")
+	assert.Zero(t, past)
+
+	farFuture, ok := normalizeResetEpochMs(strconv.FormatInt(now.Add(72*time.Hour).UnixMilli(), 10))
+	assert.False(t, ok, "resets beyond the 48h horizon are rejected")
+	assert.Zero(t, farFuture)
+
+	httpDate, ok := normalizeResetEpochMs(now.Add(time.Hour).UTC().Format(http.TimeFormat))
+	assert.True(t, ok)
+	assert.InDelta(t, now.Add(time.Hour).UnixMilli(), httpDate, 2000)
 }
 
 func TestProviderCallProvider_ParsesArrayContentResponse(t *testing.T) {

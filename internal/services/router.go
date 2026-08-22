@@ -2121,7 +2121,16 @@ func (r *Router) applyRateLimitCooldown(ctx context.Context, providerID, model s
 	r.cooldownService.ApplyCooldownForReason(ctx, providerID, model, reason, r.effectiveRateLimitCooldownSeconds(err, providerID, model))
 
 	provider, ok := r.lookupProvider(providerID)
-	if !ok || !providerLimitMatchesRateLimit(provider.Limits, err) {
+	if !ok {
+		return
+	}
+	// Providers that manage their own per-model limits (e.g. openrouter-alpha)
+	// are exempt from roster-wide benching: one model's daily cap says nothing
+	// about its siblings there.
+	if isDayScaleLimit(err) && rosterBenchExemptProviders[providerID] {
+		return
+	}
+	if !providerLimitMatchesRateLimit(provider.Limits, err) {
 		return
 	}
 
@@ -2133,11 +2142,25 @@ func (r *Router) applyRateLimitCooldown(ctx context.Context, providerID, model s
 	}
 }
 
+// rosterBenchExemptProviders lists providers whose models carry independent
+// limits, so a day-scale failure on one model must not bench the rest.
+var rosterBenchExemptProviders = map[string]bool{
+	"openrouter-alpha": true,
+}
+
+func isDayScaleLimit(err *errors.RateLimitError) bool {
+	return err.LimitType == "rpd" || err.LimitType == "tpd"
+}
+
 // effectiveRateLimitCooldownSeconds resolves how long a model should stay benched
-// after a provider 429. A provider-supplied Retry-After always wins; otherwise a
-// configured per-model pause window applies; otherwise 0 falls back to the
-// reason's default cooldown duration.
+// after a provider 429. Day-scale quotas (rpd/tpd) are handled first — a small
+// retry-after is meaningless when the window resets daily. Otherwise a
+// provider-supplied Retry-After wins; then a configured per-model pause window;
+// then 0 falls back to the reason's default cooldown duration.
 func (r *Router) effectiveRateLimitCooldownSeconds(err *errors.RateLimitError, providerID, model string) int {
+	if isDayScaleLimit(err) {
+		return dailyQuotaCooldownSeconds(err.ResetAtUnixMs, providerID)
+	}
 	if err.RetryAfterProvided && err.RetryAfter > 0 {
 		return err.RetryAfter
 	}
@@ -2145,6 +2168,40 @@ func (r *Router) effectiveRateLimitCooldownSeconds(err *errors.RateLimitError, p
 		return int((time.Duration(pauseMs) * time.Millisecond).Seconds())
 	}
 	return 0
+}
+
+// dailyQuotaFallbackCooldown benches day-scale quota deaths for hours instead of
+// seconds when no better reset signal exists (2026-08-22 incident: daily caps
+// were re-walked every request on 5s cooldowns).
+const dailyQuotaFallbackCooldown = 6 * time.Hour
+
+// dailyQuotaCooldownSeconds picks the bench duration for an exhausted daily
+// quota, in priority order: provider-stated absolute reset → known provider
+// reset schedule (Gemini resets at midnight Pacific) → flat fallback.
+func dailyQuotaCooldownSeconds(resetAtUnixMs int64, providerID string) int {
+	now := time.Now()
+	if resetAtUnixMs > 0 {
+		until := time.UnixMilli(resetAtUnixMs).Sub(now)
+		if until > 30*time.Second && until < 48*time.Hour {
+			return int((until + 30*time.Second).Seconds())
+		}
+	}
+	if providerID == "gemini" {
+		if secs := secondsUntilNextMidnightPT(now); secs > 0 {
+			return secs
+		}
+	}
+	return int(dailyQuotaFallbackCooldown.Seconds())
+}
+
+func secondsUntilNextMidnightPT(now time.Time) int {
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		return 0
+	}
+	local := now.In(loc)
+	nextMidnight := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+	return int(nextMidnight.Sub(now).Seconds()) + 60 // small buffer past the reset
 }
 
 func rateLimitCooldownReason(err *errors.RateLimitError) CooldownReason {
