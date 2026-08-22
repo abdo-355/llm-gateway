@@ -687,7 +687,9 @@ func getNousConfig() types.ProviderConfig {
 					StructuredOutputs: strPtr("json_schema_strict"),
 				},
 				"tencent/hy3:free": {
-					StructuredOutputs: strPtr("json_object"),
+					// Live probe: returns malformed JSON on response_format
+					// requests ("}{": {"ok": true}}) — text-only until fixed.
+					StructuredOutputs: strPtr("none"),
 				},
 				"meituan/longcat-2.0:free": {
 					StructuredOutputs: strPtr("none"),
