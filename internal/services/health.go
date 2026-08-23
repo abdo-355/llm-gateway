@@ -19,6 +19,9 @@ const (
 	StateClosed   CircuitState = "CLOSED"
 	StateOpen     CircuitState = "OPEN"
 	StateHalfOpen CircuitState = "HALF_OPEN"
+
+	latencyHistoryLimit = 100
+	latencyKeySuffix    = "latencies:v2"
 )
 
 type ProviderModelPair struct {
@@ -156,15 +159,14 @@ func (s *HealthService) RecordSuccess(ctx context.Context, providerID, model str
 		}
 	}
 
-	latencyKey := fmt.Sprintf("%s:latencies", healthPrefix)
-	now := time.Now()
-	member := fmt.Sprintf("%d-%d", now.UnixMilli(), now.Nanosecond())
+	latencyKey := fmt.Sprintf("%s:%s", healthPrefix, latencyKeySuffix)
 
 	score := healthScoreFromState(state, failures)
 	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
 
 	pipe := s.redis.Pipeline()
-	pipe.ZAdd(ctx, latencyKey, redis.Z{Score: float64(latencyMs), Member: member})
+	pipe.LPush(ctx, latencyKey, latencyMs)
+	pipe.LTrim(ctx, latencyKey, 0, latencyHistoryLimit-1)
 	pipe.Expire(ctx, latencyKey, time.Hour)
 	pipe.Set(ctx, scoreKey, score, time.Hour)
 	pipe.Exec(ctx)
@@ -206,7 +208,7 @@ func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model 
 	failuresKey := fmt.Sprintf("%s:failures", circuitPrefix)
 	successesKey := fmt.Sprintf("%s:successes", circuitPrefix)
 	lastFailureKey := fmt.Sprintf("%s:last_failure", circuitPrefix)
-	latencyKey := fmt.Sprintf("%s:latencies", healthPrefix)
+	latencyKey := fmt.Sprintf("%s:%s", healthPrefix, latencyKeySuffix)
 	scoreKey := fmt.Sprintf("%s:score", healthPrefix)
 
 	pipe := s.redis.Pipeline()
@@ -214,8 +216,7 @@ func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model 
 	successesCmd := pipe.Get(ctx, successesKey)
 	lastFailureCmd := pipe.Get(ctx, lastFailureKey)
 	scoreCmd := pipe.Get(ctx, scoreKey)
-	// Issue #8: Use ZRangeWithScores to get latency values from scores
-	latencyCmd := pipe.ZRangeWithScores(ctx, latencyKey, 0, -1)
+	latencyCmd := pipe.LRange(ctx, latencyKey, 0, latencyHistoryLimit-1)
 
 	_, err := pipe.Exec(ctx)
 	if err != nil && err != redis.Nil {
@@ -236,16 +237,7 @@ func (s *HealthService) GetHealthMetrics(ctx context.Context, providerID, model 
 		}
 	}
 
-	var avgLatency *int
-	latencyScores := latencyCmd.Val()
-	if len(latencyScores) > 0 {
-		sum := 0
-		for _, z := range latencyScores {
-			sum += int(z.Score)
-		}
-		avg := sum / len(latencyScores)
-		avgLatency = &avg
-	}
+	avgLatency := averageLatency(latencyCmd.Val())
 
 	healthScore := 1.0
 	if scoreCmd.Val() != "" {
@@ -362,7 +354,7 @@ func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []Provi
 		successesCmd   *redis.StringCmd
 		lastFailureCmd *redis.StringCmd
 		scoreCmd       *redis.StringCmd
-		latencyCmd     *redis.ZSliceCmd
+		latencyCmd     *redis.StringSliceCmd
 	}
 	groups := make([]cmdGroup, len(pairs))
 
@@ -376,7 +368,7 @@ func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []Provi
 			successesCmd:   pipe.Get(ctx, fmt.Sprintf("%s:successes", circuitPrefix)),
 			lastFailureCmd: pipe.Get(ctx, fmt.Sprintf("%s:last_failure", circuitPrefix)),
 			scoreCmd:       pipe.Get(ctx, fmt.Sprintf("%s:score", healthPrefix)),
-			latencyCmd:     pipe.ZRangeWithScores(ctx, fmt.Sprintf("%s:latencies", healthPrefix), 0, -1),
+			latencyCmd:     pipe.LRange(ctx, fmt.Sprintf("%s:%s", healthPrefix, latencyKeySuffix), 0, latencyHistoryLimit-1),
 		}
 	}
 	_, _ = pipe.Exec(ctx)
@@ -398,15 +390,7 @@ func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []Provi
 			}
 		}
 
-		var avgLatency *int
-		if scores := g.latencyCmd.Val(); len(scores) > 0 {
-			sum := 0
-			for _, z := range scores {
-				sum += int(z.Score)
-			}
-			avg := sum / len(scores)
-			avgLatency = &avg
-		}
+		avgLatency := averageLatency(g.latencyCmd.Val())
 
 		healthScore := 1.0
 		if val := g.scoreCmd.Val(); val != "" {
@@ -427,4 +411,27 @@ func (s *HealthService) BatchGetHealthMetrics(ctx context.Context, pairs []Provi
 		}
 	}
 	return results
+}
+
+func averageLatency(samples []string) *int {
+	if len(samples) == 0 {
+		return nil
+	}
+
+	sum := 0
+	count := 0
+	for _, sample := range samples {
+		latency, err := strconv.Atoi(sample)
+		if err != nil {
+			continue
+		}
+		sum += latency
+		count++
+	}
+	if count == 0 {
+		return nil
+	}
+
+	average := sum / count
+	return &average
 }

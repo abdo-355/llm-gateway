@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -18,6 +19,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxJSONRequestBodyBytes int64 = 10 << 20
+const maxAccumulatedStreamResponseBytes = 32 << 20
+const maxAccumulatedStreamResponseItems = 4096
+
 type CompletionsHandler struct {
 	pipeline *Pipeline
 }
@@ -31,14 +36,14 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 	reqID := requestid.Get(c)
 
 	var req types.ChatCompletionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		logger.Warn().
 			Str("type", "http").
 			Str("event", "request.validation_failed").
 			Str("request_id", reqID).
 			Err(err).
 			Msg("Invalid request body")
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(requestJSONErrorStatus(err), gin.H{
 			"error": gin.H{
 				"type":    "validation_error",
 				"code":    "VALIDATION_FAILED",
@@ -74,11 +79,16 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, req types.ChatCompletionRequest, reqID string, routeResult *RouteResult) {
 	writeStreamHeaders(c)
 
-	streamResult := h.pipeline.router.ExecuteStream(routeResult.Ctx, routeResult.Plan, req, reqID)
+	streamCtx, cancel := context.WithCancel(routeResult.Ctx)
+	defer cancel()
+	streamResult := h.pipeline.router.ExecuteStream(streamCtx, routeResult.Plan, req, reqID)
 
-	streamErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) {
-		_ = writeSSEChunk(c, chunk)
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+		return writeSSEChunk(c, chunk)
 	})
+	if clientErr != nil {
+		return
+	}
 
 	if streamErr != nil {
 		writeSSEError(c, streamErr)
@@ -100,14 +110,14 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 	reqID := requestid.Get(c)
 
 	var req types.ResponseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		logger.Warn().
 			Str("type", "http").
 			Str("event", "request.validation_failed").
 			Str("request_id", reqID).
 			Err(err).
 			Msg("Invalid response request body")
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(requestJSONErrorStatus(err), gin.H{
 			"error": gin.H{
 				"type":    "validation_error",
 				"code":    "VALIDATION_FAILED",
@@ -155,16 +165,36 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+func bindJSON(c *gin.Context, dst any) error {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxJSONRequestBodyBytes)
+	return c.ShouldBindJSON(dst)
+}
+
+func requestJSONErrorStatus(err error) int {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
+}
+
 func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan) {
 	writeStreamHeaders(c)
 
-	streamResult := h.pipeline.router.ExecuteStream(ctx, plan, chatReq, reqID)
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	streamResult := h.pipeline.router.ExecuteStream(streamCtx, plan, chatReq, reqID)
 
 	accumulator := newStreamResponseAccumulator()
-	streamErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) {
-		accumulator.Add(chunk)
-		_ = writeSSEChunk(c, chunk)
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+		if err := accumulator.Add(chunk); err != nil {
+			return err
+		}
+		return writeSSEChunk(c, chunk)
 	})
+	if clientErr != nil {
+		return
+	}
 
 	if streamErr != nil {
 		writeSSEError(c, streamErr)
@@ -199,6 +229,7 @@ type streamResponseAccumulator struct {
 	text      strings.Builder
 	toolCalls map[int]*types.ResponseItem
 	indexes   map[int]struct{}
+	size      int
 }
 
 func newStreamResponseAccumulator() *streamResponseAccumulator {
@@ -208,9 +239,9 @@ func newStreamResponseAccumulator() *streamResponseAccumulator {
 	}
 }
 
-func (a *streamResponseAccumulator) Add(chunk *types.SSEChunk) {
+func (a *streamResponseAccumulator) Add(chunk *types.SSEChunk) error {
 	if chunk == nil {
-		return
+		return nil
 	}
 
 	if chunk.ID != "" {
@@ -227,17 +258,23 @@ func (a *streamResponseAccumulator) Add(chunk *types.SSEChunk) {
 	}
 
 	if len(chunk.Choices) == 0 {
-		return
+		return nil
 	}
 
 	choice := chunk.Choices[0]
 	if choice.Delta.Content != nil {
+		if err := a.reserve(len(*choice.Delta.Content)); err != nil {
+			return err
+		}
 		a.text.WriteString(*choice.Delta.Content)
 	}
 
 	for _, tc := range choice.Delta.ToolCalls {
 		item, ok := a.toolCalls[tc.Index]
 		if !ok {
+			if len(a.toolCalls) >= maxAccumulatedStreamResponseItems {
+				return fmt.Errorf("accumulated stream response exceeds %d tool calls", maxAccumulatedStreamResponseItems)
+			}
 			callID := tc.ID
 			if callID == "" {
 				callID = "call_" + a.id
@@ -253,18 +290,36 @@ func (a *streamResponseAccumulator) Add(chunk *types.SSEChunk) {
 		}
 
 		if tc.ID != "" {
+			if err := a.reserve(len(tc.ID)); err != nil {
+				return err
+			}
 			item.CallID = tc.ID
 		}
 
 		if tc.Function != nil {
 			if tc.Function.Name != nil {
+				if err := a.reserve(len(*tc.Function.Name)); err != nil {
+					return err
+				}
 				item.Name += *tc.Function.Name
 			}
 			if tc.Function.Arguments != nil {
+				if err := a.reserve(len(*tc.Function.Arguments)); err != nil {
+					return err
+				}
 				item.Arguments += *tc.Function.Arguments
 			}
 		}
 	}
+	return nil
+}
+
+func (a *streamResponseAccumulator) reserve(size int) error {
+	if size > maxAccumulatedStreamResponseBytes-a.size {
+		return fmt.Errorf("accumulated stream response exceeds %d bytes", maxAccumulatedStreamResponseBytes)
+	}
+	a.size += size
+	return nil
 }
 
 func (a *streamResponseAccumulator) HasData() bool {

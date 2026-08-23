@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/abdo-355/llm-gateway/internal/services"
@@ -581,4 +582,17 @@ func TestResponses_StreamAccumulatesFinalResponse(t *testing.T) {
 	assert.Contains(t, body, `"arguments":"{\"location\":\"Paris\"}"`)
 	assert.Contains(t, body, `"total_tokens":15`)
 	assert.Contains(t, body, "data: [DONE]")
+}
+
+func TestStreamResponseAccumulatorRejectsOversizedContent(t *testing.T) {
+	accumulator := newStreamResponseAccumulator()
+	accumulator.size = maxAccumulatedStreamResponseBytes - 1
+	content := strings.Repeat("x", 2)
+
+	err := accumulator.Add(&types.SSEChunk{Choices: []types.DeltaChoice{{
+		Delta: types.DeltaMessage{Content: &content},
+	}}})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "accumulated stream response exceeds")
 }

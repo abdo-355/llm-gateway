@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -50,6 +49,22 @@ type cohereStreamEvent struct {
 	Text      string                 `json:"text,omitempty"`
 	Meta      *cohereChatMeta        `json:"meta,omitempty"`
 	Raw       map[string]interface{} `json:"-"`
+}
+
+func sendCohereStreamChunk(ctx context.Context, chunks chan<- *types.SSEChunk, chunk *types.SSEChunk) bool {
+	select {
+	case chunks <- chunk:
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func sendCohereStreamError(ctx context.Context, errChan chan<- *types.GatewayError, streamErr *types.GatewayError) {
+	select {
+	case errChan <- streamErr:
+	case <-ctx.Done():
+	}
 }
 
 func (s *ProviderService) callCohereProvider(
@@ -109,7 +124,7 @@ func (s *ProviderService) callCohereProvider(
 		return nil, s.handleErrorResponse(resp, baseURL, "cohere", auth)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBoundedResponseBody(resp.Body, maxProviderResponseBodyBytes)
 	if err != nil {
 		return nil, errors.NewParseError("Failed to read Cohere response", "json", "cohere", model, "", err)
 	}
@@ -158,14 +173,14 @@ func (s *ProviderService) callCohereStreamProvider(
 
 		reqBody, err := json.Marshal(cohereReq)
 		if err != nil {
-			errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_PREP_FAILED", Message: err.Error()}
+			sendCohereStreamError(ctx, errChan, &types.GatewayError{Type: "provider_error", Code: "REQUEST_PREP_FAILED", Message: err.Error()})
 			return
 		}
 
 		url := fmt.Sprintf("%s/chat", baseURL)
 		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 		if err != nil {
-			errChan <- &types.GatewayError{Type: "provider_error", Code: "REQUEST_CREATE_FAILED", Message: err.Error()}
+			sendCohereStreamError(ctx, errChan, &types.GatewayError{Type: "provider_error", Code: "REQUEST_CREATE_FAILED", Message: err.Error()})
 			return
 		}
 
@@ -173,21 +188,21 @@ func (s *ProviderService) callCohereStreamProvider(
 		req.Header.Set("Accept", "text/event-stream")
 
 		if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
-			errChan <- &types.GatewayError{Type: "provider_error", Code: "AUTH_FAILED", Message: err.Error()}
+			sendCohereStreamError(ctx, errChan, &types.GatewayError{Type: "provider_error", Code: "AUTH_FAILED", Message: err.Error()})
 			return
 		}
 
 		resp, err := s.httpClient.Do(req)
 		if err != nil {
 			if timeoutErr := requestTimeoutGatewayError(ctx); timeoutErr != nil {
-				errChan <- timeoutErr
+				sendCohereStreamError(ctx, errChan, timeoutErr)
 			} else {
 				wrappedErr := wrapNetworkError(err, "cohere", baseURL)
-				errChan <- &types.GatewayError{
+				sendCohereStreamError(ctx, errChan, &types.GatewayError{
 					Type:    "network_error",
 					Code:    "NETWORK_ERROR",
 					Message: wrappedErr.Error(),
-				}
+				})
 			}
 			return
 		}
@@ -195,7 +210,7 @@ func (s *ProviderService) callCohereStreamProvider(
 
 		if resp.StatusCode != http.StatusOK {
 			err := s.handleErrorResponse(resp, baseURL, "cohere", auth)
-			errChan <- s.convertToGatewayError(err)
+			sendCohereStreamError(ctx, errChan, s.convertToGatewayError(err))
 			return
 		}
 
@@ -212,13 +227,15 @@ func (s *ProviderService) callCohereStreamProvider(
 			payload := strings.TrimPrefix(line, "data: ")
 
 			if payload == "[DONE]" {
-				chunks <- &types.SSEChunk{
+				if !sendCohereStreamChunk(ctx, chunks, &types.SSEChunk{
 					Object: "chat.completion.chunk",
 					Choices: []types.DeltaChoice{{
 						Index:        0,
 						Delta:        types.DeltaMessage{},
 						FinishReason: func() *string { s := "stop"; return &s }(),
 					}},
+				}) {
+					return
 				}
 				break
 			}
@@ -241,11 +258,13 @@ func (s *ProviderService) callCohereStreamProvider(
 						FinishReason: nil,
 					}},
 				}
-				chunks <- chunk
+				if !sendCohereStreamChunk(ctx, chunks, chunk) {
+					return
+				}
 
 			case "stream-end":
 				finishReason := "stop"
-				chunks <- &types.SSEChunk{
+				if !sendCohereStreamChunk(ctx, chunks, &types.SSEChunk{
 					ID:      generationID,
 					Object:  "chat.completion.chunk",
 					Model:   model,
@@ -255,12 +274,14 @@ func (s *ProviderService) callCohereStreamProvider(
 						Delta:        types.DeltaMessage{},
 						FinishReason: &finishReason,
 					}},
+				}) {
+					return
 				}
 				if event.Meta != nil && event.Meta.Tokens != nil {
 					promptTokens := int(math.Round(event.Meta.Tokens.InputTokens))
 					completionTokens := int(math.Round(event.Meta.Tokens.OutputTokens))
 					totalTokens := promptTokens + completionTokens
-					chunks <- &types.SSEChunk{
+					if !sendCohereStreamChunk(ctx, chunks, &types.SSEChunk{
 						ID:      generationID,
 						Object:  "chat.completion.chunk",
 						Model:   model,
@@ -274,17 +295,19 @@ func (s *ProviderService) callCohereStreamProvider(
 							CompletionTokens: completionTokens,
 							TotalTokens:      totalTokens,
 						},
+					}) {
+						return
 					}
 				}
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
-			errChan <- &types.GatewayError{
+			sendCohereStreamError(ctx, errChan, &types.GatewayError{
 				Type:    "parse_error",
 				Code:    "SSE_SCAN_ERROR",
 				Message: fmt.Sprintf("Failed to read Cohere SSE stream: %v", err),
-			}
+			})
 			return
 		}
 	}()

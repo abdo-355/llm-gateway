@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/abdo-355/llm-gateway/internal/metrics"
@@ -137,6 +138,17 @@ func TestCompletions_InvalidJSON(t *testing.T) {
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "VALIDATION_FAILED", errObj["code"])
+}
+
+func TestCompletions_RejectsOversizedJSON(t *testing.T) {
+	body := `{"model":"` + strings.Repeat("a", int(maxJSONRequestBodyBytes))
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	setupCompletionsRouter(&mockRouter{}).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 }
 
 func TestCompletions_NoEligibleProviders(t *testing.T) {

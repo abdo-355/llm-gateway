@@ -1067,13 +1067,25 @@ func TestCompilePlan(t *testing.T) {
 		assert.True(t, plan.RetryOn429)
 		assert.True(t, plan.RetryOnTimeout)
 		assert.True(t, plan.RetryOn5xx)
-		assert.Nil(t, plan.HardTimeoutMs)
+		require.NotNil(t, plan.HardTimeoutMs)
+		assert.Equal(t, 300000, *plan.HardTimeoutMs)
 	})
 
 	t.Run("limits by maxAttempts from hints", func(t *testing.T) {
 		hints := &types.RouterHints{Fallback: &types.FallbackConfig{MaxAttempts: intPtr(1)}}
 		plan := r.CompilePlan(candidates, hints, nil)
 		assert.Len(t, plan.Attempts, 1)
+	})
+
+	t.Run("caps client max attempts with retry config", func(t *testing.T) {
+		t.Setenv("RETRY_MAX_ATTEMPTS", "2")
+		cappedRouter, _, _, _ := newTestRouter(t)
+		hints := &types.RouterHints{Fallback: &types.FallbackConfig{MaxAttempts: intPtr(99)}}
+
+		plan := cappedRouter.CompilePlan(candidates, hints, nil)
+
+		assert.Len(t, plan.Attempts, 2)
+		assert.Equal(t, 2, plan.MaxAttempts)
 	})
 
 	t.Run("uses SLO timeout from hints", func(t *testing.T) {
@@ -1123,6 +1135,14 @@ func TestCompilePlan(t *testing.T) {
 		plan := r.CompilePlan(candidates, hints, nil)
 		require.NotNil(t, plan.HardTimeoutMs)
 		assert.Equal(t, 60000, *plan.HardTimeoutMs)
+	})
+
+	t.Run("does not let client hints extend the hard timeout", func(t *testing.T) {
+		hints := &types.RouterHints{SLO: &types.SLOConfig{HardTimeoutMs: intPtr(600000)}}
+		plan := r.CompilePlan(candidates, hints, nil)
+
+		require.NotNil(t, plan.HardTimeoutMs)
+		assert.Equal(t, 300000, *plan.HardTimeoutMs)
 	})
 
 	t.Run("stores resolved model capabilities", func(t *testing.T) {

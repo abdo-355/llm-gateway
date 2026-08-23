@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const unmatchedRouteMetricPath = "__unmatched__"
+
 func Metrics() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -26,10 +28,7 @@ func Metrics() gin.HandlerFunc {
 		elapsed := time.Since(start)
 		statusStr := strconv.Itoa(c.Writer.Status())
 		method := c.Request.Method
-		path = c.FullPath()
-		if path == "" {
-			path = c.Request.URL.Path
-		}
+		path = metricPath(c)
 
 		ctx := c.Request.Context()
 		tier := metrics.GetTier(ctx)
@@ -43,4 +42,11 @@ func Metrics() gin.HandlerFunc {
 			method, path, tier, strategy,
 		).Observe(elapsed.Seconds())
 	}
+}
+
+func metricPath(c *gin.Context) string {
+	if path := c.FullPath(); path != "" {
+		return path
+	}
+	return unmatchedRouteMetricPath
 }

@@ -38,20 +38,26 @@ func resetKeepAliveTimer(timer *time.Timer) {
 // during upstream silence. Single-writer by design: both chunk frames and
 // pings are emitted from this goroutine only. Returns the terminal gateway
 // error; nil signals a clean stream end.
-func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(*types.SSEChunk)) *types.GatewayError {
+func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(*types.SSEChunk) error) (*types.GatewayError, error) {
 	timer := time.NewTimer(sseKeepAliveInterval)
 	defer timer.Stop()
 
 	for {
 		select {
+		case <-c.Request.Context().Done():
+			return nil, c.Request.Context().Err()
 		case chunk, ok := <-result.Chunks:
 			if !ok {
-				return <-result.Err
+				return <-result.Err, nil
 			}
 			resetKeepAliveTimer(timer)
-			onChunk(chunk)
+			if err := onChunk(chunk); err != nil {
+				return nil, err
+			}
 		case <-timer.C:
-			fmt.Fprint(c.Writer, ": ping\n\n")
+			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
+				return nil, err
+			}
 			c.Writer.Flush()
 			timer.Reset(sseKeepAliveInterval)
 		}
@@ -308,7 +314,9 @@ func writeSSEChunk(c *gin.Context, chunk *types.SSEChunk) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.Writer, "data: %s\n\n", chunkJSON)
+	if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", chunkJSON); err != nil {
+		return err
+	}
 	c.Writer.Flush()
 	return nil
 }

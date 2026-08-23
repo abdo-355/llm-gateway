@@ -23,6 +23,7 @@ type Router struct {
 	quotaService     QuotaChecker
 	healthService    HealthChecker
 	providerService  ProviderCaller
+	retryConfig      config.RetryConfig
 	classifier       FailureClassifier
 	backoffStrategy  BackoffStrategy
 	cooldownService  *CooldownService
@@ -35,12 +36,14 @@ func NewRouter(
 	providerSvc ProviderCaller,
 ) *Router {
 	cfg := config.LoadConfig()
+	retryCfg := config.LoadRetryConfig()
 	metrics.RegisterModelInfo(cfg)
 	return &Router{
 		config:           cfg,
 		quotaService:     quotaSvc,
 		healthService:    healthSvc,
 		providerService:  providerSvc,
+		retryConfig:      retryCfg,
 		classifier:       NewDefaultFailureClassifier(),
 		backoffStrategy:  DefaultBackoffStrategy(),
 		cooldownService:  nil,
@@ -54,12 +57,14 @@ func NewRouterWithConfig(
 	healthSvc HealthChecker,
 	providerSvc ProviderCaller,
 ) *Router {
+	retryCfg := config.LoadRetryConfig()
 	metrics.RegisterModelInfo(cfg)
 	return &Router{
 		config:           cfg,
 		quotaService:     quotaSvc,
 		healthService:    healthSvc,
 		providerService:  providerSvc,
+		retryConfig:      retryCfg,
 		classifier:       NewDefaultFailureClassifier(),
 		backoffStrategy:  DefaultBackoffStrategy(),
 		cooldownService:  nil,
@@ -594,10 +599,14 @@ func (r *Router) CompilePlan(
 	hints *types.RouterHints,
 	tierSLO *types.TierSLO,
 ) types.RoutingPlan {
-	// Determine max attempts. Client hints can cap failover breadth, otherwise
-	// all eligible candidates are tried until the request timeout is reached.
-	maxAttempts := len(candidates)
-	if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil {
+	// The process retry configuration is the upper bound. Client hints can only
+	// reduce failover breadth, not create an unbounded attempt chain.
+	maxAttempts := r.retryConfig.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	if hints != nil && hints.Fallback != nil && hints.Fallback.MaxAttempts != nil &&
+		*hints.Fallback.MaxAttempts > 0 && *hints.Fallback.MaxAttempts < maxAttempts {
 		maxAttempts = *hints.Fallback.MaxAttempts
 	}
 
@@ -613,10 +622,11 @@ func (r *Router) CompilePlan(
 		timeoutMs = *tierSLO.MaxLatencyMs
 	}
 
-	// Determine hard timeout
-	var hardTimeoutMs *int
-	if hints != nil && hints.SLO != nil && hints.SLO.HardTimeoutMs != nil {
-		hardTimeoutMs = hints.SLO.HardTimeoutMs
+	// Bound the complete attempt chain by default, not just each attempt.
+	hardTimeoutMs := defaultRequestTimeoutMs
+	if hints != nil && hints.SLO != nil && hints.SLO.HardTimeoutMs != nil &&
+		*hints.SLO.HardTimeoutMs > 0 && *hints.SLO.HardTimeoutMs < hardTimeoutMs {
+		hardTimeoutMs = *hints.SLO.HardTimeoutMs
 	}
 
 	// Build attempts
@@ -666,7 +676,7 @@ func (r *Router) CompilePlan(
 	return types.RoutingPlan{
 		Attempts:       attempts,
 		MaxAttempts:    maxAttempts,
-		HardTimeoutMs:  hardTimeoutMs,
+		HardTimeoutMs:  &hardTimeoutMs,
 		RetryOn429:     retryOn429,
 		RetryOnTimeout: retryOnTimeout,
 		RetryOn5xx:     retryOn5xx,

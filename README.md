@@ -275,6 +275,12 @@ Failures include the exact reason when available, for example:
 | `RATE_LIMIT_PER_IP` | 100 | Max requests per IP per minute |
 | `RATE_LIMIT_WINDOW_MS` | 60000 | Rate limit window in milliseconds |
 | `CORS_ORIGINS` | * | Allowed CORS origins |
+| `PPROF_ENABLED` | false | Enable pprof on the dedicated loopback-only `127.0.0.1:6060` listener |
+| `GOMEMLIMIT` | 3GiB | Go runtime soft memory limit |
+| `GATEWAY_MEMORY_LIMIT` | 4g | Compose hard memory limit for the gateway container |
+| `GATEWAY_CPUS` | 1.5 | Compose CPU limit for the gateway container |
+| `GATEWAY_PIDS_LIMIT` | 512 | Compose process/thread limit for the gateway container |
+| `RETRY_MAX_ATTEMPTS` | 3 | Maximum provider attempts per request; client hints can only reduce it |
 
 ### Tiers
 

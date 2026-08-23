@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -31,7 +32,10 @@ type Services struct {
 type Server struct {
 	httpServer    *http.Server
 	metricsServer *http.Server
+	pprofServer   *http.Server
 }
+
+const pprofAddress = "127.0.0.1:6060"
 
 func New(svc Services) *Server {
 	env := config.GetEnv()
@@ -46,6 +50,7 @@ func New(svc Services) *Server {
 
 	r.Use(requestid.New())
 	r.Use(gin.Recovery())
+	r.Use(middleware.RequestDeadline(middleware.DefaultRequestTimeout))
 	r.Use(middleware.Metrics())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Helmet())
@@ -69,7 +74,7 @@ func New(svc Services) *Server {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
 
-	return &Server{
+	s := &Server{
 		httpServer: &http.Server{
 			Addr:         fmt.Sprintf(":%d", env.Port),
 			Handler:      r,
@@ -84,6 +89,26 @@ func New(svc Services) *Server {
 			WriteTimeout: 10 * time.Second,
 			IdleTimeout:  30 * time.Second,
 		},
+	}
+	if env.PprofEnabled {
+		s.pprofServer = newPprofServer()
+	}
+	return s
+}
+
+func newPprofServer() *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	return &http.Server{
+		Addr:              pprofAddress,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       30 * time.Second,
 	}
 }
 
@@ -103,6 +128,24 @@ func (s *Server) Start() {
 			os.Exit(1)
 		}
 	}()
+
+	if s.pprofServer != nil {
+		go func() {
+			logger.Info().
+				Str("type", "app").
+				Str("event", "pprof_server.starting").
+				Str("address", s.pprofServer.Addr).
+				Msg("Starting pprof server")
+			if err := s.pprofServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Error().
+					Str("type", "app").
+					Str("event", "pprof_server.start_failed").
+					Err(err).
+					Msg("Pprof server failed to start")
+				os.Exit(1)
+			}
+		}()
+	}
 
 	go func() {
 		logger.Info().
@@ -132,12 +175,15 @@ func (s *Server) Start() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var httpErr, metricsErr error
+	var httpErr, metricsErr, pprofErr error
 
 	done := make(chan struct{})
 	go func() {
 		httpErr = s.httpServer.Shutdown(ctx)
 		metricsErr = s.metricsServer.Shutdown(ctx)
+		if s.pprofServer != nil {
+			pprofErr = s.pprofServer.Shutdown(ctx)
+		}
 		close(done)
 	}()
 
@@ -160,6 +206,14 @@ func (s *Server) Start() {
 			Str("event", "metrics_server.shutdown_failed").
 			Err(metricsErr).
 			Msg("Metrics server forced to shutdown")
+	}
+
+	if pprofErr != nil {
+		logger.Error().
+			Str("type", "app").
+			Str("event", "pprof_server.shutdown_failed").
+			Err(pprofErr).
+			Msg("Pprof server forced to shutdown")
 	}
 
 	logger.Info().

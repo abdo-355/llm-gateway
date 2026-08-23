@@ -1,11 +1,14 @@
 package services
 
 import (
+	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/abdo-355/llm-gateway/internal/errors"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,12 +140,32 @@ func TestHealthRecordSuccess(t *testing.T) {
 		svc.RecordSuccess(ctx, testProvider, testModel, 150)
 
 		prefix := svc.buildHealthKeyPrefix(testProvider, testModel)
-		latencyKey := fmt.Sprintf("%s:latencies", prefix)
-		// Issue #8: Latency is now stored as score, not member
-		scores, err := client.ZRangeWithScores(ctx, latencyKey, 0, -1).Result()
+		latencyKey := fmt.Sprintf("%s:%s", prefix, latencyKeySuffix)
+		latencies, err := client.LRange(ctx, latencyKey, 0, -1).Result()
 		require.NoError(t, err)
-		assert.Len(t, scores, 1)
-		assert.Equal(t, float64(150), scores[0].Score)
+		assert.Equal(t, []string{"150"}, latencies)
+	})
+
+	t.Run("caps latency history at the 100 most recent samples", func(t *testing.T) {
+		client, _ := newTestRedis(t)
+		svc := NewHealthService(client, "")
+		ctx := testContext()
+
+		for latency := 1; latency <= 150; latency++ {
+			svc.RecordSuccess(ctx, testProvider, testModel, latency)
+		}
+
+		prefix := svc.buildHealthKeyPrefix(testProvider, testModel)
+		latencyKey := fmt.Sprintf("%s:%s", prefix, latencyKeySuffix)
+		latencies, err := client.LRange(ctx, latencyKey, 0, -1).Result()
+		require.NoError(t, err)
+		require.Len(t, latencies, latencyHistoryLimit)
+		assert.Equal(t, "150", latencies[0])
+		assert.Equal(t, "51", latencies[latencyHistoryLimit-1])
+
+		metrics := svc.GetHealthMetrics(ctx, testProvider, testModel)
+		require.NotNil(t, metrics.AverageLatency)
+		assert.Equal(t, 100, *metrics.AverageLatency)
 	})
 }
 
@@ -204,6 +227,64 @@ func TestHealthGetHealthMetrics(t *testing.T) {
 		require.NotNil(t, metrics.AverageLatency)
 		assert.Equal(t, 150, *metrics.AverageLatency)
 	})
+
+	t.Run("uses the versioned list alongside the legacy ZSET and preserves expiry", func(t *testing.T) {
+		client, mr := newTestRedis(t)
+		svc := NewHealthService(client, "")
+		ctx := testContext()
+		prefix := svc.buildHealthKeyPrefix(testProvider, testModel)
+		legacyKey := fmt.Sprintf("%s:latencies", prefix)
+		latencyKey := fmt.Sprintf("%s:%s", prefix, latencyKeySuffix)
+
+		require.NoError(t, client.ZAdd(ctx, legacyKey, redis.Z{Score: 999, Member: "legacy"}).Err())
+		svc.RecordSuccess(ctx, testProvider, testModel, 250)
+
+		legacyType, err := client.Type(ctx, legacyKey).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "zset", legacyType)
+		latencyType, err := client.Type(ctx, latencyKey).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "list", latencyType)
+
+		ttl, err := client.TTL(ctx, latencyKey).Result()
+		require.NoError(t, err)
+		assert.Equal(t, time.Hour, ttl)
+
+		metrics := svc.GetHealthMetrics(ctx, testProvider, testModel)
+		require.NotNil(t, metrics.AverageLatency)
+		assert.Equal(t, 250, *metrics.AverageLatency)
+
+		mr.FastForward(time.Hour)
+		assert.Zero(t, client.Exists(ctx, latencyKey).Val())
+		assert.Nil(t, svc.GetHealthMetrics(ctx, testProvider, testModel).AverageLatency)
+	})
+}
+
+func TestHealthBatchGetHealthMetricsUsesBoundedLatencyHistory(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewHealthService(client, "")
+	ctx := context.Background()
+	pairs := []ProviderModelPair{
+		{ProviderID: "provider-a", Model: "model-a"},
+		{ProviderID: "provider-b", Model: "model-b"},
+	}
+
+	firstKey := fmt.Sprintf("%s:%s", svc.buildHealthKeyPrefix("provider-a", "model-a"), latencyKeySuffix)
+	firstSamples := make([]any, 150)
+	for i := range firstSamples {
+		firstSamples[i] = strconv.Itoa(i + 1)
+	}
+	require.NoError(t, client.RPush(ctx, firstKey, firstSamples...).Err())
+
+	svc.RecordSuccess(ctx, "provider-b", "model-b", 200)
+	svc.RecordSuccess(ctx, "provider-b", "model-b", 400)
+
+	metrics := svc.BatchGetHealthMetrics(ctx, pairs)
+	require.Len(t, metrics, 2)
+	require.NotNil(t, metrics[0].AverageLatency)
+	assert.Equal(t, 50, *metrics[0].AverageLatency)
+	require.NotNil(t, metrics[1].AverageLatency)
+	assert.Equal(t, 300, *metrics[1].AverageLatency)
 }
 
 func TestHealthCheckCircuitBreaker(t *testing.T) {

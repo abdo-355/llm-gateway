@@ -806,7 +806,7 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	provider := detectProvider(baseURL, providerType, auth)
 	headers := flattenHeaders(resp.Header)
 	if resp.StatusCode == http.StatusTooManyRequests {
-		body, _ := io.ReadAll(resp.Body)
+		body := readProviderErrorBody(resp.Body)
 		details := parseRateLimitDetails(provider, resp.Header, body)
 		err := errors.NewRateLimitErrorWithSubtype(
 			normalizeProviderErrorMessage(provider, resp.StatusCode, body),
@@ -819,12 +819,12 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	}
 
 	if resp.StatusCode == http.StatusPaymentRequired {
-		body, _ := io.ReadAll(resp.Body)
+		body := readProviderErrorBody(resp.Body)
 		return nil, &errors.PaymentRequiredError{ProviderError: errors.ProviderError{Message: normalizeProviderErrorMessage(provider, resp.StatusCode, body), StatusCode: 402, IsRetryable: false, Headers: headers}}
 	}
 
 	if resp.StatusCode >= 500 {
-		body, _ := io.ReadAll(resp.Body)
+		body := readProviderErrorBody(resp.Body)
 		return nil, &errors.ProviderError{
 			Message:     normalizeProviderErrorMessage(provider, resp.StatusCode, body),
 			StatusCode:  resp.StatusCode,
@@ -834,12 +834,12 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body := readProviderErrorBody(resp.Body)
 		return nil, classifyProviderHTTPError(provider, resp.StatusCode, headers, body)
 	}
 
 	// Parse response
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBoundedResponseBody(resp.Body, maxProviderResponseBodyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -869,7 +869,7 @@ func (s *ProviderService) handleResponse(resp *http.Response, baseURL, providerT
 }
 
 func (s *ProviderService) handleErrorResponse(resp *http.Response, baseURL, providerType string, auth types.ProviderAuth) error {
-	body, _ := io.ReadAll(resp.Body)
+	body := readProviderErrorBody(resp.Body)
 	provider := detectProvider(baseURL, providerType, auth)
 	headers := flattenHeaders(resp.Header)
 
@@ -1380,14 +1380,26 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 	scanner.Buffer(buf, 1024*1024)
 
 	lineCh := make(chan string)
-	scanErrCh := make(chan error, 1)
+	scanCtx, cancelScan := context.WithCancel(ctx)
+	scanDone := make(chan struct{})
+	var scanErr error
 
 	go func() {
+		defer close(scanDone)
 		defer close(lineCh)
 		for scanner.Scan() {
-			lineCh <- scanner.Text()
+			select {
+			case lineCh <- scanner.Text():
+			case <-scanCtx.Done():
+				return
+			}
 		}
-		scanErrCh <- scanner.Err()
+		scanErr = scanner.Err()
+	}()
+	defer func() {
+		cancelScan()
+		_ = body.Close()
+		<-scanDone
 	}()
 
 	inactivity := defaultStreamInactivityTimeout
@@ -1407,16 +1419,18 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 	for {
 		select {
 		case <-ctx.Done():
-			body.Close()
 			return ctx.Err()
 
 		case <-timer.C:
-			body.Close()
 			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
 
 		case line, ok := <-lineCh:
 			if !ok {
-				return <-scanErrCh
+				<-scanDone
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return scanErr
 			}
 
 			resetTimer()
@@ -1461,7 +1475,6 @@ func (s *ProviderService) parseSSEStreamChannel(ctx context.Context, body io.Rea
 			select {
 			case chunks <- &chunk:
 			case <-ctx.Done():
-				body.Close()
 				return ctx.Err()
 			}
 		}

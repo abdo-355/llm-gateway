@@ -11,10 +11,11 @@ import (
 )
 
 type EnvConfig struct {
-	Environment string
-	Port        int
-	MetricsPort int
-	LogLevel    string
+	Environment  string
+	Port         int
+	MetricsPort  int
+	LogLevel     string
+	PprofEnabled bool
 
 	GatewayAPIKey       string
 	GroqAPIKey          string
@@ -156,6 +157,7 @@ func LoadEnv() (*EnvConfig, error) {
 		Port:                port,
 		MetricsPort:         metricsPort,
 		LogLevel:            getEnvString("LOG_LEVEL", "info"),
+		PprofEnabled:        getEnvBool("PPROF_ENABLED", false),
 		GatewayAPIKey:       gatewayKey,
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
 		GeminiAPIKey:        os.Getenv("GEMINI_API_KEY"),

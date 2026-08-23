@@ -64,3 +64,17 @@ func TestLoadDotEnvInvalidLineFails(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parse .env line 1")
 }
+
+func TestLoadEnvPprofIsOptIn(t *testing.T) {
+	t.Setenv("GATEWAY_API_KEY", "test-api-key-that-is-at-least-32-characters-long")
+	t.Setenv("PPROF_ENABLED", "")
+
+	cfg, err := LoadEnv()
+	require.NoError(t, err)
+	assert.False(t, cfg.PprofEnabled)
+
+	t.Setenv("PPROF_ENABLED", "true")
+	cfg, err = LoadEnv()
+	require.NoError(t, err)
+	assert.True(t, cfg.PprofEnabled)
+}

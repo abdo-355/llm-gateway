@@ -133,8 +133,12 @@ func (s *ProviderService) prepareOllamaRequest(request types.ChatCompletionReque
 
 // handleOllamaResponse parses an Ollama native API response and converts to OpenAI format.
 func (s *ProviderService) handleOllamaResponse(resp *http.Response, model string) (*types.ChatCompletionResponse, error) {
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
+	limit := maxProviderResponseBodyBytes
+	if resp.StatusCode != http.StatusOK {
+		limit = maxProviderErrorBodyBytes
+	}
+	body, err := readBoundedResponseBody(resp.Body, limit)
+	if err != nil && resp.StatusCode == http.StatusOK {
 		return nil, err
 	}
 
@@ -289,14 +293,26 @@ func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.Read
 	provider := "ollama"
 
 	lineCh := make(chan string)
-	scanErrCh := make(chan error, 1)
+	scanCtx, cancelScan := context.WithCancel(ctx)
+	scanDone := make(chan struct{})
+	var scanErr error
 
 	go func() {
+		defer close(scanDone)
 		defer close(lineCh)
 		for scanner.Scan() {
-			lineCh <- scanner.Text()
+			select {
+			case lineCh <- scanner.Text():
+			case <-scanCtx.Done():
+				return
+			}
 		}
-		scanErrCh <- scanner.Err()
+		scanErr = scanner.Err()
+	}()
+	defer func() {
+		cancelScan()
+		_ = body.Close()
+		<-scanDone
 	}()
 
 	inactivity := defaultStreamInactivityTimeout
@@ -316,16 +332,18 @@ func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.Read
 	for {
 		select {
 		case <-ctx.Done():
-			body.Close()
 			return ctx.Err()
 
 		case <-timer.C:
-			body.Close()
 			return errors.NewTimeoutError("Inactivity timeout", "inactivity")
 
 		case line, ok := <-lineCh:
 			if !ok {
-				return <-scanErrCh
+				<-scanDone
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				return scanErr
 			}
 
 			resetTimer()
@@ -402,7 +420,6 @@ func (s *ProviderService) parseOllamaSSEStream(ctx context.Context, body io.Read
 			select {
 			case chunks <- chunk:
 			case <-ctx.Done():
-				body.Close()
 				return ctx.Err()
 			}
 

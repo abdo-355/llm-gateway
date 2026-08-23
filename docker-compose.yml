@@ -9,6 +9,9 @@ services:
       - PORT=8080
       - METRICS_PORT=9090
       - ENV=production
+      - GOMEMLIMIT=${GOMEMLIMIT:-3GiB}
+      - PPROF_ENABLED=${PPROF_ENABLED:-false}
+      - RETRY_MAX_ATTEMPTS=${RETRY_MAX_ATTEMPTS:-3}
       - GATEWAY_API_KEY=${GATEWAY_API_KEY}
       - RATE_LIMIT_PER_IP=${RATE_LIMIT_PER_IP:-100}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-60000}
@@ -30,6 +33,9 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: ${GATEWAY_MEMORY_LIMIT:-4g}
+    cpus: ${GATEWAY_CPUS:-1.5}
+    pids_limit: ${GATEWAY_PIDS_LIMIT:-512}
     healthcheck:
       test:
         [
