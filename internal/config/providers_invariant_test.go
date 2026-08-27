@@ -144,12 +144,14 @@ func TestTierRegistryInvariants(t *testing.T) {
 
 func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 	retired := map[string]struct{}{
-		"ollama/qwen3-next:80b":      {},
-		"ollama/qwen3-coder:480b":    {},
-		"ollama/deepseek-v3.1:671b":  {},
-		"ollama/mistral-large-3:675b": {},
-		"ollama/llama3.3:70b":        {},
-		"ollama/devstral-2:123b":     {},
+		"ollama/qwen3-next:80b":             {},
+		"ollama/qwen3-coder:480b":           {},
+		"ollama/deepseek-v3.1:671b":         {},
+		"ollama/mistral-large-3:675b":        {},
+		"ollama/llama3.3:70b":               {},
+		"ollama/devstral-2:123b":            {},
+		"openrouter-alpha/stealth/ox-alpha": {},
+		"nous/stealth/ox-alpha":             {},
 	}
 
 	for _, provider := range GetProviders() {

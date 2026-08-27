@@ -16,7 +16,6 @@ func GetProviders() []types.ProviderConfig {
 		getGeminiConfig(),
 		getNousConfig(),
 		getOpenRouterConfig(),
-		getOpenRouterAlphaConfig(),
 		getBaiConfig(),
 		getInferXConfig(),
 		getGmiConfig(),
@@ -667,7 +666,6 @@ func getNousConfig() types.ProviderConfig {
 	// low-credit accounts ("Too many concurrent inference requests"), which
 	// 429-benched every nous model under burst load. Gate locally instead.
 	conc3 := 3
-	ms60000 := 60000
 
 	return types.ProviderConfig{
 		ID:      "nous",
@@ -679,7 +677,6 @@ func getNousConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"stealth/ox-alpha",
 				"upstage/solar-pro4:free",
 				"stepfun/step-3.7-flash:free",
 				"tencent/hy3:free",
@@ -687,17 +684,8 @@ func getNousConfig() types.ProviderConfig {
 				"poolside/laguna-s-2.1:free",
 				"poolside/laguna-xs-2.1:free",
 			},
-			Limits: map[string]types.ModelLimits{
-				// Live generations finish at 19-27s; the default tier SLO of
-				// 30s killed legitimate completions at the wall.
-				"stealth/ox-alpha": {TimeoutMs: &ms60000},
-			},
+			Limits: map[string]types.ModelLimits{},
 			Capabilities: map[string]types.ModelCapabilities{
-				"stealth/ox-alpha": {
-					StructuredOutputs: strPtr("json_object"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
 				"upstage/solar-pro4:free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 				},
@@ -809,56 +797,6 @@ func getOpenRouterConfig() types.ProviderConfig {
 	}
 }
 
-// getOpenRouterAlphaConfig isolates stealth/ox-alpha under its own provider ID
-// so it gets a dedicated Redis quota scope with concurrency-only handling — no
-// request/token counters, no shared free-pool limits.
-func getOpenRouterAlphaConfig() types.ProviderConfig {
-	conc15 := 15
-
-	return types.ProviderConfig{
-		ID:      "openrouter-alpha",
-		BaseURL: "https://openrouter.ai/api/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "OPENROUTER_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"stealth/ox-alpha",
-			},
-			Limits: map[string]types.ModelLimits{
-				"stealth/ox-alpha": {MaxConcurrent: &conc15},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"stealth/ox-alpha": {
-					StructuredOutputs: strPtr("json_object"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_object",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: false,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits:       types.ProviderLimits{},
-		ProviderType: "openai",
-	}
-}
-
 func getBaiConfig() types.ProviderConfig {
 	conc5 := 5
 	pause60s := 60 * 1000
@@ -887,9 +825,8 @@ func getBaiConfig() types.ProviderConfig {
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"deepseek-v4-flash": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
+					Tools:     boolPtr(true),
+					Reasoning: boolPtr(true),
 				},
 				"deepseek-v4-flash-vision-exp": {
 					StructuredOutputs: strPtr("json_object"),
@@ -995,7 +932,7 @@ func getInferXConfig() types.ProviderConfig {
 }
 
 func getGmiConfig() types.ProviderConfig {
-	conc5 := 5
+	conc1 := 1
 	pause60s := 60 * 1000
 
 	return types.ProviderConfig{
@@ -1013,8 +950,8 @@ func getGmiConfig() types.ProviderConfig {
 				"MiniMaxAI/MiniMax-M2.7",
 			},
 			Limits: map[string]types.ModelLimits{
-				"MiniMaxAI/MiniMax-M3":   {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"MiniMaxAI/MiniMax-M2.7": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"MiniMaxAI/MiniMax-M3":   {MaxConcurrent: &conc1, RateLimitPauseMs: &pause60s},
+				"MiniMaxAI/MiniMax-M2.7": {MaxConcurrent: &conc1, RateLimitPauseMs: &pause60s},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"MiniMaxAI/MiniMax-M3": {
@@ -1051,6 +988,7 @@ func getGmiConfig() types.ProviderConfig {
 
 func getOrcaConfig() types.ProviderConfig {
 	conc5 := 5
+	ms15000 := 15000
 
 	return types.ProviderConfig{
 		ID:      "orca",
@@ -1068,9 +1006,9 @@ func getOrcaConfig() types.ProviderConfig {
 				"orcarouter/free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"deepseek/deepseek-v4-flash-free": {MaxConcurrent: &conc5},
-				"qwen/qwen3.8-27b-free":          {MaxConcurrent: &conc5},
-				"orcarouter/free":                 {MaxConcurrent: &conc5},
+				"deepseek/deepseek-v4-flash-free": {MaxConcurrent: &conc5, TimeoutMs: &ms15000},
+				"qwen/qwen3.8-27b-free":          {MaxConcurrent: &conc5, TimeoutMs: &ms15000},
+				"orcarouter/free":                 {MaxConcurrent: &conc5, TimeoutMs: &ms15000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"deepseek/deepseek-v4-flash-free": {
@@ -1171,7 +1109,7 @@ func getVercelConfig() types.ProviderConfig {
 }
 
 func getEmperoConfig() types.ProviderConfig {
-	conc5 := 5
+	conc1 := 1
 	pause60s := 60 * 1000
 
 	return types.ProviderConfig{
@@ -1189,8 +1127,8 @@ func getEmperoConfig() types.ProviderConfig {
 				"deepseek-v4-flash",
 			},
 			Limits: map[string]types.ModelLimits{
-				"glm-5.3-flash":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"deepseek-v4-flash": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"glm-5.3-flash":     {MaxConcurrent: &conc1, RateLimitPauseMs: &pause60s},
+				"deepseek-v4-flash": {MaxConcurrent: &conc1, RateLimitPauseMs: &pause60s},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"glm-5.3-flash": {
@@ -1228,6 +1166,7 @@ func getEmperoConfig() types.ProviderConfig {
 func getTokenHarborConfig() types.ProviderConfig {
 	conc5 := 5
 	pause60s := 60 * 1000
+	ms15000 := 15000
 
 	return types.ProviderConfig{
 		ID:      "tokenharbor",
@@ -1245,9 +1184,9 @@ func getTokenHarborConfig() types.ProviderConfig {
 				"mimo-v2.5:free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"deepseek-v4-flash:free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"qwen3.8-27b:free":       {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"mimo-v2.5:free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"deepseek-v4-flash:free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
+				"qwen3.8-27b:free":       {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
+				"mimo-v2.5:free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"deepseek-v4-flash:free": {

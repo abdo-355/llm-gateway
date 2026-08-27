@@ -869,6 +869,14 @@ func TestClassifyProviderHTTPError_StructuredOutputProvider400IsProviderError(t 
 			name: "groq failed generation strict json",
 			body: `{"error":{"message":"Failed to validate JSON. Please adjust your prompt. See 'failed_generation' for more details.","failed_generation":"{}"}}`,
 		},
+		{
+			name: "bai unavailable response format type",
+			body: `{"error":{"message":"The request is invalid: This response_format type is unavailable now. Please check the request body, required fields, and request format."}}`,
+		},
+		{
+			name: "provider response format disabled",
+			body: `{"error":{"message":"response_format is disabled for this model"}}`,
+		},
 	}
 
 	for _, tt := range tests {

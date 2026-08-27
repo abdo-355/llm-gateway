@@ -8,15 +8,11 @@ import "github.com/abdo-355/llm-gateway/internal/types"
 //	0.78–0.84 strong                  0.68–0.76 competent fallback
 //	0.56–0.66 deep fallback           0.40–0.54 untrusted/free-pool emergency
 //
-// stealth/ox-alpha and x-preview-f-free intentionally share the top weight in
-// every tier; live health/success/concurrency scoring breaks their ties.
+// Live health/success/concurrency scoring dynamically adjusts rankings at runtime.
 var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierDefault: {
 		Tier: types.TierDefault,
 		Entries: []types.TierEntry{
-			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
-			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
-			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "groq", Model: "qwen/qwen3.6-27b", Weight: 0.94},
 			{Provider: "gemini", Model: "gemini-3.5-flash-lite", Weight: 0.92},
 			{Provider: "groq", Model: "openai/gpt-oss-120b", Weight: 0.88},
@@ -84,9 +80,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierPro: {
 		Tier: types.TierPro,
 		Entries: []types.TierEntry{
-			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
-			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
-			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "gemini", Model: "gemini-3.7-flash", Weight: 0.98},
 			{Provider: "opencode", Model: "muse-spark-1.2-contributor-free", Weight: 0.96},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.94},
@@ -131,9 +124,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 	types.TierMax: {
 		Tier: types.TierMax,
 		Entries: []types.TierEntry{
-			{Provider: "openrouter-alpha", Model: "stealth/ox-alpha", Weight: 1.00},
-			{Provider: "opencode", Model: "x-preview-f-free", Weight: 1.00},
-			{Provider: "nous", Model: "stealth/ox-alpha", Weight: 0.98},
 			{Provider: "gemini", Model: "gemini-3.7-flash", Weight: 0.98},
 			{Provider: "opencode", Model: "muse-spark-1.2-contributor-free", Weight: 0.97},
 			{Provider: "opencode", Model: "nemotron-3-ultra-free", Weight: 0.95},

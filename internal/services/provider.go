@@ -960,14 +960,16 @@ func isProviderUnsupportedResponseFormat(statusCode int, lowerMessage string) bo
 	if !strings.Contains(lowerMessage, "response format") && !strings.Contains(lowerMessage, "response_format") {
 		return false
 	}
-	if !strings.Contains(lowerMessage, "json_schema") && !strings.Contains(lowerMessage, "json schema") &&
-		!strings.Contains(lowerMessage, "json_object") && !strings.Contains(lowerMessage, "json object") {
-		return false
-	}
-	return strings.Contains(lowerMessage, "does not support") ||
-		strings.Contains(lowerMessage, "not support") ||
+	if strings.Contains(lowerMessage, "unavailable") ||
+		strings.Contains(lowerMessage, "not available") ||
+		strings.Contains(lowerMessage, "disabled") ||
 		strings.Contains(lowerMessage, "not supported") ||
-		strings.Contains(lowerMessage, "unsupported")
+		strings.Contains(lowerMessage, "unsupported") ||
+		strings.Contains(lowerMessage, "does not support") ||
+		strings.Contains(lowerMessage, "not support") {
+		return true
+	}
+	return false
 }
 
 func isProviderSchemaDialectRejection(statusCode int, lowerMessage string) bool {
