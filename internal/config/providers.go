@@ -17,6 +17,13 @@ func GetProviders() []types.ProviderConfig {
 		getNousConfig(),
 		getOpenRouterConfig(),
 		getOpenRouterAlphaConfig(),
+		getBaiConfig(),
+		getInferXConfig(),
+		getGmiConfig(),
+		getOrcaConfig(),
+		getVercelConfig(),
+		getEmperoConfig(),
+		getTokenHarborConfig(),
 	}
 }
 
@@ -392,81 +399,31 @@ func getOllamaConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"llama3.3:70b",
-				"devstral-small-2:24b",
 				"gemma4:31b",
-				"gemma3:27b",
-				"gemma3:12b",
-				"nemotron-3-nano:30b",
-				"gpt-oss:20b",
-				"gemma3:4b",
-				"ministral-3:14b",
-				"ministral-3:8b",
-				"ministral-3:3b",
-				"rnj-1:8b",
-				"deepseek-v3.2",
-				"qwen3-coder:480b",
-				"qwen3-coder-next",
-				"devstral-2:123b",
-				"minimax-m2.5",
-				"nemotron-3-super",
-				"cogito-2.1:671b",
-				"deepseek-v3.1:671b",
 				"gpt-oss:120b",
-				"glm-4.7",
-				"glm-4.6",
-				"minimax-m2.1",
-				"minimax-m2",
-				"minimax-m2.7",
-				"mistral-large-3:675b",
+				"gpt-oss:20b",
+				"minimax-m3",
+				"nemotron-3-nano:30b",
+				"nemotron-3-super",
+				"nemotron-3-ultra",
 			},
 			Limits: map[string]types.ModelLimits{
-				"llama3.3:70b":         {MaxConcurrent: &conc1},
-				"devstral-small-2:24b": {MaxConcurrent: &conc1},
-				"gemma4:31b":           {MaxConcurrent: &conc1},
-				"gemma3:27b":           {MaxConcurrent: &conc1},
-				"gemma3:12b":           {MaxConcurrent: &conc1},
-				"nemotron-3-nano:30b":  {MaxConcurrent: &conc1},
-				"gpt-oss:20b":          {MaxConcurrent: &conc1},
-				"gemma3:4b":            {MaxConcurrent: &conc1},
-				"ministral-3:14b":      {MaxConcurrent: &conc1},
-				"ministral-3:8b":       {MaxConcurrent: &conc1},
-				"ministral-3:3b":       {MaxConcurrent: &conc1},
-				"rnj-1:8b":             {MaxConcurrent: &conc1},
-				"deepseek-v3.2":        {MaxConcurrent: &conc1},
-				"qwen3-coder:480b":     {MaxConcurrent: &conc1},
-				"qwen3-coder-next":     {MaxConcurrent: &conc1},
-				"devstral-2:123b":      {MaxConcurrent: &conc1},
-				"minimax-m2.5":         {MaxConcurrent: &conc1},
-				"nemotron-3-super":     {MaxConcurrent: &conc1},
-				"cogito-2.1:671b":      {MaxConcurrent: &conc1},
-				"deepseek-v3.1:671b":   {MaxConcurrent: &conc1},
+				"gemma4:31b":          {MaxConcurrent: &conc1},
 				"gpt-oss:120b":         {MaxConcurrent: &conc1},
-				"glm-4.7":              {MaxConcurrent: &conc1},
-				"glm-4.6":              {MaxConcurrent: &conc1},
-				"minimax-m2.1":         {MaxConcurrent: &conc1},
-				"minimax-m2":           {MaxConcurrent: &conc1},
-				"minimax-m2.7":         {MaxConcurrent: &conc1},
-				"mistral-large-3:675b": {MaxConcurrent: &conc1},
+				"gpt-oss:20b":          {MaxConcurrent: &conc1},
+				"minimax-m3":           {MaxConcurrent: &conc1},
+				"nemotron-3-nano:30b":  {MaxConcurrent: &conc1},
+				"nemotron-3-super":     {MaxConcurrent: &conc1},
+				"nemotron-3-ultra":     {MaxConcurrent: &conc1},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"cogito-2.1:671b":    {Tools: boolPtr(false), Reasoning: boolPtr(true)},
-				"deepseek-v3.1:671b": {Tools: boolPtr(false), Reasoning: boolPtr(true)},
-				"deepseek-v3.2":      {Reasoning: boolPtr(true)},
-				"gemma3:12b":         {Tools: boolPtr(false)},
-				"gemma3:27b":         {Tools: boolPtr(false)},
-				"gemma3:4b":          {Tools: boolPtr(false)},
-				"glm-4.6":            {Tools: boolPtr(false), Reasoning: boolPtr(true)},
-				"glm-4.7":            {Tools: boolPtr(false), Reasoning: boolPtr(true)},
-				"minimax-m2":         {Reasoning: boolPtr(true)},
-				"minimax-m2.1":       {Tools: boolPtr(false), Reasoning: boolPtr(true)},
-				"minimax-m2.5":       {Reasoning: boolPtr(true)},
-				"minimax-m2.7":       {Reasoning: boolPtr(true)},
-				"qwen3-coder-next":   {Reasoning: boolPtr(true)},
-				"qwen3-coder:480b":   {Reasoning: boolPtr(true)},
-				"rnj-1:8b":           {Tools: boolPtr(false)},
-				"gpt-oss:20b":        {Reasoning: boolPtr(true)},
-				"gpt-oss:120b":       {Reasoning: boolPtr(true)},
+				"gpt-oss:120b":     {Reasoning: boolPtr(true)},
+				"gpt-oss:20b":      {Reasoning: boolPtr(true)},
+				"minimax-m3":       {Reasoning: boolPtr(true)},
+				"nemotron-3-super": {Reasoning: boolPtr(true)},
+				"nemotron-3-ultra": {Reasoning: boolPtr(true)},
+				"gemma4:31b":       {Tools: boolPtr(true)},
+				"nemotron-3-nano:30b": {Tools: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -894,6 +851,432 @@ func getOpenRouterAlphaConfig() types.ProviderConfig {
 			PresencePenalty:     false,
 			MaxTokens:           true,
 			MaxCompletionTokens: false,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getBaiConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "bai",
+		BaseURL: "https://api.b.ai/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "BAI_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"deepseek-v4-flash",
+				"deepseek-v4-flash-vision-exp",
+				"hy3",
+				"mimo-v2.5",
+			},
+			Limits: map[string]types.ModelLimits{
+				"deepseek-v4-flash":            {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"deepseek-v4-flash-vision-exp": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"hy3":                          {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"mimo-v2.5":                    {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"deepseek-v4-flash": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"deepseek-v4-flash-vision-exp": {
+					StructuredOutputs: strPtr("json_object"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"hy3": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Reasoning:         boolPtr(true),
+				},
+				"mimo-v2.5": {
+					StructuredOutputs: strPtr("json_schema"),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "model_dependent",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getInferXConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "inferx",
+		BaseURL: "https://model.inferx.net/endpoints/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "INFERX_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"Devstral-2-123B-Instruct-2512-int4-AutoRound",
+				"Qwen3-Coder-Next-FP8",
+				"Qwen3.6-35B-A3B-FP8",
+				"Qwen3.8-27B-FP8",
+			},
+			Limits: map[string]types.ModelLimits{
+				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"Qwen3-Coder-Next-FP8":                         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"Qwen3.6-35B-A3B-FP8":                         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"Qwen3.8-27B-FP8":                             {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"Qwen3-Coder-Next-FP8": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"Qwen3.6-35B-A3B-FP8": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"Qwen3.8-27B-FP8": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema_strict",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getGmiConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "gmi",
+		BaseURL: "https://api.gmi-serving.com/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "GMI_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"MiniMaxAI/MiniMax-M3",
+				"MiniMaxAI/MiniMax-M2.7",
+			},
+			Limits: map[string]types.ModelLimits{
+				"MiniMaxAI/MiniMax-M3":   {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"MiniMaxAI/MiniMax-M2.7": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"MiniMaxAI/MiniMax-M3": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"MiniMaxAI/MiniMax-M2.7": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema_strict",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getOrcaConfig() types.ProviderConfig {
+	conc5 := 5
+
+	return types.ProviderConfig{
+		ID:      "orca",
+		BaseURL: "https://api.orcarouter.ai/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "ORCAROUTER_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"deepseek/deepseek-v4-flash-free",
+				"qwen/qwen3.8-27b-free",
+				"orcarouter/free",
+			},
+			Limits: map[string]types.ModelLimits{
+				"deepseek/deepseek-v4-flash-free": {MaxConcurrent: &conc5},
+				"qwen/qwen3.8-27b-free":          {MaxConcurrent: &conc5},
+				"orcarouter/free":                 {MaxConcurrent: &conc5},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"deepseek/deepseek-v4-flash-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"qwen/qwen3.8-27b-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"orcarouter/free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema_strict",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getVercelConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "vercel",
+		BaseURL: "https://ai-gateway.vercel.sh/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "AI_GATEWAY_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"minimax/minimax-m3-free",
+				"minimax/minimax-m2.7-free",
+				"poolside/laguna-s-2.1-free",
+			},
+			Limits: map[string]types.ModelLimits{
+				"minimax/minimax-m3-free":    {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"minimax/minimax-m2.7-free":  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"poolside/laguna-s-2.1-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"minimax/minimax-m3-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"minimax/minimax-m2.7-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"poolside/laguna-s-2.1-free": {
+					StructuredOutputs: strPtr("json_object"),
+					Tools:             boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "model_dependent",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getEmperoConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "empero",
+		BaseURL: "https://free.empero.org/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "EMPERO_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"glm-5.3-flash",
+				"deepseek-v4-flash",
+			},
+			Limits: map[string]types.ModelLimits{
+				"glm-5.3-flash":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"deepseek-v4-flash": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"glm-5.3-flash": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"deepseek-v4-flash": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "json_schema_strict",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
+			MultipleChoices:     false,
+			ToolSchema:          "json_schema",
+		},
+		Limits:       types.ProviderLimits{},
+		ProviderType: "openai",
+	}
+}
+
+func getTokenHarborConfig() types.ProviderConfig {
+	conc5 := 5
+	pause60s := 60 * 1000
+
+	return types.ProviderConfig{
+		ID:      "tokenharbor",
+		BaseURL: "https://tokenharbor.ai/v1",
+		Auth: types.ProviderAuth{
+			Type:     "bearer",
+			Env:      "TOKENHARBOR_API_KEY",
+			Optional: true,
+		},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{
+				"deepseek-v4-flash:free",
+				"qwen3.8-27b:free",
+				"mimo-v2.5:free",
+			},
+			Limits: map[string]types.ModelLimits{
+				"deepseek-v4-flash:free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"qwen3.8-27b:free":       {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"mimo-v2.5:free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+			},
+			Capabilities: map[string]types.ModelCapabilities{
+				"deepseek-v4-flash:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"qwen3.8-27b:free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"mimo-v2.5:free": {
+					StructuredOutputs: strPtr("json_schema"),
+				},
+			},
+		},
+		Capabilities: types.ProviderCapabilities{
+			Streaming:           true,
+			Tools:               true,
+			StructuredOutputs:   "model_dependent",
+			Logprobs:            false,
+			Metadata:            false,
+			Seed:                false,
+			User:                true,
+			FrequencyPenalty:    true,
+			PresencePenalty:     true,
+			MaxTokens:           true,
+			MaxCompletionTokens: true,
 			MultipleChoices:     false,
 			ToolSchema:          "json_schema",
 		},
