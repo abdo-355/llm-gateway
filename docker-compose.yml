@@ -29,6 +29,13 @@ services:
       - NOUS_API_KEY=${NOUS_API_KEY}
       - OCI_API_KEY=${OCI_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - BAI_API_KEY=${BAI_API_KEY}
+      - INFERX_API_KEY=${INFERX_API_KEY}
+      - GMI_API_KEY=${GMI_API_KEY}
+      - ORCAROUTER_API_KEY=${ORCAROUTER_API_KEY}
+      - AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY}
+      - EMPERO_API_KEY=${EMPERO_API_KEY:-free}
+      - TOKENHARBOR_API_KEY=${TOKENHARBOR_API_KEY:-${TH:-${TH_API_KEY}}}
     depends_on:
       redis:
         condition: service_healthy

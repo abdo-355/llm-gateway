@@ -30,6 +30,13 @@ type EnvConfig struct {
 	CohereAPIKey        string
 	NousAPIKey          string
 	OciAPIKey           string
+	BaiAPIKey           string
+	InferXAPIKey        string
+	GmiAPIKey           string
+	OrcaRouterAPIKey    string
+	AIGatewayAPIKey     string
+	EmperoAPIKey        string
+	TokenHarborAPIKey   string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -171,6 +178,13 @@ func LoadEnv() (*EnvConfig, error) {
 		CohereAPIKey:        os.Getenv("COHERE_API_KEY"),
 		NousAPIKey:          os.Getenv("NOUS_API_KEY"),
 		OciAPIKey:           os.Getenv("OCI_API_KEY"),
+		BaiAPIKey:           os.Getenv("BAI_API_KEY"),
+		InferXAPIKey:        os.Getenv("INFERX_API_KEY"),
+		GmiAPIKey:           os.Getenv("GMI_API_KEY"),
+		OrcaRouterAPIKey:    os.Getenv("ORCAROUTER_API_KEY"),
+		AIGatewayAPIKey:     os.Getenv("AI_GATEWAY_API_KEY"),
+		EmperoAPIKey:        getEnvString("EMPERO_API_KEY", "free"),
+		TokenHarborAPIKey:   resolveTokenHarborKey(),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
 		RateLimitGlobal:     rateLimitGlobal,
@@ -225,3 +239,14 @@ func GetEnv() *EnvConfig {
 	})
 	return envInstance
 }
+
+func resolveTokenHarborKey() string {
+	if val := os.Getenv("TOKENHARBOR_API_KEY"); val != "" {
+		return val
+	}
+	if val := os.Getenv("TH_API_KEY"); val != "" {
+		return val
+	}
+	return os.Getenv("TH")
+}
+
