@@ -512,6 +512,42 @@ func TestParseRateLimitDetails_GeminiQuotaFailure(t *testing.T) {
 	assert.Equal(t, "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quota.ID)
 }
 
+func TestParseRateLimitDetails_GeminiArrayWithRetryInfo(t *testing.T) {
+	body := []byte(`[{
+		"error": {
+			"code": 429,
+			"message": "You exceeded your current quota",
+			"status": "RESOURCE_EXHAUSTED",
+			"details": [
+				{
+					"@type": "type.googleapis.com/google.rpc.QuotaFailure",
+					"violations": [{
+						"quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count",
+						"quotaId": "GenerateContentInputTokensPerModelPerMinute-FreeTier",
+						"quotaValue": "16000"
+					}]
+				},
+				{
+					"@type": "type.googleapis.com/google.rpc.RetryInfo",
+					"retryDelay": "13s"
+				}
+			]
+		}
+	}]`)
+
+	details := parseRateLimitDetails("gemini", http.Header{}, body)
+	quota, ok := parseProviderQuotaDetails(body)
+
+	assert.True(t, ok)
+	assert.Equal(t, 13, details.RetryAfter)
+	assert.True(t, details.RetryAfterProvided)
+	assert.Equal(t, "tpm", details.LimitType)
+	assert.Equal(t, "quota_exhausted", details.LimitSubtype)
+	assert.Equal(t, "tpm", quota.LimitType)
+	assert.Equal(t, 16000, quota.Limit)
+	assert.Equal(t, "GenerateContentInputTokensPerModelPerMinute-FreeTier", quota.ID)
+}
+
 func TestParseRateLimitDetails_KiloDailyLimitReached(t *testing.T) {
 	body := []byte(`{"error":{"message":"429 limit_rpd/thinkingmachines/inkling-20260715/org/abc Daily limit reached for org-xyz."}}`)
 
@@ -1139,9 +1175,6 @@ func TestDetectProvider_NewProviders(t *testing.T) {
 		{"vercel by url", "https://ai-gateway.vercel.sh/v1", "", "vercel"},
 		{"empero by env", "https://api.example.com", "EMPERO_API_KEY", "empero"},
 		{"empero by url", "https://free.empero.org/v1", "", "empero"},
-		{"tokenharbor by env standard", "https://api.example.com", "TOKENHARBOR_API_KEY", "tokenharbor"},
-		{"tokenharbor by env short", "https://api.example.com", "TH", "tokenharbor"},
-		{"tokenharbor by url", "https://tokenharbor.ai/v1", "", "tokenharbor"},
 	}
 
 	for _, tc := range tests {

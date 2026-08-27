@@ -22,7 +22,6 @@ func GetProviders() []types.ProviderConfig {
 		getOrcaConfig(),
 		getVercelConfig(),
 		getEmperoConfig(),
-		getTokenHarborConfig(),
 	}
 }
 
@@ -863,8 +862,9 @@ func getBaiConfig() types.ProviderConfig {
 }
 
 func getInferXConfig() types.ProviderConfig {
-	conc5 := 5
+	conc2 := 2
 	pause60s := 60 * 1000
+	ms15000 := 15000
 
 	return types.ProviderConfig{
 		ID:      "inferx",
@@ -883,10 +883,10 @@ func getInferXConfig() types.ProviderConfig {
 				"Qwen3.8-27B-FP8",
 			},
 			Limits: map[string]types.ModelLimits{
-				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"Qwen3-Coder-Next-FP8":                         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"Qwen3.6-35B-A3B-FP8":                         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
-				"Qwen3.8-27B-FP8":                             {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s},
+				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {MaxConcurrent: &conc2, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
+				"Qwen3-Coder-Next-FP8":                         {MaxConcurrent: &conc2, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
+				"Qwen3.6-35B-A3B-FP8":                         {MaxConcurrent: &conc2, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
+				"Qwen3.8-27B-FP8":                             {MaxConcurrent: &conc2, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {
@@ -1147,67 +1147,6 @@ func getEmperoConfig() types.ProviderConfig {
 			Streaming:           true,
 			Tools:               true,
 			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits:       types.ProviderLimits{},
-		ProviderType: "openai",
-	}
-}
-
-func getTokenHarborConfig() types.ProviderConfig {
-	conc5 := 5
-	pause60s := 60 * 1000
-	ms15000 := 15000
-
-	return types.ProviderConfig{
-		ID:      "tokenharbor",
-		BaseURL: "https://tokenharbor.ai/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "TOKENHARBOR_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"deepseek-v4-flash:free",
-				"qwen3.8-27b:free",
-				"mimo-v2.5:free",
-			},
-			Limits: map[string]types.ModelLimits{
-				"deepseek-v4-flash:free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-				"qwen3.8-27b:free":       {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-				"mimo-v2.5:free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"deepseek-v4-flash:free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"qwen3.8-27b:free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"mimo-v2.5:free": {
-					StructuredOutputs: strPtr("json_schema"),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "model_dependent",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,

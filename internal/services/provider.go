@@ -625,8 +625,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "vercel"
 	case "EMPERO_API_KEY":
 		return "empero"
-	case "TOKENHARBOR_API_KEY", "TH_API_KEY", "TH":
-		return "tokenharbor"
 	}
 
 	switch {
@@ -654,8 +652,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "vercel"
 	case strings.Contains(baseURL, "free.empero.org"):
 		return "empero"
-	case strings.Contains(baseURL, "tokenharbor.ai"):
-		return "tokenharbor"
 	default:
 		return ""
 	}
@@ -1239,20 +1235,40 @@ type providerQuotaDetails struct {
 	ID        string
 }
 
+type errorWithDetailsPayload struct {
+	Error struct {
+		Details []json.RawMessage `json:"details"`
+	} `json:"error"`
+}
+
+func extractErrorDetails(body []byte) []json.RawMessage {
+	var single errorWithDetailsPayload
+	if err := json.Unmarshal(body, &single); err == nil && len(single.Error.Details) > 0 {
+		return single.Error.Details
+	}
+	var arr []errorWithDetailsPayload
+	if err := json.Unmarshal(body, &arr); err == nil {
+		var all []json.RawMessage
+		for _, item := range arr {
+			all = append(all, item.Error.Details...)
+		}
+		return all
+	}
+	return nil
+}
+
 // parseBodyRetryDelay extracts a provider-supplied retry delay from an error
 // response body, e.g. Google's google.rpc.RetryInfo detail:
 // {"error":{"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"37s"}]}}
+// or array formatted errors:
+// [{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"13s"}]}}]
 func parseBodyRetryDelay(body []byte) int {
-	var payload struct {
-		Error struct {
-			Details []json.RawMessage `json:"details"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
+	details := extractErrorDetails(body)
+	if len(details) == 0 {
 		return 0
 	}
 
-	for _, rawDetail := range payload.Error.Details {
+	for _, rawDetail := range details {
 		var detail struct {
 			RetryDelay string `json:"retryDelay"`
 		}
@@ -1284,16 +1300,12 @@ func parseDurationSeconds(value string) int {
 }
 
 func parseProviderQuotaDetails(body []byte) (providerQuotaDetails, bool) {
-	var payload struct {
-		Error struct {
-			Details []json.RawMessage `json:"details"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
+	details := extractErrorDetails(body)
+	if len(details) == 0 {
 		return providerQuotaDetails{}, false
 	}
 
-	for _, rawDetail := range payload.Error.Details {
+	for _, rawDetail := range details {
 		var detail map[string]any
 		if err := json.Unmarshal(rawDetail, &detail); err != nil {
 			continue
