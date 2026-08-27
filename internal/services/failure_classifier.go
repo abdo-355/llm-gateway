@@ -97,6 +97,10 @@ func (c *DefaultFailureClassifier) Classify(err error, ctx types.FailureContext)
 			decision.Action = types.ActionFailover
 			decision.IsRetryable = false
 			decision.Reason = "quota/billing exhausted, trying different provider"
+		case "prompt_too_large":
+			decision.Action = types.ActionFailover
+			decision.IsRetryable = false
+			decision.Reason = "prompt exceeds free-tier token cap, failing over to alternative provider"
 		case "overload":
 			decision.Action = types.ActionFailover
 			decision.Reason = "provider overloaded, trying different provider"

@@ -131,3 +131,16 @@ func TestFailureClassifier_PaymentFailsOverInsteadOfAborting(t *testing.T) {
 	assert.False(t, decision.IsRetryable)
 	assert.Contains(t, decision.Reason, "billing")
 }
+
+func TestFailureClassifier_PromptTooLargeFailsOverNonRetryable(t *testing.T) {
+	classifier := NewDefaultFailureClassifier()
+	rateLimitErr := errors.NewRateLimitErrorWithSubtype("prompt too large", 0, "prompt_cap", "prompt_too_large", nil)
+
+	decision := classifier.Classify(rateLimitErr, types.FailureContext{MaxAttempts: 3, HasRemainingBudget: true, AttemptIndex: 0})
+
+	assert.Equal(t, types.CategoryRateLimit, decision.Category)
+	assert.Equal(t, types.ActionFailover, decision.Action)
+	assert.False(t, decision.IsRetryable)
+	assert.Contains(t, decision.Reason, "free-tier token cap")
+}
+

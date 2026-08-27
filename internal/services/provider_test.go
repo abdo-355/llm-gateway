@@ -1111,3 +1111,60 @@ func TestProviderStreamProviderChannel_DoneTerminates(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func ptrString(s string) *string { return &s }
+
+func TestDetectProvider_NewProviders(t *testing.T) {
+	tests := []struct {
+		name         string
+		baseURL      string
+		authEnv      string
+		expectedProv string
+	}{
+		{"bai by env", "https://api.example.com", "BAI_API_KEY", "bai"},
+		{"bai by url", "https://api.b.ai/v1", "", "bai"},
+		{"inferx by env", "https://api.example.com", "INFERX_API_KEY", "inferx"},
+		{"inferx by url", "https://model.inferx.net/endpoints/v1", "", "inferx"},
+		{"gmi by env", "https://api.example.com", "GMI_API_KEY", "gmi"},
+		{"gmi by url", "https://api.gmi-serving.com/v1", "", "gmi"},
+		{"orca by env", "https://api.example.com", "ORCAROUTER_API_KEY", "orca"},
+		{"orca by url", "https://api.orcarouter.ai/v1", "", "orca"},
+		{"vercel by env", "https://api.example.com", "AI_GATEWAY_API_KEY", "vercel"},
+		{"vercel by url", "https://ai-gateway.vercel.sh/v1", "", "vercel"},
+		{"empero by env", "https://api.example.com", "EMPERO_API_KEY", "empero"},
+		{"empero by url", "https://free.empero.org/v1", "", "empero"},
+		{"tokenharbor by env standard", "https://api.example.com", "TOKENHARBOR_API_KEY", "tokenharbor"},
+		{"tokenharbor by env short", "https://api.example.com", "TH", "tokenharbor"},
+		{"tokenharbor by url", "https://tokenharbor.ai/v1", "", "tokenharbor"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := detectProvider(tc.baseURL, "openai", types.ProviderAuth{Type: "bearer", Env: tc.authEnv})
+			assert.Equal(t, tc.expectedProv, got)
+		})
+	}
+}
+
+func TestParseRateLimitDetails_Orca(t *testing.T) {
+	t.Run("with retry-after header is rate limit", func(t *testing.T) {
+		headers := http.Header{"Retry-After": []string{"42"}}
+		body := []byte(`{"error":{"code":"free_rate_limited","message":"rate limit exceeded"}}`)
+		details := parseRateLimitDetails("orca", headers, body)
+
+		assert.Equal(t, 42, details.RetryAfter)
+		assert.True(t, details.RetryAfterProvided)
+		assert.Equal(t, "rpm", details.LimitType)
+		assert.Equal(t, "rate_limit", details.LimitSubtype)
+	})
+
+	t.Run("without retry-after is prompt cap ceiling", func(t *testing.T) {
+		headers := http.Header{}
+		body := []byte(`{"error":{"code":"free_rate_limited","message":"prompt tokens exceed free tier allowance"}}`)
+		details := parseRateLimitDetails("orca", headers, body)
+
+		assert.Equal(t, 0, details.RetryAfter)
+		assert.False(t, details.RetryAfterProvided)
+		assert.Equal(t, "prompt_cap", details.LimitType)
+		assert.Equal(t, "prompt_too_large", details.LimitSubtype)
+	})
+}
+

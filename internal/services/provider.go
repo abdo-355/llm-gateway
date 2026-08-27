@@ -613,6 +613,20 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return cloudflareProviderID
 	case "OCI_API_KEY":
 		return "oci"
+	case "BAI_API_KEY":
+		return "bai"
+	case "INFERX_API_KEY":
+		return "inferx"
+	case "GMI_API_KEY":
+		return "gmi"
+	case "ORCAROUTER_API_KEY":
+		return "orca"
+	case "AI_GATEWAY_API_KEY":
+		return "vercel"
+	case "EMPERO_API_KEY":
+		return "empero"
+	case "TOKENHARBOR_API_KEY", "TH_API_KEY", "TH":
+		return "tokenharbor"
 	}
 
 	switch {
@@ -628,6 +642,20 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return cloudflareProviderID
 	case strings.Contains(baseURL, "ollama.com"):
 		return "ollama"
+	case strings.Contains(baseURL, "api.b.ai"):
+		return "bai"
+	case strings.Contains(baseURL, "inferx.net"):
+		return "inferx"
+	case strings.Contains(baseURL, "gmi-serving.com"):
+		return "gmi"
+	case strings.Contains(baseURL, "orcarouter.ai"):
+		return "orca"
+	case strings.Contains(baseURL, "ai-gateway.vercel.sh"):
+		return "vercel"
+	case strings.Contains(baseURL, "free.empero.org"):
+		return "empero"
+	case strings.Contains(baseURL, "tokenharbor.ai"):
+		return "tokenharbor"
 	default:
 		return ""
 	}
@@ -1024,6 +1052,25 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) ra
 	}
 
 	switch provider {
+	case "orca":
+		if strings.Contains(bodyUpper, "FREE_RATE_LIMITED") || strings.Contains(bodyUpper, "PROMPT") || !retryAfterProvided {
+			if !retryAfterProvided {
+				return rateLimitParseResult{
+					RetryAfter:         0,
+					RetryAfterProvided: false,
+					LimitType:          "prompt_cap",
+					LimitSubtype:       "prompt_too_large",
+					ResetAtUnixMs:      0,
+				}
+			}
+		}
+		return rateLimitParseResult{
+			RetryAfter:         retryAfter,
+			RetryAfterProvided: true,
+			LimitType:          "rpm",
+			LimitSubtype:       "rate_limit",
+			ResetAtUnixMs:      parseResetAtUnixMs(headers, body),
+		}
 	case "groq":
 		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
 			return rateLimitParseResult{retryAfter, retryAfterProvided, "rpd", limitSubtype, parseResetAtUnixMs(headers, body)}
