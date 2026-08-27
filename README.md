@@ -25,12 +25,24 @@ LLM Gateway is a unified API interface that sits between your application and LL
 
 ### Supported Providers
 
-- **Groq** - Fast inference for Llama models
+- **OpenRouter Alpha & OpenRouter** - Frontier models (`stealth/ox-alpha`, Nemotron-3, GLM-5.2)
+- **OpenCode Zen** - Fast reasoning and coding models (`x-preview-f-free`, `muse-spark`, `nemotron-3-ultra-free`)
+- **Nous Portal** - High-performance reasoning models (`stealth/ox-alpha`, `solar-pro4`)
+- **Token Harbor (TH)** - Multi-model free endpoints (`deepseek-v4-flash:free`, `qwen3.8-27b:free`, `mimo-v2.5:free`)
+- **Empero** - Low-latency OpenAI-compatible models (`glm-5.3-flash`, `deepseek-v4-flash`)
+- **Vercel AI Gateway** - MiniMax and Laguna free models (`minimax-m3-free`, `minimax-m2.7-free`, `laguna-s-2.1-free`)
+- **Orca / OrcaRouter** - Free tier completions with adaptive 429 backoff (`deepseek-v4-flash-free`, `qwen3.8-27b-free`)
+- **GMI** - MiniMax reasoning models (`MiniMax-M3`, `MiniMax-M2.7`)
+- **InferX** - FP8 and quantized frontier models (`Devstral-2-123B`, `Qwen3-Coder-Next`, `Qwen3.8-27B`, `Qwen3.6-35B`)
+- **BAI** - DeepSeek and HY3 endpoints (`deepseek-v4-flash`, `hy3`, `mimo-v2.5`)
+- **Groq** - Ultra-fast inference for Qwen and Llama models
+- **Google Gemini** - Official Gemini 3.7/3.6/3.5 and Gemma 4 models
 - **NVIDIA NIM** - High-performance LLMs via NVIDIA's API
-- **Ollama** - Self-hosted and cloud Ollama models
+- **Ollama** - Official 7 free cloud models (`gpt-oss:120b`, `nemotron-3-ultra`, `minimax-m3`, `gemma4:31b`, etc.)
+- **Oracle Cloud (OCI)** - Llama 3.3 70B strict schema certified
 - **Kilo** - Diverse models via Kilo's gateway
 - **Cloudflare Workers AI** - Native Workers AI chat models with daily neuron-budget tracking
-- **OpenCode Zen** - Free and experimental models via OpenCode's Zen gateway
+- **Cohere & Z.AI** - Specialized embeddings, chat, and reasoning models
 
 ---
 
