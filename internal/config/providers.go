@@ -293,7 +293,7 @@ func getCloudflareConfig() types.ProviderConfig {
 
 func getOpenCodeConfig() types.ProviderConfig {
 	conc5 := 5
-	pause24h := 24 * 60 * 60 * 1000
+	pause6h := 6 * 60 * 60 * 1000
 
 	return types.ProviderConfig{
 		ID:      "opencode",
@@ -311,10 +311,10 @@ func getOpenCodeConfig() types.ProviderConfig {
 				"nemotron-3.5-lightning-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
-				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
-				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
-				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
+				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				// Muse Spark rides Zen's Responses API bridge: legacy max_tokens
