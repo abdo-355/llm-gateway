@@ -363,7 +363,7 @@ func isStrictJSONSchema(format *types.ResponseFormat) bool {
 
 func isResponsesBackedOpenCodeModel(model string) bool {
 	switch model {
-	case "muse-spark-1.2-contributor-free":
+	case "muse-spark-1.2-contributor-free", "muse-spark-1.3-contributor-free":
 		return true
 	default:
 		return false

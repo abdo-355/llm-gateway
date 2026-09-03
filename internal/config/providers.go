@@ -305,14 +305,24 @@ func getOpenCodeConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
+				"big-pickle",
+				"deepseek-v4-flash-free",
+				"laguna-s-2.1-free",
+				"ling-3.0-flash-fin-free",
 				"mimo-v2.5-free",
 				"muse-spark-1.2-contributor-free",
+				"muse-spark-1.3-contributor-free",
 				"nemotron-3-ultra-free",
 				"nemotron-3.5-lightning-free",
 			},
 			Limits: map[string]types.ModelLimits{
+				"big-pickle":                      {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"deepseek-v4-flash-free":          {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"laguna-s-2.1-free":               {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"ling-3.0-flash-fin-free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"muse-spark-1.3-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
 			},
@@ -327,6 +337,18 @@ func getOpenCodeConfig() types.ProviderConfig {
 					MaxCompletionTokens: boolPtr(true),
 					Tools:               boolPtr(false),
 					Reasoning:           boolPtr(true),
+				},
+				"muse-spark-1.3-contributor-free": {
+					MaxTokens:           boolPtr(false),
+					MaxCompletionTokens: boolPtr(true),
+					Tools:               boolPtr(false),
+					Reasoning:           boolPtr(true),
+				},
+				"ling-3.0-flash-fin-free": {
+					Reasoning: boolPtr(true),
+				},
+				"deepseek-v4-flash-free": {
+					Reasoning: boolPtr(true),
 				},
 				"mimo-v2.5-free": {
 					StructuredOutputs: strPtr("json_schema"),
