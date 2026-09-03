@@ -316,15 +316,15 @@ func getOpenCodeConfig() types.ProviderConfig {
 				"nemotron-3.5-lightning-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"big-pickle":                      {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"deepseek-v4-flash-free":          {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"laguna-s-2.1-free":               {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"ling-3.0-flash-fin-free":         {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"muse-spark-1.3-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
-				"nemotron-3.5-lightning-free":     {MaxConcurrent: &conc5, RateLimitPauseMs: &pause6h},
+				"big-pickle":                      {RateLimitPauseMs: &pause6h},
+				"deepseek-v4-flash-free":          {RateLimitPauseMs: &pause6h},
+				"laguna-s-2.1-free":               {RateLimitPauseMs: &pause6h},
+				"ling-3.0-flash-fin-free":         {RateLimitPauseMs: &pause6h},
+				"mimo-v2.5-free":                  {RateLimitPauseMs: &pause6h},
+				"muse-spark-1.2-contributor-free": {RateLimitPauseMs: &pause6h},
+				"muse-spark-1.3-contributor-free": {RateLimitPauseMs: &pause6h},
+				"nemotron-3-ultra-free":           {RateLimitPauseMs: &pause6h},
+				"nemotron-3.5-lightning-free":     {RateLimitPauseMs: &pause6h},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				// Muse Spark rides Zen's Responses API bridge: legacy max_tokens
@@ -383,7 +383,9 @@ func getOpenCodeConfig() types.ProviderConfig {
 			MultipleChoices:     false,
 			ToolSchema:          "json_schema",
 		},
-		Limits:       types.ProviderLimits{},
+		Limits: types.ProviderLimits{
+			MaxConcurrent: &conc5,
+		},
 		ProviderType: "openai",
 	}
 }

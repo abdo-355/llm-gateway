@@ -568,6 +568,17 @@ func (r *Router) concurrencyLoadPenalty(ctx context.Context, candidate types.Rou
 		return 0
 	}
 
+	if pLimit := r.lookupProviderConcurrencyLimit(candidate.Provider.ID); pLimit > 0 {
+		current, err := reader.GetConcurrencyUsage(ctx, candidate.Provider.ID, providerQuotaScopeModel)
+		if err == nil && current > 0 {
+			utilization := float64(current) / float64(pLimit)
+			if utilization > 1 {
+				utilization = 1
+			}
+			return utilization * 0.75
+		}
+	}
+
 	limits := effectiveModelLimits(candidate.Provider, candidate.Model)
 	if limits.MaxConcurrent == nil || *limits.MaxConcurrent <= 0 {
 		return 0

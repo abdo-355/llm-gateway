@@ -95,3 +95,59 @@ func TestAcquireAttemptConcurrency_NoCapsConfigured(t *testing.T) {
 	assert.True(t, ok)
 	assert.Nil(t, release)
 }
+
+func TestAcquireAttemptConcurrency_ProviderWideSharedAcrossModels(t *testing.T) {
+	client, _ := newTestRedis(t)
+	svc := NewQuotaService(client, "quota")
+	healthSvc := NewHealthService(client, "health")
+	cfg := types.AppConfig{Providers: []types.ProviderConfig{{
+		ID:      "opencode",
+		BaseURL: "https://opencode.ai/zen/v1",
+		Limits:  types.ProviderLimits{MaxConcurrent: intPtr(5)},
+		Models: types.ProviderModels{
+			Mode: "allowlist",
+			List: []string{"model-a", "model-b"},
+			Limits: map[string]types.ModelLimits{
+				"model-a": {},
+				"model-b": {},
+			},
+		},
+	}}}
+	r := NewRouterWithConfig(cfg, svc, healthSvc, newProviderService())
+	ctx := testContext()
+
+	// Acquire 3 on model-a
+	var releases []func()
+	for i := 0; i < 3; i++ {
+		rel, scope, ok := r.acquireAttemptConcurrency(ctx, "opencode", "model-a")
+		require.True(t, ok)
+		require.Empty(t, scope)
+		releases = append(releases, rel)
+	}
+
+	// Acquire 2 on model-b
+	for i := 0; i < 2; i++ {
+		rel, scope, ok := r.acquireAttemptConcurrency(ctx, "opencode", "model-b")
+		require.True(t, ok)
+		require.Empty(t, scope)
+		releases = append(releases, rel)
+	}
+
+	// 6th attempt on model-a must fail with provider scope
+	rel, scope, ok := r.acquireAttemptConcurrency(ctx, "opencode", "model-a")
+	assert.False(t, ok)
+	assert.Nil(t, rel)
+	assert.Equal(t, "provider", scope)
+
+	// Release 1 and try again
+	releases[0]()
+	rel, scope, ok = r.acquireAttemptConcurrency(ctx, "opencode", "model-a")
+	assert.True(t, ok)
+	assert.Empty(t, scope)
+	rel()
+
+	for _, release := range releases[1:] {
+		release()
+	}
+}
+
