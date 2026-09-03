@@ -376,3 +376,110 @@ func TestCompletions_PropagatesRouteContextToRequest(t *testing.T) {
 	assert.Equal(t, "default", tier)
 	assert.Equal(t, "balanced", strategy)
 }
+
+func TestCompletions_Stream_EarlyFailureReturnsRealHTTPStatus(t *testing.T) {
+	router := &mockRouter{
+		deriveRequirementsFn: func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
+			return types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "allowed"}
+		},
+		executeStreamFn: func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult {
+			chunks := make(chan *types.SSEChunk)
+			close(chunks)
+			errs := make(chan *types.GatewayError, 1)
+			errs <- &types.GatewayError{
+				Type:    "gateway_error",
+				Code:    "ALL_ATTEMPTS_FAILED",
+				Message: "All 59 candidates exhausted",
+			}
+			return types.StreamResult{Chunks: chunks, Err: errs}
+		},
+	}
+
+	body := `{"model":"default","messages":[{"role":"user","content":"Hi"}],"stream":true}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	var resp map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	errObj, ok := resp["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "ALL_ATTEMPTS_FAILED", errObj["code"])
+}
+
+func TestCompletions_Stream_MidStreamFailureSendsSSEErrorChunk(t *testing.T) {
+	router := &mockRouter{
+		deriveRequirementsFn: func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
+			return types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "allowed"}
+		},
+		executeStreamFn: func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult {
+			chunks := make(chan *types.SSEChunk, 1)
+			chunks <- &types.SSEChunk{
+				Object: "chat.completion.chunk",
+				Choices: []types.DeltaChoice{{
+					Index: 0,
+					Delta: types.DeltaMessage{Content: ptrString("Hello world")},
+				}},
+			}
+			close(chunks)
+			errs := make(chan *types.GatewayError, 1)
+			errs <- &types.GatewayError{
+				Type:    "gateway_error",
+				Code:    "PROVIDER_ERROR",
+				Message: "Stream terminated unexpectedly",
+			}
+			return types.StreamResult{Chunks: chunks, Err: errs}
+		},
+	}
+
+	body := `{"model":"default","messages":[{"role":"user","content":"Hi"}],"stream":true}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	bodyStr := w.Body.String()
+	assert.Contains(t, bodyStr, "Hello world")
+	assert.Contains(t, bodyStr, `"finish_reason":"error"`)
+	assert.Contains(t, bodyStr, "event: error")
+}
+
+func TestCompletions_Stream_SuccessEmitsSSEStream(t *testing.T) {
+	router := &mockRouter{
+		deriveRequirementsFn: func(req types.ChatCompletionRequest, hints *types.RouterHints) types.DerivedRequirements {
+			return types.DerivedRequirements{Output: "text", Streaming: "preferred", Tools: "allowed"}
+		},
+		executeStreamFn: func(ctx context.Context, plan types.RoutingPlan, req types.ChatCompletionRequest, requestID string) types.StreamResult {
+			chunks := make(chan *types.SSEChunk, 1)
+			chunks <- &types.SSEChunk{
+				Object: "chat.completion.chunk",
+				Choices: []types.DeltaChoice{{
+					Index: 0,
+					Delta: types.DeltaMessage{Content: ptrString("Stream completed")},
+				}},
+			}
+			close(chunks)
+			errs := make(chan *types.GatewayError, 1)
+			errs <- nil
+			return types.StreamResult{Chunks: chunks, Err: errs}
+		},
+	}
+
+	body := `{"model":"default","messages":[{"role":"user","content":"Hi"}],"stream":true}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	setupCompletionsRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	bodyStr := w.Body.String()
+	assert.Contains(t, bodyStr, "Stream completed")
+	assert.Contains(t, bodyStr, "data: [DONE]")
+}

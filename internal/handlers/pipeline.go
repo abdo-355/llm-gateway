@@ -37,8 +37,9 @@ func resetKeepAliveTimer(timer *time.Timer) {
 // pumpStreamToClient forwards chunks to the client with SSE comment pings
 // during upstream silence. Single-writer by design: both chunk frames and
 // pings are emitted from this goroutine only. Returns the terminal gateway
-// error; nil signals a clean stream end.
-func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(*types.SSEChunk) error) (*types.GatewayError, error) {
+// error; nil signals a clean stream end. ensureHeaders is lazily invoked before
+// the first byte (chunk or keep-alive ping) is flushed to the client.
+func pumpStreamToClient(c *gin.Context, result types.StreamResult, ensureHeaders func(), onChunk func(*types.SSEChunk) error) (*types.GatewayError, error) {
 	timer := time.NewTimer(sseKeepAliveInterval)
 	defer timer.Stop()
 
@@ -51,10 +52,16 @@ func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(
 				return <-result.Err, nil
 			}
 			resetKeepAliveTimer(timer)
+			if ensureHeaders != nil {
+				ensureHeaders()
+			}
 			if err := onChunk(chunk); err != nil {
 				return nil, err
 			}
 		case <-timer.C:
+			if ensureHeaders != nil {
+				ensureHeaders()
+			}
 			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
 				return nil, err
 			}

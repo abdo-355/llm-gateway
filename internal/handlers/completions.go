@@ -77,13 +77,19 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 }
 
 func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, req types.ChatCompletionRequest, reqID string, routeResult *RouteResult) {
-	writeStreamHeaders(c)
-
 	streamCtx, cancel := context.WithCancel(routeResult.Ctx)
 	defer cancel()
 	streamResult := h.pipeline.router.ExecuteStream(streamCtx, routeResult.Plan, req, reqID)
 
-	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+	var headersWritten bool
+	ensureHeaders := func() {
+		if !headersWritten {
+			writeStreamHeaders(c)
+			headersWritten = true
+		}
+	}
+
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, ensureHeaders, func(chunk *types.SSEChunk) error {
 		return writeSSEChunk(c, chunk)
 	})
 	if clientErr != nil {
@@ -91,8 +97,13 @@ func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, r
 	}
 
 	if streamErr != nil {
+		if !headersWritten {
+			writeExecutionError(c, streamErr)
+			return
+		}
 		writeSSEError(c, streamErr)
 	} else {
+		ensureHeaders()
 		writeSSEDone(c)
 	}
 }
@@ -179,14 +190,20 @@ func requestJSONErrorStatus(err error) int {
 }
 
 func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan) {
-	writeStreamHeaders(c)
-
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	streamResult := h.pipeline.router.ExecuteStream(streamCtx, plan, chatReq, reqID)
 
 	accumulator := newStreamResponseAccumulator()
-	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+	var headersWritten bool
+	ensureHeaders := func() {
+		if !headersWritten {
+			writeStreamHeaders(c)
+			headersWritten = true
+		}
+	}
+
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, ensureHeaders, func(chunk *types.SSEChunk) error {
 		if err := accumulator.Add(chunk); err != nil {
 			return err
 		}
@@ -197,9 +214,14 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 	}
 
 	if streamErr != nil {
+		if !headersWritten {
+			writeExecutionError(c, streamErr)
+			return
+		}
 		writeSSEError(c, streamErr)
 		return
 	}
+	ensureHeaders()
 	if accumulator.HasData() {
 		response := accumulator.Response()
 		respJSON, _ := json.Marshal(response)

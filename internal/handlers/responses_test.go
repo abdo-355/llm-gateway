@@ -596,3 +596,37 @@ func TestStreamResponseAccumulatorRejectsOversizedContent(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "accumulated stream response exceeds")
 }
+
+func TestResponses_Stream_EarlyFailureReturnsRealHTTPStatus(t *testing.T) {
+	router := &mockResponsesRouter{
+		deriveRequirementsFn: func(_ types.ChatCompletionRequest, _ *types.RouterHints) types.DerivedRequirements {
+			return types.DerivedRequirements{Output: "text", Streaming: "required", Tools: "allowed"}
+		},
+		executeStreamFn: func(_ context.Context, _ types.RoutingPlan, _ types.ChatCompletionRequest, _ string) types.StreamResult {
+			chunks := make(chan *types.SSEChunk)
+			close(chunks)
+			errs := make(chan *types.GatewayError, 1)
+			errs <- &types.GatewayError{
+				Type:    "gateway_error",
+				Code:    "ALL_ATTEMPTS_FAILED",
+				Message: "All upstream providers unavailable",
+			}
+			return types.StreamResult{Chunks: chunks, Err: errs}
+		},
+	}
+
+	requestBody := `{"model":"default","input":"Hello","stream":true}`
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	setupResponsesRouter(router).ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadGateway, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "application/json")
+	var resp map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	errObj, ok := resp["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "ALL_ATTEMPTS_FAILED", errObj["code"])
+}
