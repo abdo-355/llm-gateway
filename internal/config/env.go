@@ -20,7 +20,6 @@ type EnvConfig struct {
 	GatewayAPIKey       string
 	GroqAPIKey          string
 	GeminiAPIKey        string
-	NimAPIKey           string
 	OllamaAPIKey        string
 	KiloAPIKey          string
 	CloudflareAccountID string
@@ -36,7 +35,6 @@ type EnvConfig struct {
 	OrcaRouterAPIKey    string
 	AIGatewayAPIKey     string
 	EmperoAPIKey        string
-	TokenHarborAPIKey   string
 
 	RedisURL       string
 	RedisKeyPrefix string
@@ -168,7 +166,6 @@ func LoadEnv() (*EnvConfig, error) {
 		GatewayAPIKey:       gatewayKey,
 		GroqAPIKey:          os.Getenv("GROQ_API_KEY"),
 		GeminiAPIKey:        os.Getenv("GEMINI_API_KEY"),
-		NimAPIKey:           os.Getenv("NIM_API_KEY"),
 		OllamaAPIKey:        os.Getenv("OLLAMA_API_KEY"),
 		KiloAPIKey:          os.Getenv("KILO_API_KEY"),
 		CloudflareAccountID: os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
@@ -184,7 +181,6 @@ func LoadEnv() (*EnvConfig, error) {
 		OrcaRouterAPIKey:    os.Getenv("ORCAROUTER_API_KEY"),
 		AIGatewayAPIKey:     os.Getenv("AI_GATEWAY_API_KEY"),
 		EmperoAPIKey:        getEnvString("EMPERO_API_KEY", "free"),
-		TokenHarborAPIKey:   resolveTokenHarborKey(),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),
 		RateLimitGlobal:     rateLimitGlobal,
@@ -238,15 +234,5 @@ func GetEnv() *EnvConfig {
 		}
 	})
 	return envInstance
-}
-
-func resolveTokenHarborKey() string {
-	if val := os.Getenv("TOKENHARBOR_API_KEY"); val != "" {
-		return val
-	}
-	if val := os.Getenv("TH_API_KEY"); val != "" {
-		return val
-	}
-	return os.Getenv("TH")
 }
 

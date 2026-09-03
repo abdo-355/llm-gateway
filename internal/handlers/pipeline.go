@@ -381,7 +381,7 @@ func ptrString(s string) *string {
 func filterCandidatesByModel(candidates []types.RoutingCandidate, model string) []types.RoutingCandidate {
 	var filtered []types.RoutingCandidate
 	for _, c := range candidates {
-		if c.Model == model {
+		if c.Model == model || fmt.Sprintf("%s/%s", c.Provider.ID, c.Model) == model {
 			filtered = append(filtered, c)
 		}
 	}

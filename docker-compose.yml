@@ -20,7 +20,6 @@ services:
       - REDIS_KEY_PREFIX=llm_gateway
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - NIM_API_KEY=${NIM_API_KEY}
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - KILO_API_KEY=${KILO_API_KEY}
       - OPENCODE_ZEN_API_KEY=${OPENCODE_ZEN_API_KEY}
@@ -35,7 +34,6 @@ services:
       - ORCAROUTER_API_KEY=${ORCAROUTER_API_KEY}
       - AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY}
       - EMPERO_API_KEY=${EMPERO_API_KEY:-free}
-      - TOKENHARBOR_API_KEY=${TOKENHARBOR_API_KEY:-${TH:-${TH_API_KEY}}}
     depends_on:
       redis:
         condition: service_healthy

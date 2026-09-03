@@ -286,8 +286,8 @@ func TestCloudflareRecordNeuronUsage(t *testing.T) {
 	assert.Equal(t, 25, stats.NonCachedInputTokens)
 	assert.Equal(t, 153, stats.Neurons)
 	assert.InDelta(t, 0.001683, stats.EstimatedUSDIfPaid, 0.000001)
-	assert.Equal(t, 9847, stats.RemainingDailyNeurons)
-	assert.Equal(t, 9847, svc.GetCloudflareRemainingDailyNeurons(ctx))
+	assert.Equal(t, 9347, stats.RemainingDailyNeurons)
+	assert.Equal(t, 9347, svc.GetCloudflareRemainingDailyNeurons(ctx))
 }
 
 func TestCloudflareCheckDailyNeuronBudget(t *testing.T) {

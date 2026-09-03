@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"sort"
@@ -584,7 +585,7 @@ func providerUsesNativeJSONObject(provider, model string) bool {
 
 func providerUsesJSONSchemaForJSONObject(provider, model string) bool {
 	switch provider {
-	case "groq", "nim", "zai", "kilo":
+	case "groq", "zai", "kilo":
 		return true
 	case "oci":
 		return !strings.HasPrefix(model, "google.gemini-")
@@ -601,8 +602,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	switch auth.Env {
 	case "GROQ_API_KEY":
 		return "groq"
-	case "NIM_API_KEY":
-		return "nim"
 	case "OLLAMA_API_KEY":
 		return "ollama"
 	case "KILO_API_KEY":
@@ -630,8 +629,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 	switch {
 	case strings.Contains(baseURL, "api.groq.com"):
 		return "groq"
-	case strings.Contains(baseURL, "integrate.api.nvidia.com"):
-		return "nim"
 	case strings.Contains(baseURL, "api.kilo.ai"):
 		return "kilo"
 	case strings.Contains(baseURL, "opencode.ai"):
@@ -1076,11 +1073,37 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) ra
 			ResetAtUnixMs:      parseResetAtUnixMs(headers, body),
 		}
 	case "groq":
-		if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
-			return rateLimitParseResult{retryAfter, retryAfterProvided, "rpd", limitSubtype, parseResetAtUnixMs(headers, body)}
-		}
-		if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
-			return rateLimitParseResult{retryAfter, retryAfterProvided, "tpm", limitSubtype, parseResetAtUnixMs(headers, body)}
+		isTPM := headers.Get("X-RateLimit-Remaining-Tokens") == "0" ||
+			strings.Contains(bodyUpper, "TOKENS PER MINUTE") ||
+			strings.Contains(bodyUpper, "TPM")
+		isRPD := headers.Get("X-RateLimit-Remaining-Requests") == "0" ||
+			strings.Contains(bodyUpper, "REQUESTS PER DAY") ||
+			strings.Contains(bodyUpper, "RPD")
+
+		if isTPM && !isRPD {
+			tpmResetMs := parseGroqResetDuration(headers.Get("X-RateLimit-Reset-Tokens"))
+			if !retryAfterProvided && tpmResetMs > 0 {
+				retryAfter = int(math.Ceil(float64(tpmResetMs-time.Now().UnixMilli()) / 1000.0))
+				if retryAfter > 0 {
+					retryAfterProvided = true
+				}
+			}
+			return rateLimitParseResult{retryAfter, retryAfterProvided, "tpm", limitSubtype, tpmResetMs}
+		} else if isRPD {
+			rpdResetMs := parseGroqResetDuration(headers.Get("X-RateLimit-Reset-Requests"))
+			if rpdResetMs == 0 {
+				rpdResetMs = parseResetAtUnixMs(headers, body)
+			}
+			return rateLimitParseResult{retryAfter, retryAfterProvided, "rpd", "quota_exhausted", rpdResetMs}
+		} else {
+			if limit := headers.Get("X-RateLimit-Limit-Tokens"); limit != "" {
+				tpmResetMs := parseGroqResetDuration(headers.Get("X-RateLimit-Reset-Tokens"))
+				return rateLimitParseResult{retryAfter, retryAfterProvided, "tpm", limitSubtype, tpmResetMs}
+			}
+			if limit := headers.Get("X-RateLimit-Limit-Requests"); limit != "" {
+				rpdResetMs := parseGroqResetDuration(headers.Get("X-RateLimit-Reset-Requests"))
+				return rateLimitParseResult{retryAfter, retryAfterProvided, "rpd", limitSubtype, rpdResetMs}
+			}
 		}
 	case cloudflareProviderID:
 		if strings.Contains(bodyUpper, "USED UP YOUR DAILY FREE ALLOCATION") ||
@@ -1149,6 +1172,19 @@ func parseResetAtUnixMs(headers http.Header, body []byte) int64 {
 		}
 	}
 	return parseBodyMetadataResetMs(body)
+}
+
+// parseGroqResetDuration parses duration strings like "2m59.56s" or "7.66s" into future epoch ms
+func parseGroqResetDuration(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	dur, err := time.ParseDuration(raw)
+	if err != nil || dur <= 0 {
+		return 0
+	}
+	return time.Now().Add(dur).UnixMilli()
 }
 
 // normalizeResetEpochMs accepts epoch milliseconds (OpenRouter), epoch seconds,

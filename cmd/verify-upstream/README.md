@@ -49,12 +49,10 @@ Loads `.env` file automatically. Requires provider API keys:
 
 - `GROQ_API_KEY` - Groq provider
 - `GEMINI_API_KEY` - Google Gemini API
-- `NIM_API_KEY` - NVIDIA NIM provider
 - `OLLAMA_API_KEY` - Ollama provider
 - `KILO_API_KEY` - Kilo provider (optional)
 - `OPENCODE_ZEN_API_KEY` - OpenCode Zen provider
 - `NOUS_API_KEY` - Nous Portal provider
-- `TOKENHARBOR_API_KEY` (or `TH`) - Token Harbor provider
 - `EMPERO_API_KEY` - Empero provider (defaults to "free")
 - `AI_GATEWAY_API_KEY` - Vercel AI Gateway provider
 - `ORCAROUTER_API_KEY` - Orca / OrcaRouter provider

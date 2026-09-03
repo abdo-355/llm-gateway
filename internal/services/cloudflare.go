@@ -20,7 +20,7 @@ const (
 	cloudflareProviderType            = "cloudflare_workers_ai"
 	cloudflareAPITokenEnv             = "CLOUDFLARE_API_TOKEN"
 	cloudflareAccountIDEnv            = "CLOUDFLARE_ACCOUNT_ID"
-	cloudflareFreeDailyNeuronBudget   = 10000
+	cloudflareFreeDailyNeuronBudget   = 9500
 	cloudflareMinRemainingDailyBudget = 300
 	cloudflareDefaultMaxTokens        = 512
 	cloudflarePaidUSDPerThousand      = 0.011
@@ -33,12 +33,12 @@ type cloudflareModelPricing struct {
 }
 
 var cloudflarePricingTable = map[string]cloudflareModelPricing{
-	"@cf/moonshotai/kimi-k2.6":                     {InputNeuronsPerM: 86364, CachedInputNeuronsPerM: 14545, OutputNeuronsPerM: 363636},
 	"@cf/moonshotai/kimi-k2.5":                     {InputNeuronsPerM: 54545, CachedInputNeuronsPerM: 9091, OutputNeuronsPerM: 272727},
 	"@cf/google/gemma-4-26b-a4b-it":                {InputNeuronsPerM: 9091, CachedInputNeuronsPerM: 9091, OutputNeuronsPerM: 27273},
 	"@cf/openai/gpt-oss-120b":                      {InputNeuronsPerM: 31818, CachedInputNeuronsPerM: 31818, OutputNeuronsPerM: 68182},
 	"@cf/nvidia/nemotron-3-120b-a12b":              {InputNeuronsPerM: 45455, CachedInputNeuronsPerM: 45455, OutputNeuronsPerM: 136364},
 	"@cf/openai/gpt-oss-20b":                       {InputNeuronsPerM: 18182, CachedInputNeuronsPerM: 18182, OutputNeuronsPerM: 27273},
+	"@cf/qwen/qwen3.8-27b":                         {InputNeuronsPerM: 40909, CachedInputNeuronsPerM: 40909, OutputNeuronsPerM: 290909},
 	"@cf/qwen/qwen3-30b-a3b-fp8":                   {InputNeuronsPerM: 4625, CachedInputNeuronsPerM: 4625, OutputNeuronsPerM: 30475},
 	"@cf/zai-org/glm-4.7-flash":                    {InputNeuronsPerM: 5500, CachedInputNeuronsPerM: 5500, OutputNeuronsPerM: 36400},
 	"@cf/qwen/qwen2.5-coder-32b-instruct":          {InputNeuronsPerM: 60000, CachedInputNeuronsPerM: 60000, OutputNeuronsPerM: 90909},
@@ -46,11 +46,18 @@ var cloudflarePricingTable = map[string]cloudflareModelPricing{
 	"@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": {InputNeuronsPerM: 45170, CachedInputNeuronsPerM: 45170, OutputNeuronsPerM: 443756},
 	"@cf/meta/llama-4-scout-17b-16e-instruct":      {InputNeuronsPerM: 24545, CachedInputNeuronsPerM: 24545, OutputNeuronsPerM: 77273},
 	"@cf/mistralai/mistral-small-3.1-24b-instruct": {InputNeuronsPerM: 31876, CachedInputNeuronsPerM: 31876, OutputNeuronsPerM: 50488},
+	"@cf/mistral/mistral-7b-instruct-v0.1":         {InputNeuronsPerM: 10000, CachedInputNeuronsPerM: 10000, OutputNeuronsPerM: 17300},
 	"@cf/google/gemma-3-12b-it":                    {InputNeuronsPerM: 31371, CachedInputNeuronsPerM: 31371, OutputNeuronsPerM: 50560},
 	"@cf/meta/llama-3.3-70b-instruct-fp8-fast":     {InputNeuronsPerM: 26668, CachedInputNeuronsPerM: 26668, OutputNeuronsPerM: 204805},
+	"@cf/meta/llama-3.1-70b-instruct-fp8-fast":     {InputNeuronsPerM: 26668, CachedInputNeuronsPerM: 26668, OutputNeuronsPerM: 204805},
+	"@cf/meta/llama-3.1-8b-instruct-fp8-fast":      {InputNeuronsPerM: 4119, CachedInputNeuronsPerM: 4119, OutputNeuronsPerM: 34868},
+	"@cf/meta/llama-3.2-11b-vision-instruct":       {InputNeuronsPerM: 4410, CachedInputNeuronsPerM: 4410, OutputNeuronsPerM: 61493},
+	"@cf/aisingapore/gemma-sea-lion-v4-27b-it":     {InputNeuronsPerM: 31876, CachedInputNeuronsPerM: 31876, OutputNeuronsPerM: 50488},
 	"@cf/ibm-granite/granite-4.0-h-micro":          {InputNeuronsPerM: 1542, CachedInputNeuronsPerM: 1542, OutputNeuronsPerM: 10158},
 	"@cf/meta/llama-3.2-3b-instruct":               {InputNeuronsPerM: 4625, CachedInputNeuronsPerM: 4625, OutputNeuronsPerM: 30475},
 	"@cf/meta/llama-3.2-1b-instruct":               {InputNeuronsPerM: 2457, CachedInputNeuronsPerM: 2457, OutputNeuronsPerM: 18252},
+	"@cf/meta/llama-3.1-8b-instruct":               {InputNeuronsPerM: 25608, CachedInputNeuronsPerM: 25608, OutputNeuronsPerM: 75147},
+	"@cf/meta/llama-3-8b-instruct":                 {InputNeuronsPerM: 25608, CachedInputNeuronsPerM: 25608, OutputNeuronsPerM: 75147},
 }
 
 type cloudflareRunRequest struct {
