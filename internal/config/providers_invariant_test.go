@@ -155,6 +155,8 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 		"tokenharbor/deepseek-v4-flash:free": {},
 		"tokenharbor/qwen3.8-27b:free":        {},
 		"tokenharbor/mimo-v2.5:free":          {},
+		"opencode/hy3-free":                   {},
+		"opencode/x-preview-f-free":           {},
 	}
 
 	for _, provider := range GetProviders() {

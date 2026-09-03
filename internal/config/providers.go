@@ -293,9 +293,7 @@ func getCloudflareConfig() types.ProviderConfig {
 
 func getOpenCodeConfig() types.ProviderConfig {
 	conc5 := 5
-	conc10 := 10
 	pause24h := 24 * 60 * 60 * 1000
-	pause6h := 6 * 60 * 60 * 1000
 
 	return types.ProviderConfig{
 		ID:      "opencode",
@@ -307,16 +305,12 @@ func getOpenCodeConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"x-preview-f-free",
-				"hy3-free",
 				"mimo-v2.5-free",
 				"muse-spark-1.2-contributor-free",
 				"nemotron-3-ultra-free",
 				"nemotron-3.5-lightning-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"x-preview-f-free":                {MaxConcurrent: &conc10, RateLimitPauseMs: &pause6h},
-				"hy3-free":                        {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
 				"mimo-v2.5-free":                  {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
 				"muse-spark-1.2-contributor-free": {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
 				"nemotron-3-ultra-free":           {MaxConcurrent: &conc5, RateLimitPauseMs: &pause24h},
@@ -333,18 +327,6 @@ func getOpenCodeConfig() types.ProviderConfig {
 					MaxCompletionTokens: boolPtr(true),
 					Tools:               boolPtr(false),
 					Reasoning:           boolPtr(true),
-				},
-				// x-preview rejects metadata with a 400 and produced no tool call
-				// under the strict tool-schema probe.
-				"x-preview-f-free": {
-					Metadata:          boolPtr(false),
-					ToolSchema:        strPtr("none"),
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Reasoning:         boolPtr(true),
-				},
-				"hy3-free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Reasoning:         boolPtr(true),
 				},
 				"mimo-v2.5-free": {
 					StructuredOutputs: strPtr("json_schema"),

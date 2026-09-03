@@ -946,6 +946,12 @@ func isProviderFailoverHTTPError(statusCode int, message string) bool {
 	if strings.Contains(lower, "was retired") {
 		return true
 	}
+	if strings.Contains(lower, "missing tags") {
+		return true
+	}
+	if strings.Contains(lower, "model") && (strings.Contains(lower, "not supported") || strings.Contains(lower, "not found") || strings.Contains(lower, "unknown model")) {
+		return true
+	}
 	return isProviderSchemaDialectRejection(statusCode, lower) || isProviderUnsupportedResponseFormat(statusCode, lower)
 }
 

@@ -49,7 +49,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "gemma4:31b", Weight: 0.65},
 			{Provider: "ollama", Model: "gpt-oss:20b", Weight: 0.64},
 			{Provider: "gemini", Model: "gemini-2.5-flash-lite", Weight: 0.62},
-			{Provider: "opencode", Model: "hy3-free", Weight: 0.60},
 			{Provider: "ollama", Model: "nemotron-3-nano:30b", Weight: 0.60},
 			{Provider: "nous", Model: "upstage/solar-pro4:free", Weight: 0.58},
 			{Provider: "nous", Model: "stepfun/step-3.7-flash:free", Weight: 0.56},
@@ -109,7 +108,6 @@ var tierRegistry = map[types.Tier]types.TierConfig{
 			{Provider: "ollama", Model: "minimax-m3", Weight: 0.75},
 			{Provider: "nim", Model: "qwen/qwen3.5-122b-a10b", Weight: 0.74},
 			{Provider: "ollama", Model: "nemotron-3-super", Weight: 0.72},
-			{Provider: "opencode", Model: "hy3-free", Weight: 0.60},
 			{Provider: "kilo", Model: "poolside/laguna-s-2.1:free", Weight: 0.56},
 		},
 		SLO: &types.TierSLO{

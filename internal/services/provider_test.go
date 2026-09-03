@@ -379,13 +379,13 @@ func TestNormalizeRequestForProvider_OpenCodeTokenParamDialects(t *testing.T) {
 	}{
 		{
 			name:                "chat dialect maps completion tokens to max_tokens",
-			model:               "x-preview-f-free",
+			model:               "mimo-v2.5-free",
 			maxCompletionTokens: ptrInt(7),
 			wantMaxTokens:       ptrInt(7),
 		},
 		{
 			name:          "chat dialect keeps max_tokens as-is",
-			model:         "hy3-free",
+			model:         "nemotron-3-ultra-free",
 			maxTokens:     ptrInt(9),
 			wantMaxTokens: ptrInt(9),
 		},
@@ -912,6 +912,14 @@ func TestClassifyProviderHTTPError_StructuredOutputProvider400IsProviderError(t 
 		{
 			name: "provider response format disabled",
 			body: `{"error":{"message":"response_format is disabled for this model"}}`,
+		},
+		{
+			name: "nous requires missing tags format rejection",
+			body: `{"error":{"message":"Model requires missing tags in the system prompt to activate."}}`,
+		},
+		{
+			name: "opencode model not supported rejection",
+			body: `{"type":"error","error":{"type":"ModelError","message":"Model hy3-free is not supported"}}`,
 		},
 	}
 

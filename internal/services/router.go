@@ -2162,6 +2162,10 @@ func isAuthProviderError(err error) bool {
 	if !ok {
 		return false
 	}
+	lower := strings.ToLower(providerErr.Message)
+	if strings.Contains(lower, "not supported") || (strings.Contains(lower, "model") && strings.Contains(lower, "not found")) {
+		return false
+	}
 	return providerErr.StatusCode == http.StatusUnauthorized || providerErr.StatusCode == http.StatusForbidden
 }
 
