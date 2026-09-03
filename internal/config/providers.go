@@ -775,7 +775,7 @@ func getOpenRouterConfig() types.ProviderConfig {
 		Capabilities: types.ProviderCapabilities{
 			Streaming:           true,
 			Tools:               false,
-			StructuredOutputs:   "none",
+			StructuredOutputs:   "json_object",
 			Logprobs:            false,
 			Metadata:            false,
 			Seed:                false,

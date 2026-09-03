@@ -84,6 +84,9 @@ func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, r
 	var headersWritten bool
 	ensureHeaders := func() {
 		if !headersWritten {
+			if routeResult != nil && routeResult.Tier != nil {
+				c.Header("X-Gateway-Tier", string(routeResult.Tier.Tier))
+			}
 			writeStreamHeaders(c)
 			headersWritten = true
 		}
@@ -160,7 +163,7 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 	c.Request = c.Request.WithContext(result.Ctx)
 
 	if result.Requirements.Streaming == "required" || (result.Requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
-		h.handleStream(c, result.Ctx, req, reqID, *chatReq, result.Plan)
+		h.handleStream(c, result.Ctx, req, reqID, *chatReq, result.Plan, result.Tier)
 		return
 	}
 
@@ -189,7 +192,7 @@ func requestJSONErrorStatus(err error) int {
 	return http.StatusBadRequest
 }
 
-func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan) {
+func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan, tier *types.TierConfig) {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	streamResult := h.pipeline.router.ExecuteStream(streamCtx, plan, chatReq, reqID)
@@ -198,6 +201,9 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 	var headersWritten bool
 	ensureHeaders := func() {
 		if !headersWritten {
+			if tier != nil {
+				c.Header("X-Gateway-Tier", string(tier.Tier))
+			}
 			writeStreamHeaders(c)
 			headersWritten = true
 		}

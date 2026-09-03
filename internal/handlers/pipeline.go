@@ -206,6 +206,16 @@ func resolveMetricTier(model string, tierConfig *types.TierConfig) string {
 }
 
 func writeExecutionError(c *gin.Context, err error) {
+	if err == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "gateway_error",
+				"code":    "EXECUTION_ERROR",
+				"message": "Execution failed with unspecified error",
+			},
+		})
+		return
+	}
 	gatewayErr, ok := err.(*types.GatewayError)
 	if !ok {
 		gatewayErr = &types.GatewayError{
@@ -329,9 +339,20 @@ func writeSSEChunk(c *gin.Context, chunk *types.SSEChunk) error {
 }
 
 func writeSSEError(c *gin.Context, err *types.GatewayError) {
+	reqID := ""
+	if err != nil {
+		reqID = err.RequestID
+	}
+	if reqID == "" {
+		reqID = requestid.Get(c)
+	}
+
 	// First emit an OpenAI-compatible error chunk with finish_reason: "error"
 	errorChunk := types.SSEChunk{
-		Object: "chat.completion.chunk",
+		ID:      "chatcmpl-" + reqID,
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "gateway-error",
 		Choices: []types.DeltaChoice{{
 			Index:        0,
 			Delta:        types.DeltaMessage{},
