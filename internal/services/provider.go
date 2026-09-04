@@ -937,6 +937,12 @@ func classifyProviderHTTPError(provider string, statusCode int, headers map[stri
 
 func isProviderFailoverHTTPError(statusCode int, message string) bool {
 	lower := strings.ToLower(message)
+	if strings.Contains(lower, "credit insufficient balance") ||
+		strings.Contains(lower, "insufficient balance") ||
+		strings.Contains(lower, "insufficient credit") ||
+		strings.Contains(lower, "balance=0") {
+		return true
+	}
 	if strings.Contains(lower, "degraded function cannot be invoked") {
 		return true
 	}
