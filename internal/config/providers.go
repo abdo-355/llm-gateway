@@ -27,9 +27,7 @@ func GetProviders() []types.ProviderConfig {
 func getGroqConfig() types.ProviderConfig {
 	rpm30 := 30
 	rpd1000 := 1000
-	rpd250 := 250
 	tpm8000 := 8000
-	tpm70000 := 70000
 	tpd200000 := 200000
 
 	return types.ProviderConfig{
@@ -46,24 +44,18 @@ func getGroqConfig() types.ProviderConfig {
 				"openai/gpt-oss-20b",
 				"qwen/qwen3.6-27b",
 				"qwen/qwen3.8-27b",
-				"groq/compound",
-				"groq/compound-mini",
 			},
 			Limits: map[string]types.ModelLimits{
 				"openai/gpt-oss-120b": {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 				"openai/gpt-oss-20b":  {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 				"qwen/qwen3.6-27b":    {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
 				"qwen/qwen3.8-27b":    {Rpm: &rpm30, Rpd: &rpd1000, Tpm: &tpm8000, Tpd: &tpd200000},
-				"groq/compound":       {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
-				"groq/compound-mini":  {Rpm: &rpm30, Rpd: &rpd250, Tpm: &tpm70000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"openai/gpt-oss-120b": {Logprobs: boolPtr(false), Reasoning: boolPtr(true)},
 				"openai/gpt-oss-20b":  {Logprobs: boolPtr(false), Reasoning: boolPtr(true)},
 				"qwen/qwen3.6-27b":    {Logprobs: boolPtr(false)},
 				"qwen/qwen3.8-27b":    {Logprobs: boolPtr(false)},
-				"groq/compound":       {Tools: boolPtr(true)},
-				"groq/compound-mini":  {Tools: boolPtr(true)},
 			},
 		},
 		Capabilities: types.ProviderCapabilities{
@@ -776,31 +768,18 @@ func getBaiConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"deepseek-v4-flash",
-				"deepseek-v4-flash-vision-exp",
 				"hy3",
 				"mimo-v2.5",
 				"glm-5.3-flash",
 				"qwen3.8-flash",
 			},
 			Limits: map[string]types.ModelLimits{
-				"deepseek-v4-flash":            {RateLimitPauseMs: &pause60s},
-				"deepseek-v4-flash-vision-exp": {RateLimitPauseMs: &pause60s},
-				"hy3":                          {RateLimitPauseMs: &pause60s},
-				"mimo-v2.5":                    {RateLimitPauseMs: &pause60s},
-				"glm-5.3-flash":                {RateLimitPauseMs: &pause60s},
-				"qwen3.8-flash":                {RateLimitPauseMs: &pause60s},
+				"hy3":           {RateLimitPauseMs: &pause60s},
+				"mimo-v2.5":     {RateLimitPauseMs: &pause60s},
+				"glm-5.3-flash": {RateLimitPauseMs: &pause60s},
+				"qwen3.8-flash": {RateLimitPauseMs: &pause60s},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
-				"deepseek-v4-flash": {
-					Tools:     boolPtr(true),
-					Reasoning: boolPtr(true),
-				},
-				"deepseek-v4-flash-vision-exp": {
-					StructuredOutputs: strPtr("json_object"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
 				"hy3": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Reasoning:         boolPtr(true),
