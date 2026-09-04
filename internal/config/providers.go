@@ -771,11 +771,13 @@ func getBaiConfig() types.ProviderConfig {
 				"hy3",
 				"mimo-v2.5",
 				"glm-5.3-flash",
+				"qwen3.8-flash",
 			},
 			Limits: map[string]types.ModelLimits{
 				"hy3":           {RateLimitPauseMs: &pause60s},
 				"mimo-v2.5":     {RateLimitPauseMs: &pause60s},
 				"glm-5.3-flash": {RateLimitPauseMs: &pause60s},
+				"qwen3.8-flash": {RateLimitPauseMs: &pause60s},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"hy3": {
@@ -789,6 +791,10 @@ func getBaiConfig() types.ProviderConfig {
 					StructuredOutputs: strPtr("json_schema"),
 					Tools:             boolPtr(true),
 					Reasoning:         boolPtr(true),
+				},
+				"qwen3.8-flash": {
+					StructuredOutputs: strPtr("json_schema"),
+					Tools:             boolPtr(true),
 				},
 			},
 		},
