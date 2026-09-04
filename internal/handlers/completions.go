@@ -77,13 +77,22 @@ func (h *CompletionsHandler) Handle(c *gin.Context) {
 }
 
 func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, req types.ChatCompletionRequest, reqID string, routeResult *RouteResult) {
-	writeStreamHeaders(c)
-
 	streamCtx, cancel := context.WithCancel(routeResult.Ctx)
 	defer cancel()
 	streamResult := h.pipeline.router.ExecuteStream(streamCtx, routeResult.Plan, req, reqID)
 
-	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+	var headersWritten bool
+	ensureHeaders := func() {
+		if !headersWritten {
+			if routeResult != nil && routeResult.Tier != nil {
+				c.Header("X-Gateway-Tier", string(routeResult.Tier.Tier))
+			}
+			writeStreamHeaders(c)
+			headersWritten = true
+		}
+	}
+
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, ensureHeaders, func(chunk *types.SSEChunk) error {
 		return writeSSEChunk(c, chunk)
 	})
 	if clientErr != nil {
@@ -91,8 +100,13 @@ func (h *CompletionsHandler) handleStream(c *gin.Context, ctx context.Context, r
 	}
 
 	if streamErr != nil {
+		if !headersWritten {
+			writeExecutionError(c, streamErr)
+			return
+		}
 		writeSSEError(c, streamErr)
 	} else {
+		ensureHeaders()
 		writeSSEDone(c)
 	}
 }
@@ -149,7 +163,7 @@ func (h *ResponsesHandler) Handle(c *gin.Context) {
 	c.Request = c.Request.WithContext(result.Ctx)
 
 	if result.Requirements.Streaming == "required" || (result.Requirements.Streaming == "preferred" && req.Stream != nil && *req.Stream) {
-		h.handleStream(c, result.Ctx, req, reqID, *chatReq, result.Plan)
+		h.handleStream(c, result.Ctx, req, reqID, *chatReq, result.Plan, result.Tier)
 		return
 	}
 
@@ -178,15 +192,24 @@ func requestJSONErrorStatus(err error) int {
 	return http.StatusBadRequest
 }
 
-func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan) {
-	writeStreamHeaders(c)
-
+func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req types.ResponseRequest, reqID string, chatReq types.ChatCompletionRequest, plan types.RoutingPlan, tier *types.TierConfig) {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	streamResult := h.pipeline.router.ExecuteStream(streamCtx, plan, chatReq, reqID)
 
 	accumulator := newStreamResponseAccumulator()
-	streamErr, clientErr := pumpStreamToClient(c, streamResult, func(chunk *types.SSEChunk) error {
+	var headersWritten bool
+	ensureHeaders := func() {
+		if !headersWritten {
+			if tier != nil {
+				c.Header("X-Gateway-Tier", string(tier.Tier))
+			}
+			writeStreamHeaders(c)
+			headersWritten = true
+		}
+	}
+
+	streamErr, clientErr := pumpStreamToClient(c, streamResult, ensureHeaders, func(chunk *types.SSEChunk) error {
 		if err := accumulator.Add(chunk); err != nil {
 			return err
 		}
@@ -197,9 +220,14 @@ func (h *ResponsesHandler) handleStream(c *gin.Context, ctx context.Context, req
 	}
 
 	if streamErr != nil {
+		if !headersWritten {
+			writeExecutionError(c, streamErr)
+			return
+		}
 		writeSSEError(c, streamErr)
 		return
 	}
+	ensureHeaders()
 	if accumulator.HasData() {
 		response := accumulator.Response()
 		respJSON, _ := json.Marshal(response)

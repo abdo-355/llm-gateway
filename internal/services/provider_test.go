@@ -379,13 +379,13 @@ func TestNormalizeRequestForProvider_OpenCodeTokenParamDialects(t *testing.T) {
 	}{
 		{
 			name:                "chat dialect maps completion tokens to max_tokens",
-			model:               "x-preview-f-free",
+			model:               "mimo-v2.5-free",
 			maxCompletionTokens: ptrInt(7),
 			wantMaxTokens:       ptrInt(7),
 		},
 		{
 			name:          "chat dialect keeps max_tokens as-is",
-			model:         "hy3-free",
+			model:         "nemotron-3-ultra-free",
 			maxTokens:     ptrInt(9),
 			wantMaxTokens: ptrInt(9),
 		},
@@ -793,6 +793,33 @@ func TestProviderCallProvider_GroqRateLimitDetails(t *testing.T) {
 	assert.Equal(t, "7000", rlErr.Headers["X-Ratelimit-Limit-Requests"])
 }
 
+func TestProviderCallProvider_GroqTPMRateLimitDetails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit-Requests", "14400")
+		w.Header().Set("X-RateLimit-Remaining-Requests", "14399")
+		w.Header().Set("X-RateLimit-Reset-Requests", "2m59.56s")
+		w.Header().Set("X-RateLimit-Limit-Tokens", "6000")
+		w.Header().Set("X-RateLimit-Remaining-Tokens", "0")
+		w.Header().Set("X-RateLimit-Reset-Tokens", "7.66s")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":{"message":"Rate limit reached for model ` + "`" + `qwen/qwen3.8-27b` + "`" + ` on tokens per minute (TPM). Limit: 6000, Used: 5900, Requested: 200. Please try again in 7.66s.","type":"tokens"}}`))
+	}))
+	defer srv.Close()
+
+	svc := newProviderService()
+	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
+
+	_, err := svc.CallProvider(srv.URL, "key", "qwen/qwen3.8-27b", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "GROQ_API_KEY"}, "")
+	require.Error(t, err)
+
+	var rlErr *errors.RateLimitError
+	require.ErrorAs(t, err, &rlErr)
+	assert.Equal(t, "tpm", rlErr.LimitType)
+	assert.True(t, rlErr.RetryAfter >= 7 && rlErr.RetryAfter <= 8, "RetryAfter should be ~8s, got %d", rlErr.RetryAfter)
+	assert.True(t, rlErr.RetryAfterProvided)
+	assert.True(t, rlErr.ResetAtUnixMs > time.Now().UnixMilli(), "ResetAtUnixMs should be in the future")
+}
+
 func TestProviderCallProvider_MistralValidationError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -821,7 +848,7 @@ func TestProviderCallProvider_NIMDegradedFunctionIsProviderError(t *testing.T) {
 	svc := newProviderService()
 	req := types.ChatCompletionRequest{Messages: []types.OpenAIMessage{{Role: "user", Content: "Hi"}}}
 
-	_, err := svc.CallProvider(srv.URL, "key", "qwen/qwen3-next-80b-a3b-instruct", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "NIM_API_KEY"}, "")
+	_, err := svc.CallProvider(srv.URL, "key", "qwen/qwen3-next-80b-a3b-instruct", req, 10000, context.Background(), "openai", types.ProviderAuth{Type: "bearer", Env: "TEST_API_KEY"}, "")
 	require.Error(t, err)
 
 	var providerErr *errors.ProviderError
@@ -912,6 +939,14 @@ func TestClassifyProviderHTTPError_StructuredOutputProvider400IsProviderError(t 
 		{
 			name: "provider response format disabled",
 			body: `{"error":{"message":"response_format is disabled for this model"}}`,
+		},
+		{
+			name: "nous requires missing tags format rejection",
+			body: `{"error":{"message":"Model requires missing tags in the system prompt to activate."}}`,
+		},
+		{
+			name: "opencode model not supported rejection",
+			body: `{"type":"error","error":{"type":"ModelError","message":"Model hy3-free is not supported"}}`,
 		},
 	}
 

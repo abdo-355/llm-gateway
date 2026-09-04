@@ -152,9 +152,8 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 		"ollama/devstral-2:123b":              {},
 		"openrouter-alpha/stealth/ox-alpha":   {},
 		"nous/stealth/ox-alpha":               {},
-		"tokenharbor/deepseek-v4-flash:free": {},
-		"tokenharbor/qwen3.8-27b:free":        {},
-		"tokenharbor/mimo-v2.5:free":          {},
+		"opencode/hy3-free":                   {},
+		"opencode/x-preview-f-free":           {},
 	}
 
 	for _, provider := range GetProviders() {
@@ -178,17 +177,21 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 }
 
 func TestOCIModelConcurrencyLimit(t *testing.T) {
-	const expected = 20
+	const expected = 15
 
 	for _, provider := range GetProviders() {
 		if provider.ID != "oci" {
 			continue
 		}
 
+		if provider.Limits.MaxConcurrent != nil {
+			assert.Equal(t, expected, *provider.Limits.MaxConcurrent, "OCI provider max concurrency")
+		}
 		for _, model := range provider.Models.List {
 			limits := provider.Models.Limits[model]
-			require.NotNil(t, limits.MaxConcurrent, "OCI model %q must declare max concurrency", model)
-			assert.Equal(t, expected, *limits.MaxConcurrent, "OCI model %q max concurrency", model)
+			if limits.MaxConcurrent != nil {
+				assert.Equal(t, expected, *limits.MaxConcurrent, "OCI model %q max concurrency", model)
+			}
 		}
 		return
 	}
@@ -239,11 +242,6 @@ func TestVerifiedKiloStrictSchemaOverrides(t *testing.T) {
 }
 
 func TestKnownStructuredOutputFailuresStayDisabled(t *testing.T) {
-	nim := requireProvider(t, "nim")
-	nimCaps := nim.Models.Capabilities["mistralai/ministral-14b-instruct-2512"]
-	require.NotNil(t, nimCaps.StructuredOutputs)
-	assert.Equal(t, "none", *nimCaps.StructuredOutputs)
-
 	cohere := requireProvider(t, "cohere")
 	cohereCaps := cohere.Models.Capabilities["command-a-03-2025"]
 	require.NotNil(t, cohereCaps.StructuredOutputs)

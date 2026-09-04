@@ -37,8 +37,9 @@ func resetKeepAliveTimer(timer *time.Timer) {
 // pumpStreamToClient forwards chunks to the client with SSE comment pings
 // during upstream silence. Single-writer by design: both chunk frames and
 // pings are emitted from this goroutine only. Returns the terminal gateway
-// error; nil signals a clean stream end.
-func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(*types.SSEChunk) error) (*types.GatewayError, error) {
+// error; nil signals a clean stream end. ensureHeaders is lazily invoked before
+// the first byte (chunk or keep-alive ping) is flushed to the client.
+func pumpStreamToClient(c *gin.Context, result types.StreamResult, ensureHeaders func(), onChunk func(*types.SSEChunk) error) (*types.GatewayError, error) {
 	timer := time.NewTimer(sseKeepAliveInterval)
 	defer timer.Stop()
 
@@ -51,10 +52,16 @@ func pumpStreamToClient(c *gin.Context, result types.StreamResult, onChunk func(
 				return <-result.Err, nil
 			}
 			resetKeepAliveTimer(timer)
+			if ensureHeaders != nil {
+				ensureHeaders()
+			}
 			if err := onChunk(chunk); err != nil {
 				return nil, err
 			}
 		case <-timer.C:
+			if ensureHeaders != nil {
+				ensureHeaders()
+			}
 			if _, err := fmt.Fprint(c.Writer, ": ping\n\n"); err != nil {
 				return nil, err
 			}
@@ -199,6 +206,16 @@ func resolveMetricTier(model string, tierConfig *types.TierConfig) string {
 }
 
 func writeExecutionError(c *gin.Context, err error) {
+	if err == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": gin.H{
+				"type":    "gateway_error",
+				"code":    "EXECUTION_ERROR",
+				"message": "Execution failed with unspecified error",
+			},
+		})
+		return
+	}
 	gatewayErr, ok := err.(*types.GatewayError)
 	if !ok {
 		gatewayErr = &types.GatewayError{
@@ -322,9 +339,20 @@ func writeSSEChunk(c *gin.Context, chunk *types.SSEChunk) error {
 }
 
 func writeSSEError(c *gin.Context, err *types.GatewayError) {
+	reqID := ""
+	if err != nil {
+		reqID = err.RequestID
+	}
+	if reqID == "" {
+		reqID = requestid.Get(c)
+	}
+
 	// First emit an OpenAI-compatible error chunk with finish_reason: "error"
 	errorChunk := types.SSEChunk{
-		Object: "chat.completion.chunk",
+		ID:      "chatcmpl-" + reqID,
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "gateway-error",
 		Choices: []types.DeltaChoice{{
 			Index:        0,
 			Delta:        types.DeltaMessage{},
@@ -353,7 +381,7 @@ func ptrString(s string) *string {
 func filterCandidatesByModel(candidates []types.RoutingCandidate, model string) []types.RoutingCandidate {
 	var filtered []types.RoutingCandidate
 	for _, c := range candidates {
-		if c.Model == model {
+		if c.Model == model || fmt.Sprintf("%s/%s", c.Provider.ID, c.Model) == model {
 			filtered = append(filtered, c)
 		}
 	}
