@@ -16,7 +16,6 @@ func GetProviders() []types.ProviderConfig {
 		getNousConfig(),
 		getOpenRouterConfig(),
 		getBaiConfig(),
-		getInferXConfig(),
 		getGmiConfig(),
 		getOrcaConfig(),
 		getVercelConfig(),
@@ -815,78 +814,6 @@ func getBaiConfig() types.ProviderConfig {
 		},
 		Limits: types.ProviderLimits{
 			MaxConcurrent: &conc5,
-		},
-		ProviderType: "openai",
-	}
-}
-
-func getInferXConfig() types.ProviderConfig {
-	conc2 := 2
-	pause60s := 60 * 1000
-	ms15000 := 15000
-
-	return types.ProviderConfig{
-		ID:      "inferx",
-		BaseURL: "https://model.inferx.net/endpoints/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "INFERX_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"Devstral-2-123B-Instruct-2512-int4-AutoRound",
-				"Qwen3-Coder-Next-FP8",
-				"Qwen3.6-35B-A3B-FP8",
-				"Qwen3.8-27B-FP8",
-			},
-			Limits: map[string]types.ModelLimits{
-				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-				"Qwen3-Coder-Next-FP8":                         {RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-				"Qwen3.6-35B-A3B-FP8":                         {RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-				"Qwen3.8-27B-FP8":                             {RateLimitPauseMs: &pause60s, TimeoutMs: &ms15000},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"Devstral-2-123B-Instruct-2512-int4-AutoRound": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"Qwen3-Coder-Next-FP8": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"Qwen3.6-35B-A3B-FP8": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"Qwen3.8-27B-FP8": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc2,
 		},
 		ProviderType: "openai",
 	}

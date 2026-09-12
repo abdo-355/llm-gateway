@@ -614,8 +614,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "oci"
 	case "BAI_API_KEY":
 		return "bai"
-	case "INFERX_API_KEY":
-		return "inferx"
 	case "GMI_API_KEY":
 		return "gmi"
 	case "ORCAROUTER_API_KEY":
@@ -639,8 +637,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "ollama"
 	case strings.Contains(baseURL, "api.b.ai"):
 		return "bai"
-	case strings.Contains(baseURL, "inferx.net"):
-		return "inferx"
 	case strings.Contains(baseURL, "gmi-serving.com"):
 		return "gmi"
 	case strings.Contains(baseURL, "orcarouter.ai"):
@@ -940,7 +936,10 @@ func isProviderFailoverHTTPError(statusCode int, message string) bool {
 	if strings.Contains(lower, "credit insufficient balance") ||
 		strings.Contains(lower, "insufficient balance") ||
 		strings.Contains(lower, "insufficient credit") ||
-		strings.Contains(lower, "balance=0") {
+		strings.Contains(lower, "balance=0") ||
+		strings.Contains(lower, "not eligible for free models") ||
+		strings.Contains(lower, "link a github account") ||
+		strings.Contains(lower, "add credits") {
 		return true
 	}
 	if strings.Contains(lower, "degraded function cannot be invoked") {
@@ -1059,16 +1058,37 @@ func parseRateLimitDetails(provider string, headers http.Header, body []byte) ra
 	}
 
 	switch provider {
+	case "cohere":
+		if strings.Contains(bodyUpper, "TRIAL KEY") && (strings.Contains(bodyUpper, "MONTH") || strings.Contains(bodyUpper, "1000")) {
+			tenDaysSeconds := int((10 * 24 * time.Hour).Seconds())
+			return rateLimitParseResult{
+				RetryAfter:         tenDaysSeconds,
+				RetryAfterProvided: true,
+				LimitType:          "monthly_quota",
+				LimitSubtype:       "quota_exhausted",
+				ResetAtUnixMs:      time.Now().Add(10 * 24 * time.Hour).UnixMilli(),
+			}
+		}
 	case "orca":
-		if strings.Contains(bodyUpper, "FREE_RATE_LIMITED") || strings.Contains(bodyUpper, "PROMPT") || !retryAfterProvided {
-			if !retryAfterProvided {
-				return rateLimitParseResult{
-					RetryAfter:         0,
-					RetryAfterProvided: false,
-					LimitType:          "prompt_cap",
-					LimitSubtype:       "prompt_too_large",
-					ResetAtUnixMs:      0,
-				}
+		isAccountError := strings.Contains(bodyUpper, "LINK A GITHUB ACCOUNT") ||
+			strings.Contains(bodyUpper, "FREE MODELS ARE NOT AVAILABLE") ||
+			strings.Contains(bodyUpper, "ADD CREDITS")
+		if isAccountError {
+			return rateLimitParseResult{
+				RetryAfter:         int((24 * time.Hour).Seconds()),
+				RetryAfterProvided: true,
+				LimitType:          "quota",
+				LimitSubtype:       "quota_exhausted",
+				ResetAtUnixMs:      0,
+			}
+		}
+		if (strings.Contains(bodyUpper, "FREE_RATE_LIMITED") || strings.Contains(bodyUpper, "PROMPT EXCEEDS") || strings.Contains(bodyUpper, "TOKEN CAP")) && !retryAfterProvided {
+			return rateLimitParseResult{
+				RetryAfter:         0,
+				RetryAfterProvided: false,
+				LimitType:          "prompt_cap",
+				LimitSubtype:       "prompt_too_large",
+				ResetAtUnixMs:      0,
 			}
 		}
 		return rateLimitParseResult{

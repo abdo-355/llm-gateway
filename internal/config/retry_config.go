@@ -82,7 +82,7 @@ func LoadCooldownConfig() CooldownConfig {
 		PaymentDuration:          30 * time.Minute,
 		Error5xxDuration:         30 * time.Second,
 		StructuredOutputDuration: 30 * time.Second,
-		MaxRetryAfterDuration:    24 * time.Hour,
+		MaxRetryAfterDuration:    30 * 24 * time.Hour,
 	}
 
 	if val := os.Getenv("COOLDOWN_ENABLED"); val != "" {

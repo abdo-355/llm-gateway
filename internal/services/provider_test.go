@@ -1200,8 +1200,6 @@ func TestDetectProvider_NewProviders(t *testing.T) {
 	}{
 		{"bai by env", "https://api.example.com", "BAI_API_KEY", "bai"},
 		{"bai by url", "https://api.b.ai/v1", "", "bai"},
-		{"inferx by env", "https://api.example.com", "INFERX_API_KEY", "inferx"},
-		{"inferx by url", "https://model.inferx.net/endpoints/v1", "", "inferx"},
 		{"gmi by env", "https://api.example.com", "GMI_API_KEY", "gmi"},
 		{"gmi by url", "https://api.gmi-serving.com/v1", "", "gmi"},
 		{"orca by env", "https://api.example.com", "ORCAROUTER_API_KEY", "orca"},
@@ -1242,5 +1240,73 @@ func TestParseRateLimitDetails_Orca(t *testing.T) {
 		assert.Equal(t, "prompt_cap", details.LimitType)
 		assert.Equal(t, "prompt_too_large", details.LimitSubtype)
 	})
+
+	t.Run("account eligibility error returns 24h quota exhausted", func(t *testing.T) {
+		headers := http.Header{}
+		body := []byte(`{"error":"Your account is not eligible for free models. Link a GitHub account at orca.ai to access free models or add credits to continue."}`)
+		details := parseRateLimitDetails("orca", headers, body)
+
+		assert.Equal(t, int((24 * time.Hour).Seconds()), details.RetryAfter)
+		assert.True(t, details.RetryAfterProvided)
+		assert.Equal(t, "quota", details.LimitType)
+		assert.Equal(t, "quota_exhausted", details.LimitSubtype)
+	})
 }
 
+func TestParseRateLimitDetails_Cohere(t *testing.T) {
+	t.Run("trial key monthly limit sets 10-day quota exhausted", func(t *testing.T) {
+		headers := http.Header{}
+		body := []byte(`{"message":"You are using a Trial key, which is limited to 1000 API calls / month. You have reached your limit. To unlock more, enter your credit card on the Cohere dashboard."}`)
+		details := parseRateLimitDetails("cohere", headers, body)
+
+		expectedSeconds := int((10 * 24 * time.Hour).Seconds())
+		assert.Equal(t, expectedSeconds, details.RetryAfter)
+		assert.True(t, details.RetryAfterProvided)
+		assert.Equal(t, "monthly_quota", details.LimitType)
+		assert.Equal(t, "quota_exhausted", details.LimitSubtype)
+		assert.True(t, details.ResetAtUnixMs > time.Now().UnixMilli())
+	})
+}
+
+func TestClassifyProviderHTTPError_OrcaAccountError(t *testing.T) {
+	headers := map[string]string{}
+	body := []byte(`{"error":"Your account is not eligible for free models. Link a GitHub account at orca.ai to access free models or add credits to continue."}`)
+	err := classifyProviderHTTPError("orca", http.StatusBadRequest, headers, body)
+
+	providerErr, ok := err.(*errors.ProviderError)
+	require.True(t, ok)
+	assert.False(t, providerErr.IsRetryable)
+	assert.Equal(t, http.StatusBadRequest, providerErr.StatusCode)
+}
+
+func TestEffectiveRateLimitCooldownSeconds_CohereMonthly(t *testing.T) {
+	r := &Router{}
+
+	errMonthly := &errors.RateLimitError{
+		ProviderError: errors.ProviderError{Message: "trial key monthly limit reached"},
+		LimitType:     "monthly_quota",
+		LimitSubtype:  "quota_exhausted",
+	}
+
+	seconds := r.effectiveRateLimitCooldownSeconds(errMonthly, "cohere", "command-r-plus")
+	assert.Equal(t, int((10 * 24 * time.Hour).Seconds()), seconds)
+
+	errGeneric := &errors.RateLimitError{
+		ProviderError:      errors.ProviderError{Message: "standard rpm limit"},
+		LimitType:          "rpm",
+		RetryAfter:         15,
+		RetryAfterProvided: true,
+	}
+
+	secondsGeneric := r.effectiveRateLimitCooldownSeconds(errGeneric, "cohere", "command-r-plus")
+	assert.Equal(t, 15, secondsGeneric)
+}
+
+func TestProviderLimitMatchesRateLimit_QuotaExhausted(t *testing.T) {
+	limits := types.ProviderLimits{}
+	err := &errors.RateLimitError{
+		LimitSubtype: "quota_exhausted",
+	}
+
+	assert.True(t, providerLimitMatchesRateLimit(limits, err))
+}
