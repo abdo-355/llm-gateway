@@ -57,7 +57,6 @@ Loads `.env` file automatically. Requires provider API keys:
 - `AI_GATEWAY_API_KEY` - Vercel AI Gateway provider
 - `ORCAROUTER_API_KEY` - Orca / OrcaRouter provider
 - `GMI_API_KEY` - GMI provider
-- `INFERX_API_KEY` - InferX provider
 - `BAI_API_KEY` - BAI provider
 
 Optional:

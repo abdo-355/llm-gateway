@@ -86,3 +86,38 @@ func TestCooldownRetryAfterIsCapped(t *testing.T) {
 	assert.GreaterOrEqual(t, remaining, 59*time.Minute)
 	assert.LessOrEqual(t, remaining, time.Hour)
 }
+
+func TestCooldown10DaysSupported(t *testing.T) {
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+
+	svc := NewCooldownService(client, "cooldown", config.CooldownConfig{
+		Enabled:               true,
+		RateLimitDuration:     5 * time.Second,
+		PaymentDuration:       30 * time.Minute,
+		MaxRetryAfterDuration: 30 * 24 * time.Hour,
+	})
+	ctx := context.Background()
+
+	tenDaysSeconds := 10 * 24 * 3600
+	svc.ApplyCooldownForReason(ctx, "cohere", "command-r-plus", CooldownQuota, tenDaysSeconds)
+
+	remaining := svc.GetCooldownRemaining(ctx, "cohere", "command-r-plus")
+	assert.GreaterOrEqual(t, remaining, 9*24*time.Hour)
+	assert.LessOrEqual(t, remaining, 10*24*time.Hour)
+	assert.Equal(t, CooldownQuota, svc.GetCooldownReason(ctx, "cohere", "command-r-plus"))
+}
+
+func TestCooldownQuotaUsesPaymentDuration(t *testing.T) {
+	svc := NewCooldownService(nil, "cooldown", config.CooldownConfig{
+		Enabled:         true,
+		PaymentDuration: 30 * time.Minute,
+		DefaultDuration: 10 * time.Second,
+	})
+
+	assert.Equal(t, 30*time.Minute, svc.GetDurationForReason(CooldownQuota))
+}

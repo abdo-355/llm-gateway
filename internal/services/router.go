@@ -2240,8 +2240,10 @@ var rosterBenchExemptProviders = map[string]bool{
 	"openrouter-alpha": true,
 }
 
+const cohereMonthlyLimitCooldown = 10 * 24 * time.Hour
+
 func isDayScaleLimit(err *errors.RateLimitError) bool {
-	return err.LimitType == "rpd" || err.LimitType == "tpd"
+	return err.LimitType == "rpd" || err.LimitType == "tpd" || err.LimitType == "monthly_quota"
 }
 
 // effectiveRateLimitCooldownSeconds resolves how long a model should stay benched
@@ -2250,6 +2252,9 @@ func isDayScaleLimit(err *errors.RateLimitError) bool {
 // provider-supplied Retry-After wins; then a configured per-model pause window;
 // then 0 falls back to the reason's default cooldown duration.
 func (r *Router) effectiveRateLimitCooldownSeconds(err *errors.RateLimitError, providerID, model string) int {
+	if providerID == "cohere" && (err.LimitType == "monthly_quota" || strings.Contains(strings.ToLower(err.Message), "trial key")) {
+		return int(cohereMonthlyLimitCooldown.Seconds())
+	}
 	if isDayScaleLimit(err) {
 		return dailyQuotaCooldownSeconds(err.ResetAtUnixMs, providerID)
 	}
@@ -2271,10 +2276,13 @@ const dailyQuotaFallbackCooldown = 6 * time.Hour
 // quota, in priority order: provider-stated absolute reset → known provider
 // reset schedule (Gemini resets at midnight Pacific) → flat fallback.
 func dailyQuotaCooldownSeconds(resetAtUnixMs int64, providerID string) int {
+	if providerID == "cohere" {
+		return int(cohereMonthlyLimitCooldown.Seconds())
+	}
 	now := time.Now()
 	if resetAtUnixMs > 0 {
 		until := time.UnixMilli(resetAtUnixMs).Sub(now)
-		if until > 30*time.Second && until < 48*time.Hour {
+		if until > 30*time.Second && until < 30*24*time.Hour {
 			return int((until + 30*time.Second).Seconds())
 		}
 	}
@@ -2309,7 +2317,7 @@ func rateLimitCooldownReason(err *errors.RateLimitError) CooldownReason {
 
 func providerLimitMatchesRateLimit(limits types.ProviderLimits, err *errors.RateLimitError) bool {
 	if err.LimitSubtype == "quota_exhausted" {
-		return hasModelLimits(providerLevelModelLimits(limits))
+		return true
 	}
 
 	switch err.LimitType {

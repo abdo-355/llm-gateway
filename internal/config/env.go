@@ -30,7 +30,6 @@ type EnvConfig struct {
 	NousAPIKey          string
 	OciAPIKey           string
 	BaiAPIKey           string
-	InferXAPIKey        string
 	GmiAPIKey           string
 	OrcaRouterAPIKey    string
 	AIGatewayAPIKey     string
@@ -176,7 +175,6 @@ func LoadEnv() (*EnvConfig, error) {
 		NousAPIKey:          os.Getenv("NOUS_API_KEY"),
 		OciAPIKey:           os.Getenv("OCI_API_KEY"),
 		BaiAPIKey:           os.Getenv("BAI_API_KEY"),
-		InferXAPIKey:        os.Getenv("INFERX_API_KEY"),
 		GmiAPIKey:           os.Getenv("GMI_API_KEY"),
 		OrcaRouterAPIKey:    os.Getenv("ORCAROUTER_API_KEY"),
 		AIGatewayAPIKey:     os.Getenv("AI_GATEWAY_API_KEY"),

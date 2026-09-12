@@ -33,7 +33,6 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **Vercel AI Gateway** - MiniMax and Laguna free models (`minimax-m3-free`, `minimax-m2.7-free`, `laguna-s-2.1-free`)
 - **Orca / OrcaRouter** - Free tier completions with adaptive 429 backoff (`deepseek-v4-flash-free`, `qwen3.8-27b-free`)
 - **GMI** - MiniMax reasoning models (`MiniMax-M3`, `MiniMax-M2.7`)
-- **InferX** - FP8 and quantized frontier models (`Devstral-2-123B`, `Qwen3-Coder-Next`, `Qwen3.8-27B`, `Qwen3.6-35B`)
 - **BAI** - DeepSeek and HY3 endpoints (`deepseek-v4-flash`, `hy3`, `mimo-v2.5`)
 - **Groq** - Ultra-fast inference for Qwen and Llama models
 - **Google Gemini** - Official Gemini 3.7/3.6/3.5 and Gemma 4 models
