@@ -18,7 +18,6 @@ func GetProviders() []types.ProviderConfig {
 		getBaiConfig(),
 		getGmiConfig(),
 		getOrcaConfig(),
-		getVercelConfig(),
 		getEmperoConfig(),
 	}
 }
@@ -939,68 +938,6 @@ func getOrcaConfig() types.ProviderConfig {
 	}
 }
 
-func getVercelConfig() types.ProviderConfig {
-	conc5 := 5
-	pause60s := 60 * 1000
-
-	return types.ProviderConfig{
-		ID:      "vercel",
-		BaseURL: "https://ai-gateway.vercel.sh/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "AI_GATEWAY_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"minimax/minimax-m3-free",
-				"minimax/minimax-m2.7-free",
-				"poolside/laguna-s-2.1-free",
-			},
-			Limits: map[string]types.ModelLimits{
-				"minimax/minimax-m3-free":    {RateLimitPauseMs: &pause60s},
-				"minimax/minimax-m2.7-free":  {RateLimitPauseMs: &pause60s},
-				"poolside/laguna-s-2.1-free": {RateLimitPauseMs: &pause60s},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"minimax/minimax-m3-free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"minimax/minimax-m2.7-free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"poolside/laguna-s-2.1-free": {
-					StructuredOutputs: strPtr("json_object"),
-					Tools:             boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "model_dependent",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc5,
-		},
-		ProviderType: "openai",
-	}
-}
 
 func getEmperoConfig() types.ProviderConfig {
 	conc1 := 1

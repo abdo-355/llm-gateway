@@ -1204,8 +1204,6 @@ func TestDetectProvider_NewProviders(t *testing.T) {
 		{"gmi by url", "https://api.gmi-serving.com/v1", "", "gmi"},
 		{"orca by env", "https://api.example.com", "ORCAROUTER_API_KEY", "orca"},
 		{"orca by url", "https://api.orcarouter.ai/v1", "", "orca"},
-		{"vercel by env", "https://api.example.com", "AI_GATEWAY_API_KEY", "vercel"},
-		{"vercel by url", "https://ai-gateway.vercel.sh/v1", "", "vercel"},
 		{"empero by env", "https://api.example.com", "EMPERO_API_KEY", "empero"},
 		{"empero by url", "https://free.empero.org/v1", "", "empero"},
 	}

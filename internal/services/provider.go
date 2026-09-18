@@ -618,8 +618,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "gmi"
 	case "ORCAROUTER_API_KEY":
 		return "orca"
-	case "AI_GATEWAY_API_KEY":
-		return "vercel"
 	case "EMPERO_API_KEY":
 		return "empero"
 	}
@@ -641,8 +639,6 @@ func detectProvider(baseURL, providerType string, auth types.ProviderAuth) strin
 		return "gmi"
 	case strings.Contains(baseURL, "orcarouter.ai"):
 		return "orca"
-	case strings.Contains(baseURL, "ai-gateway.vercel.sh"):
-		return "vercel"
 	case strings.Contains(baseURL, "free.empero.org"):
 		return "empero"
 	default:

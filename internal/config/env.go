@@ -32,7 +32,6 @@ type EnvConfig struct {
 	BaiAPIKey           string
 	GmiAPIKey           string
 	OrcaRouterAPIKey    string
-	AIGatewayAPIKey     string
 	EmperoAPIKey        string
 
 	RedisURL       string
@@ -177,7 +176,6 @@ func LoadEnv() (*EnvConfig, error) {
 		BaiAPIKey:           os.Getenv("BAI_API_KEY"),
 		GmiAPIKey:           os.Getenv("GMI_API_KEY"),
 		OrcaRouterAPIKey:    os.Getenv("ORCAROUTER_API_KEY"),
-		AIGatewayAPIKey:     os.Getenv("AI_GATEWAY_API_KEY"),
 		EmperoAPIKey:        getEnvString("EMPERO_API_KEY", "free"),
 		RedisURL:            getEnvString("REDIS_URL", "redis://localhost:6379"),
 		RedisKeyPrefix:      getEnvString("REDIS_KEY_PREFIX", "llm_gateway"),

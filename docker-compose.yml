@@ -31,7 +31,6 @@ services:
       - BAI_API_KEY=${BAI_API_KEY}
       - GMI_API_KEY=${GMI_API_KEY}
       - ORCAROUTER_API_KEY=${ORCAROUTER_API_KEY}
-      - AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY}
       - EMPERO_API_KEY=${EMPERO_API_KEY:-free}
     depends_on:
       redis:
