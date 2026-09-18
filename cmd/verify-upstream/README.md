@@ -54,7 +54,6 @@ Loads `.env` file automatically. Requires provider API keys:
 - `OPENCODE_ZEN_API_KEY` - OpenCode Zen provider
 - `NOUS_API_KEY` - Nous Portal provider
 - `EMPERO_API_KEY` - Empero provider (defaults to "free")
-- `AI_GATEWAY_API_KEY` - Vercel AI Gateway provider
 - `ORCAROUTER_API_KEY` - Orca / OrcaRouter provider
 - `GMI_API_KEY` - GMI provider
 - `BAI_API_KEY` - BAI provider

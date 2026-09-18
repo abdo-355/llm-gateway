@@ -30,7 +30,6 @@ LLM Gateway is a unified API interface that sits between your application and LL
 - **Nous Portal** - High-performance reasoning models (`stealth/ox-alpha`, `solar-pro4`)
 - **Token Harbor (TH)** - Multi-model free endpoints (`deepseek-v4-flash:free`, `qwen3.8-27b:free`, `mimo-v2.5:free`)
 - **Empero** - Low-latency OpenAI-compatible models (`glm-5.3-flash`, `deepseek-v4-flash`)
-- **Vercel AI Gateway** - MiniMax and Laguna free models (`minimax-m3-free`, `minimax-m2.7-free`, `laguna-s-2.1-free`)
 - **Orca / OrcaRouter** - Free tier completions with adaptive 429 backoff (`deepseek-v4-flash-free`, `qwen3.8-27b-free`)
 - **GMI** - MiniMax reasoning models (`MiniMax-M3`, `MiniMax-M2.7`)
 - **BAI** - DeepSeek and HY3 endpoints (`deepseek-v4-flash`, `hy3`, `mimo-v2.5`)
