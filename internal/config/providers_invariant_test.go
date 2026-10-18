@@ -152,8 +152,6 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 		"ollama/devstral-2:123b":              {},
 		"openrouter-alpha/stealth/ox-alpha":   {},
 		"nous/stealth/ox-alpha":               {},
-		"opencode/hy3-free":                   {},
-		"opencode/x-preview-f-free":           {},
 	}
 
 	for _, provider := range GetProviders() {
@@ -173,71 +171,6 @@ func TestKnownRetiredModelsAreNotConfigured(t *testing.T) {
 	for _, cert := range GetCertifications() {
 		_, found := retired[cert.Provider+"/"+cert.Model]
 		assert.False(t, found, "retired model remains certified")
-	}
-}
-
-func TestOCIModelConcurrencyLimit(t *testing.T) {
-	const expected = 15
-
-	for _, provider := range GetProviders() {
-		if provider.ID != "oci" {
-			continue
-		}
-
-		if provider.Limits.MaxConcurrent != nil {
-			assert.Equal(t, expected, *provider.Limits.MaxConcurrent, "OCI provider max concurrency")
-		}
-		for _, model := range provider.Models.List {
-			limits := provider.Models.Limits[model]
-			if limits.MaxConcurrent != nil {
-				assert.Equal(t, expected, *limits.MaxConcurrent, "OCI model %q max concurrency", model)
-			}
-		}
-		return
-	}
-
-	t.Fatal("OCI provider not found")
-}
-
-func TestVerifiedOCIStrictSchemaModels(t *testing.T) {
-	provider := requireProvider(t, "oci")
-	verified := []string{
-		"meta.llama-3.3-70b-instruct",
-	}
-	certified := strictSchemaCertifications()
-
-	for _, model := range verified {
-		t.Run(model, func(t *testing.T) {
-			caps, ok := provider.Models.Capabilities[model]
-			require.True(t, ok, "verified OCI model must declare explicit capabilities")
-			require.NotNil(t, caps.StructuredOutputs)
-			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
-			assert.Contains(t, certified, "oci/"+model)
-		})
-	}
-}
-
-func TestOCIGeminiModelsAreRemoved(t *testing.T) {
-	provider := requireProvider(t, "oci")
-
-	for _, model := range provider.Models.List {
-		assert.NotContains(t, model, "google.gemini-", "OCI google.gemini-* models 404 on this tenancy and must stay removed")
-	}
-}
-
-func TestVerifiedKiloStrictSchemaOverrides(t *testing.T) {
-	provider := requireProvider(t, "kilo")
-	verified := []string{
-		"openrouter/free",
-	}
-
-	for _, model := range verified {
-		t.Run(model, func(t *testing.T) {
-			caps, ok := provider.Models.Capabilities[model]
-			require.True(t, ok, "verified Kilo model must declare explicit capabilities")
-			require.NotNil(t, caps.StructuredOutputs)
-			assert.Equal(t, "json_schema_strict", *caps.StructuredOutputs)
-		})
 	}
 }
 

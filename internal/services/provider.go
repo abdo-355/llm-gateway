@@ -119,6 +119,7 @@ func (s *ProviderService) CallProvider(
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "llm-gateway/1.0")
 
 	if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
 		return nil, err
@@ -184,6 +185,7 @@ func (s *ProviderService) StreamProviderChannel(
 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "text/event-stream")
+		req.Header.Set("User-Agent", "llm-gateway/1.0")
 
 		if err := s.setAuth(ctx, req, apiKey, auth); err != nil {
 			errChan <- &types.GatewayError{Type: "provider_error", Code: "AUTH_FAILED", Message: err.Error()}

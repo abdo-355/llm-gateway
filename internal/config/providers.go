@@ -5,20 +5,14 @@ import "github.com/abdo-355/llm-gateway/internal/types"
 func GetProviders() []types.ProviderConfig {
 	return []types.ProviderConfig{
 		getGroqConfig(),
-		getKiloConfig(),
 		getCloudflareConfig(),
-		getOpenCodeConfig(),
 		getOllamaConfig(),
 		getZaiConfig(),
 		getCohereConfig(),
-		getOciConfig(),
 		getGeminiConfig(),
 		getNousConfig(),
 		getOpenRouterConfig(),
-		getBaiConfig(),
-		getGmiConfig(),
 		getOrcaConfig(),
-		getEmperoConfig(),
 	}
 }
 
@@ -75,13 +69,11 @@ func getGroqConfig() types.ProviderConfig {
 	}
 }
 
+
 func GetCertifications() []types.Certification {
-	return []types.Certification{
-		{Provider: "oci", Model: "meta.llama-3.3-70b-instruct", StrictSchema: true},
-	}
+	return []types.Certification{}
 }
 
-// LoadConfig returns the complete app configuration
 func LoadConfig() types.AppConfig {
 	return types.AppConfig{
 		Providers:      GetProviders(),
@@ -89,81 +81,6 @@ func LoadConfig() types.AppConfig {
 	}
 }
 
-func getKiloConfig() types.ProviderConfig {
-	rph200 := 200
-
-	return types.ProviderConfig{
-		ID:      "kilo",
-		BaseURL: "https://api.kilo.ai/api/gateway",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "KILO_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"poolside/laguna-s-2.1:free",
-				"thinkingmachines/inkling:free",
-				"nvidia/nemotron-3-ultra-550b-a55b:free",
-				"nvidia/nemotron-3-super-120b-a12b:free",
-				"nvidia/nemotron-3.5-lightning:free",
-				"google/gemma-4-26b-a4b-it:free",
-				"minimax/minimax-m3-free",
-				"openrouter/free",
-			},
-			Limits: map[string]types.ModelLimits{}, // Using provider-level rph limit
-			Capabilities: map[string]types.ModelCapabilities{
-				"poolside/laguna-s-2.1:free": {
-					StructuredOutputs: strPtr("json_object"),
-				},
-				"thinkingmachines/inkling:free": {
-					StructuredOutputs: strPtr("json_object"),
-				},
-				"nvidia/nemotron-3-ultra-550b-a55b:free": {
-					StructuredOutputs: strPtr("json_object"),
-					Reasoning:         boolPtr(true),
-				},
-				"nvidia/nemotron-3-super-120b-a12b:free": {
-					StructuredOutputs: strPtr("json_object"),
-					Reasoning:         boolPtr(true),
-				},
-				"nvidia/nemotron-3.5-lightning:free": {
-					StructuredOutputs: strPtr("json_object"),
-				},
-				"google/gemma-4-26b-a4b-it:free": {
-					StructuredOutputs: strPtr("json_object"),
-				},
-				"minimax/minimax-m3-free": {
-					StructuredOutputs: strPtr("json_object"),
-				},
-				"openrouter/free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               false,
-			StructuredOutputs:   "none",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			Rph: &rph200,
-		},
-		ProviderType: "openai",
-	}
-}
 
 func getCloudflareConfig() types.ProviderConfig {
 	rpm1 := 1
@@ -243,104 +160,6 @@ func getCloudflareConfig() types.ProviderConfig {
 	}
 }
 
-func getOpenCodeConfig() types.ProviderConfig {
-	conc5 := 5
-	pause6h := 6 * 60 * 60 * 1000
-
-	return types.ProviderConfig{
-		ID:      "opencode",
-		BaseURL: "https://opencode.ai/zen/v1",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "OPENCODE_ZEN_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"big-pickle",
-				"deepseek-v4-flash-free",
-				"laguna-s-2.1-free",
-				"ling-3.0-flash-fin-free",
-				"mimo-v2.5-free",
-				"muse-spark-1.2-contributor-free",
-				"muse-spark-1.3-contributor-free",
-				"nemotron-3-ultra-free",
-				"nemotron-3.5-lightning-free",
-			},
-			Limits: map[string]types.ModelLimits{
-				"big-pickle":                      {RateLimitPauseMs: &pause6h},
-				"deepseek-v4-flash-free":          {RateLimitPauseMs: &pause6h},
-				"laguna-s-2.1-free":               {RateLimitPauseMs: &pause6h},
-				"ling-3.0-flash-fin-free":         {RateLimitPauseMs: &pause6h},
-				"mimo-v2.5-free":                  {RateLimitPauseMs: &pause6h},
-				"muse-spark-1.2-contributor-free": {RateLimitPauseMs: &pause6h},
-				"muse-spark-1.3-contributor-free": {RateLimitPauseMs: &pause6h},
-				"nemotron-3-ultra-free":           {RateLimitPauseMs: &pause6h},
-				"nemotron-3.5-lightning-free":     {RateLimitPauseMs: &pause6h},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				// Muse Spark rides Zen's Responses API bridge: legacy max_tokens
-				// is rejected with a 400 while max_completion_tokens is honored,
-				// and the bridge cannot execute tools over chat/completions.
-				// Structured-output compliance is too inconsistent to certify a
-				// dialect, so it inherits the provider-level model_dependent.
-				"muse-spark-1.2-contributor-free": {
-					MaxTokens:           boolPtr(false),
-					MaxCompletionTokens: boolPtr(true),
-					Tools:               boolPtr(false),
-					Reasoning:           boolPtr(true),
-				},
-				"muse-spark-1.3-contributor-free": {
-					MaxTokens:           boolPtr(false),
-					MaxCompletionTokens: boolPtr(true),
-					Tools:               boolPtr(false),
-					Reasoning:           boolPtr(true),
-				},
-				"ling-3.0-flash-fin-free": {
-					Reasoning: boolPtr(true),
-				},
-				"deepseek-v4-flash-free": {
-					Reasoning: boolPtr(true),
-				},
-				"mimo-v2.5-free": {
-					StructuredOutputs: strPtr("json_schema"),
-				},
-				// Nemotron 3 Ultra Free intermittently answers in plain text
-				// instead of emitting a tool call under load; the capability
-				// itself is confirmed by direct probes.
-				"nemotron-3-ultra-free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					ToolSchema:        strPtr("json_schema"),
-					Reasoning:         boolPtr(true),
-				},
-				"nemotron-3.5-lightning-free": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Reasoning:         boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "model_dependent",
-			Logprobs:            false,
-			Metadata:            true,
-			Seed:                true,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc5,
-		},
-		ProviderType: "openai",
-	}
-}
 
 func getOllamaConfig() types.ProviderConfig {
 	conc1 := 1
@@ -394,6 +213,7 @@ func getOllamaConfig() types.ProviderConfig {
 	}
 }
 
+
 func getZaiConfig() types.ProviderConfig {
 	conc1 := 1
 	conc2 := 2
@@ -443,6 +263,7 @@ func getZaiConfig() types.ProviderConfig {
 	}
 }
 
+
 func getCohereConfig() types.ProviderConfig {
 	rpm20 := 20
 
@@ -483,47 +304,6 @@ func getCohereConfig() types.ProviderConfig {
 			Rpm: &rpm20,
 		},
 		ProviderType: "cohere",
-	}
-}
-func getOciConfig() types.ProviderConfig {
-	conc15 := 15
-
-	return types.ProviderConfig{
-		ID:      "oci",
-		BaseURL: "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/openai/v1",
-		Auth: types.ProviderAuth{
-			Type: "bearer",
-			Env:  "OCI_API_KEY",
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"meta.llama-3.3-70b-instruct",
-			},
-			Limits: map[string]types.ModelLimits{},
-			Capabilities: map[string]types.ModelCapabilities{
-				"meta.llama-3.3-70b-instruct": {StructuredOutputs: strPtr("json_schema_strict"), Logprobs: boolPtr(true)},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                false,
-			FrequencyPenalty:    false,
-			PresencePenalty:     false,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     true,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc15,
-		},
-		ProviderType: "openai",
 	}
 }
 
@@ -611,6 +391,7 @@ func getGeminiConfig() types.ProviderConfig {
 // ACCOUNT-WIDE (50 rpm / 500k tpm, 2100 rph / 6m tph per the response headers),
 // so they live at the provider level and are enforced through the shared
 // "__provider__" quota scope rather than per model.
+
 func getNousConfig() types.ProviderConfig {
 	rpm50 := 50
 	rph2100 := 2100
@@ -631,16 +412,15 @@ func getNousConfig() types.ProviderConfig {
 		Models: types.ProviderModels{
 			Mode: "allowlist",
 			List: []string{
-				"upstage/solar-pro4:free",
+				"upstage/solar-mini4:free",
 				"stepfun/step-3.7-flash:free",
-				"tencent/hy3:free",
 				"meituan/longcat-2.0:free",
 				"poolside/laguna-s-2.1:free",
 				"poolside/laguna-xs-2.1:free",
 			},
 			Limits: map[string]types.ModelLimits{},
 			Capabilities: map[string]types.ModelCapabilities{
-				"upstage/solar-pro4:free": {
+				"upstage/solar-mini4:free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 				},
 				"stepfun/step-3.7-flash:free": {
@@ -648,11 +428,6 @@ func getNousConfig() types.ProviderConfig {
 					// requests (~4-5K input tokens) repeatedly returned empty
 					// choice-0 content - reasoning budget starved under real
 					// loads. Text-only until re-verified.
-					StructuredOutputs: strPtr("none"),
-				},
-				"tencent/hy3:free": {
-					// Live probe: returns malformed JSON on response_format
-					// requests ("}{": {"ok": true}}) — text-only until fixed.
 					StructuredOutputs: strPtr("none"),
 				},
 				"meituan/longcat-2.0:free": {
@@ -691,6 +466,7 @@ func getNousConfig() types.ProviderConfig {
 		ProviderType: "openai",
 	}
 }
+
 
 func getOpenRouterConfig() types.ProviderConfig {
 	rpm20 := 20
@@ -751,129 +527,6 @@ func getOpenRouterConfig() types.ProviderConfig {
 	}
 }
 
-func getBaiConfig() types.ProviderConfig {
-	conc5 := 5
-	pause60s := 60 * 1000
-
-	return types.ProviderConfig{
-		ID:      "bai",
-		BaseURL: "https://api.b.ai/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "BAI_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"hy3",
-				"mimo-v2.5",
-				"glm-5.3-flash",
-				"qwen3.8-flash",
-			},
-			Limits: map[string]types.ModelLimits{
-				"hy3":           {RateLimitPauseMs: &pause60s},
-				"mimo-v2.5":     {RateLimitPauseMs: &pause60s},
-				"glm-5.3-flash": {RateLimitPauseMs: &pause60s},
-				"qwen3.8-flash": {RateLimitPauseMs: &pause60s},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"hy3": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Reasoning:         boolPtr(true),
-				},
-				"mimo-v2.5": {
-					StructuredOutputs: strPtr("json_schema"),
-				},
-				"glm-5.3-flash": {
-					StructuredOutputs: strPtr("json_schema"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"qwen3.8-flash": {
-					StructuredOutputs: strPtr("json_schema"),
-					Tools:             boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "model_dependent",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc5,
-		},
-		ProviderType: "openai",
-	}
-}
-
-func getGmiConfig() types.ProviderConfig {
-	conc1 := 1
-	pause60s := 60 * 1000
-
-	return types.ProviderConfig{
-		ID:      "gmi",
-		BaseURL: "https://api.gmi-serving.com/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "GMI_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"MiniMaxAI/MiniMax-M3",
-				"MiniMaxAI/MiniMax-M2.7",
-			},
-			Limits: map[string]types.ModelLimits{
-				"MiniMaxAI/MiniMax-M3":   {RateLimitPauseMs: &pause60s},
-				"MiniMaxAI/MiniMax-M2.7": {RateLimitPauseMs: &pause60s},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"MiniMaxAI/MiniMax-M3": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"MiniMaxAI/MiniMax-M2.7": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc1,
-		},
-		ProviderType: "openai",
-	}
-}
 
 func getOrcaConfig() types.ProviderConfig {
 	conc5 := 5
@@ -891,13 +544,21 @@ func getOrcaConfig() types.ProviderConfig {
 			Mode: "allowlist",
 			List: []string{
 				"deepseek/deepseek-v4-flash-free",
-				"qwen/qwen3.8-27b-free",
+				"deepseek/deepseek-v4.1-flash-free",
 				"orcarouter/free",
+				"orca/orcaverify-text1.0-free",
+				"tencent/hy3-free",
+				"tencent/hy4-preview-free",
+				"z-ai/glm-5.3-flash-free",
 			},
 			Limits: map[string]types.ModelLimits{
-				"deepseek/deepseek-v4-flash-free": {TimeoutMs: &ms15000},
-				"qwen/qwen3.8-27b-free":          {TimeoutMs: &ms15000},
-				"orcarouter/free":                 {TimeoutMs: &ms15000},
+				"deepseek/deepseek-v4-flash-free":   {TimeoutMs: &ms15000},
+				"deepseek/deepseek-v4.1-flash-free": {TimeoutMs: &ms15000},
+				"orcarouter/free":                   {TimeoutMs: &ms15000},
+				"orca/orcaverify-text1.0-free":      {TimeoutMs: &ms15000},
+				"tencent/hy3-free":                  {TimeoutMs: &ms15000},
+				"tencent/hy4-preview-free":          {TimeoutMs: &ms15000},
+				"z-ai/glm-5.3-flash-free":          {TimeoutMs: &ms15000},
 			},
 			Capabilities: map[string]types.ModelCapabilities{
 				"deepseek/deepseek-v4-flash-free": {
@@ -905,7 +566,7 @@ func getOrcaConfig() types.ProviderConfig {
 					Tools:             boolPtr(true),
 					Reasoning:         boolPtr(true),
 				},
-				"qwen/qwen3.8-27b-free": {
+				"deepseek/deepseek-v4.1-flash-free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Tools:             boolPtr(true),
 					Reasoning:         boolPtr(true),
@@ -913,6 +574,26 @@ func getOrcaConfig() types.ProviderConfig {
 				"orcarouter/free": {
 					StructuredOutputs: strPtr("json_schema_strict"),
 					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"orca/orcaverify-text1.0-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(false),
+				},
+				"tencent/hy3-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"tencent/hy4-preview-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
+				},
+				"z-ai/glm-5.3-flash-free": {
+					StructuredOutputs: strPtr("json_schema_strict"),
+					Tools:             boolPtr(true),
+					Reasoning:         boolPtr(true),
 				},
 			},
 		},
@@ -938,67 +619,10 @@ func getOrcaConfig() types.ProviderConfig {
 	}
 }
 
-
-func getEmperoConfig() types.ProviderConfig {
-	conc1 := 1
-	pause60s := 60 * 1000
-
-	return types.ProviderConfig{
-		ID:      "empero",
-		BaseURL: "https://free.empero.org/v1",
-		Auth: types.ProviderAuth{
-			Type:     "bearer",
-			Env:      "EMPERO_API_KEY",
-			Optional: true,
-		},
-		Models: types.ProviderModels{
-			Mode: "allowlist",
-			List: []string{
-				"glm-5.3-flash",
-				"deepseek-v4-flash",
-			},
-			Limits: map[string]types.ModelLimits{
-				"glm-5.3-flash":     {RateLimitPauseMs: &pause60s},
-				"deepseek-v4-flash": {RateLimitPauseMs: &pause60s},
-			},
-			Capabilities: map[string]types.ModelCapabilities{
-				"glm-5.3-flash": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-				"deepseek-v4-flash": {
-					StructuredOutputs: strPtr("json_schema_strict"),
-					Tools:             boolPtr(true),
-					Reasoning:         boolPtr(true),
-				},
-			},
-		},
-		Capabilities: types.ProviderCapabilities{
-			Streaming:           true,
-			Tools:               true,
-			StructuredOutputs:   "json_schema_strict",
-			Logprobs:            false,
-			Metadata:            false,
-			Seed:                false,
-			User:                true,
-			FrequencyPenalty:    true,
-			PresencePenalty:     true,
-			MaxTokens:           true,
-			MaxCompletionTokens: true,
-			MultipleChoices:     false,
-			ToolSchema:          "json_schema",
-		},
-		Limits: types.ProviderLimits{
-			MaxConcurrent: &conc1,
-		},
-		ProviderType: "openai",
-	}
-}
-
 func boolPtr(b bool) *bool {
 	return &b
 }
+
 
 func strPtr(s string) *string {
 	return &s
