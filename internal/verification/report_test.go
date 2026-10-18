@@ -134,8 +134,8 @@ func TestJSONObjectProbeAlwaysUsesResponseFormat(t *testing.T) {
 	}
 
 	report, err := runWithClient(context.Background(), Config{
-		Provider: "kilo",
-		Model:    "nvidia/nemotron-3-ultra-550b-a55b:free",
+		Provider: "zai",
+		Model:    "glm-4.6v-flash",
 		Probe:    "json_object",
 		Timeout:  time.Second,
 	}, client)
